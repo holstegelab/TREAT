@@ -81,12 +81,12 @@ print(checkOutDir(output_directory))
 
 ## Extract reads mapping to the location of interest
 if anal_type == 'extract_reads':
+    store_temporary = 'True'
     print("** reading bed file")
     bed = readBed(bed_file)
     print("** checking bam files")
     all_bams = checkBAM(bam_directory)
     reads_bam, reads_fasta = extractReads(bed, all_bams, output_directory, window_size)
-    store_temporary = 'True'
 elif anal_type == 'measure':    
     print("** reading bed file")
     bed = readBed(bed_file)
