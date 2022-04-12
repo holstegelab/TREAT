@@ -5,6 +5,7 @@ A set of tools to manipulate and analyze Pacbio and other sequencing data.
 1. Clone the repository anywhere in your system
 2. Type `conda activate py37` to load the conda environment
 3. Either add the directory in your bash_profile (`export PATH="/path/to/TRHT/directory/:$PATH"`) or run directly from the folder
+4. You may need to make the program executable (`chmod +x path/to/TRHT.py`)
 
 ## Dependencies
 TRHT will call several external tools. All these tools should be readily available in the cluster. The tools are:

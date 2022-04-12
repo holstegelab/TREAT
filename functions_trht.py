@@ -186,7 +186,7 @@ def polishReads(bed, distances, out_dir):
                             to_write = '>' + read_in_order + '\n' + read[-3] + '\n'
                             tmp_f.write(to_write)
             tmp_f.close()
-            corrected_reads = os.popen('/project/holstegelab/Software/nicco/tools/urchin correct -m 3 ' + tmp_fname).read().split('\n')
+            corrected_reads = os.popen('/project/holstegelab/Software/nicco/tools/urchin/build/urchin correct -m 3 ' + tmp_fname).read().split('\n')
             corrected_reads = corrected_reads[:-1]
             corrected_reads_id = [x for x in corrected_reads if x.startswith('>')]
             corrected_reads_seq = [x for x in corrected_reads if not x.startswith('>')]

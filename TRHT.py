@@ -1,3 +1,5 @@
+#!/project/holstegelab/Software/conda/miniconda3_v1/envs/py37/bin/python
+
 #############################################################
 # SET OF TOOLS THAT CAN BE USED TO MANAGE AND ANALYZE DATA  #
 # FROM PACBIO OR OTHER SEQUENCING PLATFORMS.                #
@@ -36,7 +38,7 @@ parser.add_argument('--polish', dest = 'polish', type = str, help = 'Boolean (Tr
 parser.add_argument('--snp-data', dest = 'snp_dir', type = str, help = 'If assembly is selected, please add here the path to SNP data (in PLINK2 format). This information is necessary for phasing.', required = False, default = 'False')
 parser.add_argument('--snp-data-ids', dest = 'snp_data_ids', type = str, help = 'Please submit here a 2-column file with GWAS ID and ID in sequencing data. If not provided, will assume the IDs are the same.', required = False, default = 'False')
 parser.add_argument('--coverage-step', dest = 'step', type = int, help = 'Number of nt based on which the region(s) of interest will be split to calculate coverage.', required = False, default = 500)
-parser.add_argument('--reads-ids', dest = 'target_reads', type = int, help = 'If analysis type was extract_raw_reads, please provide here a tab-separated file with two columns: the first column should contain the .bam file to extract reads from, the second column should contain the reads ID to extract, one read ID per line.', required = False, default = 'False')
+parser.add_argument('--reads-ids', dest = 'target_reads', type = str, help = 'If analysis type was extract_raw_reads, please provide here a tab-separated file with two columns: the first column should contain the .bam file to extract reads from, the second column should contain the reads ID to extract, one read ID per line.', required = False, default = 'False')
 
 args = parser.parse_args()
 # Check arguments
@@ -176,6 +178,6 @@ elif anal_type == 'extract_raw_reads':
     print('** reading target reads and bam file(s)')
     target = readTarget(target_reads)
 
-if (store_temporary == 'False' and analysis_type != 'coverage_profile'):
+if (store_temporary == 'False' and anal_type != 'coverage_profile'):
     print(cleanTemp(args.out_dir, args.analysis_type))
 print('\n** run complete! all results are correctly stored. \ngoing to sleep now \nciao!')
