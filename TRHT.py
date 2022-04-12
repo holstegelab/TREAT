@@ -1,14 +1,11 @@
-#!/project/holstegelab/Software/conda/miniconda3_v1/envs/py37/bin/python3
-
 #############################################################
-# GIVEN A BED FILE AND SOME PARAMETERS, DO ANALYSES ON THE  #
-# PACBIO DATA.                                              #
+# SET OF TOOLS THAT CAN BE USED TO MANAGE AND ANALYZE DATA  #
+# FROM PACBIO OR OTHER SEQUENCING PLATFORMS.                #
 #############################################################
 
 ## Libraries
 import os
 import sys
-sys.path.append('/project/holstegelab/Software/nicco/bin/TRHT')
 from functions_trht import *
 import argparse
 import os.path
@@ -47,11 +44,11 @@ if (args.analysis_type not in ['annotate_snps', 'extract_snps', 'extract_annotat
     parser.error('!! You should provide at least a .bam file if analysis_type is --> %s' %(args.analysis_type))
 elif (args.analysis_type not in ['genotype_snps_pacbio', 'annotate_snps', 'extract_raw_reads']) and (args.bed_dir == 'None'):
     parser.error('!! You should provide at least a .bed file if analysis_type is --> %s' %(args.analysis_type))
-elif (args.analysis_type == 'extract_raw_reads' and args.target_reads == 'False'):
+if (args.analysis_type == 'extract_raw_reads' and args.target_reads == 'False'):
     parser.error('!! Your should provide either a text file containing the IDs of interest or a comma-separated list of IDs')
 
 # Print arguments
-print("\n** Tandem Repeat Haplotyping Tool (TRHT) **\n")
+print("\n** Tandem Repeat Haplotyping Toolkit (TRHT) **\n")
 print("********************\n** Your settings:")
 print("** bed file --> %s" %(args.bed_dir))
 print("** bam file(s) --> %s" %(args.bam_dir))
@@ -87,6 +84,7 @@ if anal_type == 'extract_reads':
     print("** checking bam files")
     all_bams = checkBAM(bam_directory)
     reads_bam, reads_fasta = extractReads(bed, all_bams, output_directory, window_size)
+    store_temporary = 'True'
 elif anal_type == 'measure':    
     print("** reading bed file")
     bed = readBed(bed_file)

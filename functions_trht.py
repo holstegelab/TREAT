@@ -186,7 +186,7 @@ def polishReads(bed, distances, out_dir):
                             to_write = '>' + read_in_order + '\n' + read[-3] + '\n'
                             tmp_f.write(to_write)
             tmp_f.close()
-            corrected_reads = os.popen('urchin correct -m 3 ' + tmp_fname).read().split('\n')
+            corrected_reads = os.popen('/project/holstegelab/Software/nicco/tools/urchin correct -m 3 ' + tmp_fname).read().split('\n')
             corrected_reads = corrected_reads[:-1]
             corrected_reads_id = [x for x in corrected_reads if x.startswith('>')]
             corrected_reads_seq = [x for x in corrected_reads if not x.startswith('>')]
@@ -672,17 +672,17 @@ def phase_reads(reads_bam, snps_to_keep, output_directory, SNPs_data_directory, 
         for x in id_gwas: to_write = '%s\n' %(x); tmp_samples.write(to_write)
         tmp_samples.close()
         # make subset of snps and sample of interest -- one sample at the time
-        os.system('plink2 --pfile %s --extract %s/tmp_snps_interest.txt --keep %s/tmp_samples_interest.txt --recode vcf --out %s/tmp_genotypes' %(SNPs_data_directory[:-5], output_directory, output_directory, output_directory))
+        os.system('/project/holstegelab/Software/bin/plink2 --pfile %s --extract %s/tmp_snps_interest.txt --keep %s/tmp_samples_interest.txt --recode vcf --out %s/tmp_genotypes' %(SNPs_data_directory[:-5], output_directory, output_directory, output_directory))
         # check if file was created, otherwise skip
         if os.path.isfile('%s/tmp_genotypes.vcf' %(output_directory)):
             # add chr notation for chromosome to vcf
-            os.system('bcftools annotate --rename-chrs /project/holstegelab/Software/nicco/bin/TRHT/chr_name_conv.txt %s/tmp_genotypes.vcf | bgzip > %s/tmp_genotypes.vcf.gz' %(output_directory, output_directory))
-            os.system('tabix %s/tmp_genotypes.vcf.gz' %(output_directory))
+            os.system('/project/holstegelab/Software/conda/miniconda3_v1/envs/py37/bin/bcftools annotate --rename-chrs /project/holstegelab/Software/nicco/bin/TRHT/chr_name_conv.txt %s/tmp_genotypes.vcf | bgzip > %s/tmp_genotypes.vcf.gz' %(output_directory, output_directory))
+            os.system('/home/holstegelab-ntesi/.conda/envs/whatshap/bin/tabix %s/tmp_genotypes.vcf.gz' %(output_directory))
             # create a phased vcf with whatshap
-            os.system('whatshap phase -o %s --reference=%s %s/tmp_genotypes.vcf.gz %s --ignore-read-groups --internal-downsampling 5' %(f.replace('.bam', '_phased.vcf.gz'), ref_path, output_directory, f))
+            os.system('/home/holstegelab-ntesi/.conda/envs/whatshap/bin/whatshap phase -o %s --reference=%s %s/tmp_genotypes.vcf.gz %s --ignore-read-groups --internal-downsampling 5' %(f.replace('.bam', '_phased.vcf.gz'), ref_path, output_directory, f))
             # for haplotag command, need a phased vcf
-            os.system('tabix %s' %(f.replace('.bam', '_phased.vcf.gz')))
-            os.system('whatshap haplotag -o %s/tmp_haplotag.bam --reference=%s %s %s --ignore-read-groups' %(output_directory, ref_path, f.replace('.bam', '_phased.vcf.gz'), f))
+            os.system('/home/holstegelab-ntesi/.conda/envs/whatshap/bin/tabix %s' %(f.replace('.bam', '_phased.vcf.gz')))
+            os.system('/home/holstegelab-ntesi/.conda/envs/whatshap/bin/whatshap haplotag -o %s/tmp_haplotag.bam --reference=%s %s %s --ignore-read-groups' %(output_directory, ref_path, f.replace('.bam', '_phased.vcf.gz'), f))
             # read haplotags
             haplotags = {}
             inBam = pysam.AlignmentFile('%s/tmp_haplotag.bam' %(output_directory), 'rb', check_sq=False)
