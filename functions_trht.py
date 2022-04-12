@@ -152,6 +152,8 @@ def extractReads(bed, all_bams, out_dir, window):
         outf.close()
         all_out_bam.append(outname)
         all_out_fasta.append(outname_fasta)
+        os.system('/project/holstegelab/Software/nicco/tools/samtools-1.11/samtools sort %s > %s' %(outname, outname + '_sorted'))
+        os.system('mv %s %s' %(outname + '_sorted', outname))
         os.system('/project/holstegelab/Software/nicco/tools/samtools-1.11/samtools index %s' %(outname))
     return all_out_bam, all_out_fasta
 
