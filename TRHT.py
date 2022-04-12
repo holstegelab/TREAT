@@ -81,7 +81,6 @@ print(checkOutDir(output_directory))
 
 ## Extract reads mapping to the location of interest
 if anal_type == 'extract_reads':
-    store_temporary = 'True'
     print("** reading bed file")
     bed = readBed(bed_file)
     print("** checking bam files")
@@ -178,6 +177,6 @@ elif anal_type == 'extract_raw_reads':
     print('** reading target reads and bam file(s)')
     target = readTarget(target_reads)
 
-if (store_temporary == 'False' and anal_type != 'coverage_profile'):
-    print(cleanTemp(args.out_dir, args.analysis_type))
+if (store_temporary == 'False' and anal_type not in ['extract_reads', 'coverage_profile']):
+    print(cleanTemp(output_directory, anal_type))
 print('\n** run complete! all results are correctly stored. \ngoing to sleep now \nciao!')
