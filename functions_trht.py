@@ -35,14 +35,15 @@ def readBed(bed_dir):
                 pass
             else:
                 line = line.rstrip().split()
-                chrom, start, end = line[0:3]
-                region_id = chrom + ':' + start + '-' + end
-                if 'chr' not in chrom:
-                    chrom = 'chr' + str(chrom)
-                if chrom in bed.keys():
-                    bed[chrom].append([start, end, region_id])
-                else:
-                    bed[chrom] = [[start, end, region_id]]
+                if len(line) >= 3:
+                    chrom, start, end = line[0:3]
+                    region_id = chrom + ':' + start + '-' + end
+                    if 'chr' not in chrom:
+                        chrom = 'chr' + str(chrom)
+                    if chrom in bed.keys():
+                        bed[chrom].append([start, end, region_id])
+                    else:
+                        bed[chrom] = [[start, end, region_id]]
     return bed
 
 # Read bed file with motif
@@ -265,7 +266,7 @@ def measureDistance(bed, reads_bam, window, out_dir):
         for region in bed[chrom]:
             region_id = chrom + ':' + region[0] + '-' + region[1]
             start, end = int(region[0]) - window, int(region[1]) + window
-            sequence_in_reference = [x.rstrip() for x in list(os.popen('/project/holstegelab/Software/nicco/tools/samtools-1.11/samtools faidx /project/holstegelab/Share/pacbio/resources/GRCh38_full_analysis_set_plus_decoy_hla.fa %s:%s-%s' %(chrom, start, end)))]
+            sequence_in_reference = [x.rstrip() for x in list(os.popen('/project/holstegelab/Software/nicco/tools/samtools-1.11/samtools faidx /project/holstegelab/Software/resources/GRCh38_full_analysis_set_plus_decoy_hla.fa %s:%s-%s' %(chrom, start, end)))]
             seq_merged = ''.join(sequence_in_reference[1:])
             if 'reference' in distances.keys():
                 distances['reference'].append([region_id, 'NA', 'NA', 'NA', 'NA', seq_merged, len(seq_merged), window])
@@ -549,7 +550,7 @@ def extractSNPsFromBam(input_variants, bam_files, variant_info):
             chunks_info = [all_snps_info[start:end] for start, end in zip([0] + indices, indices + [len(all_snps_info)])]
             for i in range(len(chunks)):
                 start_pos, end_pos = chunks[i][0], chunks[i][-1]
-                tmp = os.popen("pysamstats -c %s -s %s -e %s -u -t variation --fasta /project/holstegelab/Share/pacbio/resources/GRCh38_full_analysis_set_plus_decoy_hla.fa %s" %(chrom, start_pos, end_pos, bam)).read().split("\n")
+                tmp = os.popen("pysamstats -c %s -s %s -e %s -u -t variation --fasta /project/holstegelab/Software/resources/GRCh38_full_analysis_set_plus_decoy_hla.fa %s" %(chrom, start_pos, end_pos, bam)).read().split("\n")
                 info = [x.split('\t') for x in tmp[1:]]
                 info = [x for x in info if len(x) > 1]
                 counter_info = 0
@@ -661,7 +662,7 @@ def findSNPs_gwas(SNPs_data_directory, bed, window):
 # Function that uses whatshap to assign a haplotype to reads given a vcf file to take snps -- this uses whatshap haplotag
 def phase_reads(reads_bam, snps_to_keep, output_directory, SNPs_data_directory, snp_data_ids):
     map_ids = pd.read_csv(snp_data_ids, sep = " ") if snp_data_ids != 'False' else False
-    ref_path = '/project/holstegelab/Share/pacbio/resources/GRCh38_full_analysis_set_plus_decoy_hla.fa'
+    ref_path = '/project/holstegelab/Software/resources/GRCh38_full_analysis_set_plus_decoy_hla.fa'
     phasing_info = {}
     for f in reads_bam:
         id_gwas = list(map_ids['ID_GWAS'][map_ids['ID_PACBIO'] == f.split('/')[-1]]) if isinstance(map_ids, pd.DataFrame) == True else [f.split('/')[-1].split('_')[0]]          # find gwas id for the corresponding sample
