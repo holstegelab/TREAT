@@ -73,7 +73,7 @@ print("** window used --> %s\n********************\n" %(args.window))
 # Store arguments
 bed_file, anal_type, var_file, bam_directory, output_directory, store_temporary, window_size, assembly_type, assembly_ploidy, number_threads, polishing, snp_dir, snp_data_ids, step, target_reads = args.bed_dir, args.analysis_type, args.variant_file, args.bam_dir, args.out_dir, args.store_temp, args.window, args.ass_type, args.ass_ploidy, args.thread, args.polish, args.snp_dir, args.snp_data_ids, args.step, args.target_reads
 # Store arguments (for debugging only)
-#bed_file, anal_type, var_file, bam_directory, output_directory, store_temporary, window_size, assembly_type, assembly_ploidy, number_threads, polishing, snp_dir, snp_data_ids, step = '../bed_files/RFC1.bed', '', '', '/project/holstegelab/Share/pacbio/blood_brain_child/hifi/c7_child_merged_hifi.bam', 'coverage_profile/blood_brain_child', 'True', 250000, '', 2, 4, 'True', '/project/holstegelab/Share/gwas_array/Imputed_data_100plus/chrAll_imputed_100plus.pvar', '/project/holstegelab/Share/nicco/workspaces/20211013_target_approach/automatic_pipeline/RFC1/phenotypes/map_pabio_gwas_allSamples.txt', 500
+#bed_file, anal_type, var_file, bam_directory, output_directory, store_temporary, window_size, assembly_type, assembly_ploidy, number_threads, polishing, snp_dir, snp_data_ids, step, target_reads = '../bed_files/RFC1.bed', '', '', '/project/holstegelab/Data/pacbio/r64050_20201106_141701/3_C01/3_C01/m64050_201109_030710.subreads.bam,/project/holstegelab/Share/pacbio/data/r64050_20210312_134654/4_D01/4_D01/m64050_210316_090911.subreads.bam', '/project/holstegelab/Share/nicco/workspaces/20211013_target_approach/automatic_pipeline/RFC1/subreads', 'True', 250000, '', 2, 4, 'True', '/project/holstegelab/Share/gwas_array/Imputed_data_100plus/chrAll_imputed_100plus.pvar', '/project/holstegelab/Share/nicco/workspaces/20211013_target_approach/automatic_pipeline/RFC1/phenotypes/map_pabio_gwas_allSamples.txt', 500, '/project/holstegelab/Share/nicco/workspaces/20211013_target_approach/automatic_pipeline/RFC1/subreads/c7_all_reads.txt'
 
 ## Check whether output directory exists otherwise create it
 print("** checking directories")
@@ -174,8 +174,12 @@ elif anal_type == 'coverage_profile':
     print("** generating coverage profile")
     coverage_profile = generateCoverageProfile(bed, all_bams, window_size, step, output_directory)   
 elif anal_type == 'extract_raw_reads':
-    print('** reading target reads and bam file(s)')
-    target = readTarget(target_reads)
+    print("** checking bam files")
+    all_bams = checkBAM(bam_directory)
+    print('** reading target reads')
+    target = open(target_reads, 'r').readlines()
+    print('** finding target reads in bam')
+    reads_found = findTargetReads(target, all_bams, output_directory)
 
 if (store_temporary == 'False' and anal_type not in ['extract_reads', 'coverage_profile']):
     print(cleanTemp(output_directory, anal_type))

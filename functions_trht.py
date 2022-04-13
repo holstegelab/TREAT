@@ -737,4 +737,23 @@ def generateCoverageProfile(bed, all_bams, window_size, step, output_directory):
     return('Done')
 
 # Function to read target file containing the reads of interest and the target .bam file(s)
-    
+def findTargetReads(target, all_bams, output_directory):
+    # clean targets
+    target = [x.rstrip().split('/ccs')[0] for x in target]
+    # define output bam
+    outname = '%s/subreads_information.bam' %(output_directory)
+    inBam = pysam.AlignmentFile(all_bams[0], 'rb', check_sq=False)
+    outBam = pysam.AlignmentFile(outname, "wb", template=inBam)
+    inBam.close()
+    for bam in all_bams:
+        inBam = pysam.AlignmentFile(bam, 'rb', check_sq=False)
+        for read in inBam:
+            read_name = '/'.join(read.query_name.split('/')[:2])
+            if read_name in target:
+                outBam.write(read)
+        inBam.close()
+    inBam.close()
+    outBam.close()
+    return('Reads found!')
+
+
