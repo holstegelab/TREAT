@@ -740,20 +740,47 @@ def generateCoverageProfile(bed, all_bams, window_size, step, output_directory):
 def findTargetReads(target, all_bams, output_directory):
     # clean targets
     target = [x.rstrip().split('/ccs')[0] for x in target]
+    # list of temporary outputs
+    tmp_list = []
     # define output bam
-    outname = '%s/subreads_information.bam' %(output_directory)
-    inBam = pysam.AlignmentFile(all_bams[0], 'rb', check_sq=False)
-    outBam = pysam.AlignmentFile(outname, "wb", template=inBam)
-    inBam.close()
     for bam in all_bams:
+        counter = 0
         inBam = pysam.AlignmentFile(bam, 'rb', check_sq=False)
+        outname = '%s/tmp_subreads_information_%s.bam' %(output_directory, all_bams.index(bam))
+        tmp_list.append(outname)
+        outBam = pysam.AlignmentFile(outname, "wb", template=inBam)
         for read in inBam:
+            counter += 1
+            print('**** %s reads processed' %(counter), end = '\r')
             read_name = '/'.join(read.query_name.split('/')[:2])
             if read_name in target:
                 outBam.write(read)
+        print('\n')
         inBam.close()
-    inBam.close()
-    outBam.close()
-    return('Reads found!')
+        outBam.close()
+    # then merge the bam files in tmp_list and remove the temporary
+    cmd = '/project/holstegelab/Software/nicco/tools/samtools-1.11/samtools merge %s/subreads_information.bam %s' %(output_directory, ' '.join(tmp_list))
+    os.system(cmd)
+    for bam in tmp_list:
+        cmd = 'rm %s' %(bam)
+        os.system(cmd)
+    return('%s/subreads_information.bam' %(output_directory))
 
+# Function to align raw subreads (non-hifi) reads to the reference genome and chm13
+def alignRawReads(target_bam, output_directory):
+    # set output names
+    outname_hg38 = '%s/sub_information_hg38.bam' %(output_directory)
+    outname_chm13 = '%s/sub_information_chm13.bam' %(output_directory)
+    # set reference genomes
+    hg38 = '/project/holstegelab/Share/pacbio/resources/h38_subread.mmi'
+    chm13 = '/project/holstegelab/Share/asalazar/data/chm13/assembly/v2_0/chm13v2.0_subreads.mmi'
+    # commands for alignment to hg38
+    print('**** aligning to GRCh38')
+    cmd = "/project/holstegelab/Software/conda/miniconda3_v1/envs/py37/bin/pbmm2 align --preset SUBREAD %s -j %s --log-level FATAL --sort %s %s" %(hg38, thread, target_bam, outname_hg38)
+    os.system(cmd)
+    # commands for alignment to chm13
+    print('**** aligning to chm13')
+    cmd = "/project/holstegelab/Software/conda/miniconda3_v1/envs/py37/bin/pbmm2 align --preset SUBREAD %s -j %s --log-level FATAL --sort %s %s" %(hg38, thread, target_bam, outname_chm13)
+    os.system(cmd)
+    return('Files are aligned')
 

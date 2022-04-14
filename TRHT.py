@@ -179,7 +179,10 @@ elif anal_type == 'extract_raw_reads':
     print('** reading target reads')
     target = open(target_reads, 'r').readlines()
     print('** finding target reads in bam')
-    reads_found = findTargetReads(target, all_bams, output_directory)
+    print('** alright, have a sit and get some coffee, cause this may take a while')
+    target_bam = findTargetReads(target, all_bams, output_directory)
+    print('** reads found, now aligning')
+    alignment = alignRawReads(target_bam, output_directory)
 
 if (store_temporary == 'False' and anal_type not in ['extract_reads', 'coverage_profile']):
     print(cleanTemp(output_directory, anal_type))
