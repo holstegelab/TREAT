@@ -661,7 +661,7 @@ def findSNPs_gwas(SNPs_data_directory, bed, window):
 
 # Function that uses whatshap to assign a haplotype to reads given a vcf file to take snps -- this uses whatshap haplotag
 def phase_reads(reads_bam, snps_to_keep, output_directory, SNPs_data_directory, snp_data_ids):
-    map_ids = pd.read_csv(snp_data_ids, sep = " ") if snp_data_ids != 'False' else False
+    map_ids = pd.read_csv(snp_data_ids, sep = " |\t", engine = 'python') if snp_data_ids != 'False' else False
     ref_path = '/project/holstegelab/Software/resources/GRCh38_full_analysis_set_plus_decoy_hla.fa'
     phasing_info = {}
     for f in reads_bam:
@@ -679,7 +679,7 @@ def phase_reads(reads_bam, snps_to_keep, output_directory, SNPs_data_directory, 
         # check if file was created, otherwise skip
         if os.path.isfile('%s/tmp_genotypes.vcf' %(output_directory)):
             # add chr notation for chromosome to vcf
-            os.system('/project/holstegelab/Software/conda/miniconda3_v1/envs/py37/bin/bcftools annotate --rename-chrs /project/holstegelab/Software/nicco/bin/TRHT/chr_name_conv.txt %s/tmp_genotypes.vcf | bgzip > %s/tmp_genotypes.vcf.gz' %(output_directory, output_directory))
+            os.system('/project/holstegelab/Software/conda/miniconda3_v1/envs/py37/bin/bcftools annotate --rename-chrs test_data/chr_name_conv.txt %s/tmp_genotypes.vcf | bgzip > %s/tmp_genotypes.vcf.gz' %(output_directory, output_directory))
             os.system('/home/holstegelab-ntesi/.conda/envs/whatshap/bin/tabix %s/tmp_genotypes.vcf.gz' %(output_directory))
             # create a phased vcf with whatshap
             os.system('/home/holstegelab-ntesi/.conda/envs/whatshap/bin/whatshap phase -o %s --reference=%s %s/tmp_genotypes.vcf.gz %s --ignore-read-groups --internal-downsampling 5' %(f.replace('.bam', '_phased.vcf.gz'), ref_path, output_directory, f))
