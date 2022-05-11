@@ -29,6 +29,7 @@ def suppress_stdout():
 # Read bed file
 def readBed(bed_dir):
     bed = {}
+    count_reg = 0
     with open(bed_dir) as finp:
         for line in finp:
             if line.startswith('#'):
@@ -38,12 +39,14 @@ def readBed(bed_dir):
                 if len(line) >= 3:
                     chrom, start, end = line[0:3]
                     region_id = chrom + ':' + start + '-' + end
+                    count_reg += 1
                     if 'chr' not in chrom:
                         chrom = 'chr' + str(chrom)
                     if chrom in bed.keys():
                         bed[chrom].append([start, end, region_id])
                     else:
                         bed[chrom] = [[start, end, region_id]]
+    print('**** found %s regions in %s chromosomes' %(count_reg, len(bed)))
     return bed
 
 # Read bed file with motif
@@ -61,15 +64,22 @@ def readMotif(bed_dir):
     return motif
 
 # Check directory
-def checkOutDir(out_dir):
-    if os.path.isdir(out_dir) == False:
-        os.system('mkdir %s' %(out_dir))
-        return("** output directory not found, will create.")
+def checkOutDir(out_dir, analysis_type):
+    if analysis_type == 'realign':
+        return("** output directory will be the same as input")
     else:
-        return("** output directory found, will add outputs there.")
+        if out_dir[-1] == '/':
+            out_dir = out_dir[:-1]
+        if os.path.isdir(out_dir) == False:
+            os.system('mkdir %s' %(out_dir))
+            return("** output directory not found, will create.")
+        else:
+            return("** output directory found, will add outputs there.")
 
 # Check bam file(s)
 def checkBAM(bam_dir):
+    if bam_dir[-1] == '/':
+        bam_dir = bam_dir[:-1]
     if os.path.isdir(bam_dir) == True:              # in case a directory was submitted
         all_bams = [x.rstrip()for x in list(os.popen('ls %s/*bam' %(bam_dir)))]
         print("** found directory with %s bam" %(len(all_bams)))
@@ -309,12 +319,12 @@ def trf(distances, out_dir, motif, polished):
             tmp_out.write('>%s\n%s\n' %(bam, seq))
             tmp_out.close()
             # run tandem repeat finder specifying as maximum motif length the known one
-            cmd = '/project/holstegelab/Software/nicco/tools/trf409.linux64 ' + tmp_name + ' 2 7 7 80 10 20 %s -ngs -h' %(len(exact_motifs[0]))
+            cmd = '/project/holstegelab/Software/nicco/tools/trf409.linux64 ' + tmp_name + ' 2 7 7 80 10 50 %s -ngs -h' %(len(exact_motifs[0]))
             trf = [x for x in os.popen(cmd).read().split('\n') if x != '']
             # if no trf results were found, try to make the motif larger, let's say 5nt bigger, before going to the results
             motif_len = 'no_motif'
             if len(trf) == 0:
-                cmd = '/project/holstegelab/Software/nicco/tools/trf409.linux64 ' + tmp_name + ' 2 7 7 80 10 20 %s -ngs -h' %(len(exact_motifs[0]) + 5)
+                cmd = '/project/holstegelab/Software/nicco/tools/trf409.linux64 ' + tmp_name + ' 2 7 7 80 10 50 200 -ngs -h'
                 trf = [x for x in os.popen(cmd).read().split('\n') if x != '']
                 motif_len = 'different_length'
             else:
@@ -415,18 +425,25 @@ def localAssembly(strategy, out_dir, ploidy, thread):
     return outnames_list
 
 # Align assembly
-def alignAssembly(outname_list, thread):
-    ref_hifi = '/project/holstegelab/Share/pacbio/resources/h38_ccs.mmi'
+def alignAssembly(outname_list, thread, reference):
+    if reference == 'chm13':
+        ref_hifi = '/project/holstegelab/Share/asalazar/data/chm13/assembly/v2_0/chm13v2.0_hifi.mmi'
+        outname_prefix = '_haps_chm13.bam'
+        outname_primary_prefix = '_p_ctg_chm13.bam'
+    else:
+        ref_hifi = '/project/holstegelab/Share/pacbio/resources/h38_ccs.mmi'
+        outname_prefix = '_haps_hg38.bam'
+        outname_primary_prefix = '_p_ctg_hg38.bam'
     for asm in outname_list:
         # haplotype-aware fastas
         asm_name = asm + '_haps.fasta'
-        outname = asm + '_haps.bam'
+        outname = asm + outname_prefix
         cmd = "/project/holstegelab/Software/conda/miniconda3_v1/envs/py37/bin/pbmm2 align --preset CCS %s -j %s --log-level FATAL --sort %s %s" %(ref_hifi, thread, asm_name, outname)       # command for alignment
         os.system(cmd)
         # primary contigs as well
         asm_name = asm + '_p_ctg.fasta'
-        outname = asm + '_p_ctg.bam'
-        cmd = "/project/holstegelab/Software/conda/miniconda3_v1/envs/py37/bin/pbmm2 align --preset CCS %s -j %s --log-level FATAL --sort %s %s" %(ref_hifi, thread, asm_name, outname)       # command for alignment
+        outname_primary = asm + outname_primary_prefix
+        cmd = "/project/holstegelab/Software/conda/miniconda3_v1/envs/py37/bin/pbmm2 align --preset CCS %s -j %s --log-level FATAL --sort %s %s" %(ref_hifi, thread, asm_name, outname_primary)       # command for alignment
         os.system(cmd)
         print('**** %s/%s alignment done' %(outname_list.index(asm) + 1, len(outname_list)), end = '\r')
     return(print('\n** alignment done'))
@@ -434,8 +451,8 @@ def alignAssembly(outname_list, thread):
 # Clean temporary files
 def cleanTemp(out_dir, analysis_type):
     if analysis_type == 'assembly':
-        os.system('rm %s/*step1*' %(out_dir))
-    elif analysis_type in ['extract_snps', 'annotate_snps', 'extract_annotate']:
+        os.system('rm %s/*step1.bam*' %(out_dir))
+    elif analysis_type in ['extract_snps', 'annotate_snps', 'extract_annotate', 'realign']:
         pass
     else:
         os.system('rm %s/*step1*bam' %(out_dir))
@@ -641,17 +658,20 @@ def findSNPs_gwas(SNPs_data_directory, bed, window):
     chroms_interest = list(bed.keys())
     i = 1
     while i<len(inpf):
-        line = inpf[i].rstrip().split()
-        chrom_snp, pos, snpid, ref, alt = line
-        if 'chr' + chrom_snp in chroms_interest:
-            for interval in bed['chr' + chrom_snp]:
-                start, end, region_id = int(interval[0]), int(interval[1]), interval[-1]
-                if int(pos) >= (start - window) and int(pos) <= (end + window):
-                    snps_to_keep.append(snpid)
-                    if region_id in snps_interest.keys():
-                        snps_interest[region_id].append([chrom_snp, pos, snpid, ref, alt])
-                    else:
-                        snps_interest[region_id] = [[chrom_snp, pos, snpid, ref, alt]]
+        if inpf[i].startswith('#'):
+            pass
+        else:
+            line = inpf[i].rstrip().split()
+            chrom_snp, pos, snpid, ref, alt = line[0:5]
+            if 'chr' + chrom_snp in chroms_interest:
+                for interval in bed['chr' + chrom_snp]:
+                    start, end, region_id = int(interval[0]), int(interval[1]), interval[-1]
+                    if int(pos) >= (start - window) and int(pos) <= (end + window):
+                        snps_to_keep.append(snpid)
+                        if region_id in snps_interest.keys():
+                            snps_interest[region_id].append([chrom_snp, pos, snpid, ref, alt])
+                        else:
+                            snps_interest[region_id] = [[chrom_snp, pos, snpid, ref, alt]]
         i += 1
     # finally check if we have results for all genes
     regions_found = list(snps_interest.keys())
@@ -665,53 +685,62 @@ def phase_reads(reads_bam, snps_to_keep, output_directory, SNPs_data_directory, 
     ref_path = '/project/holstegelab/Software/resources/GRCh38_full_analysis_set_plus_decoy_hla.fa'
     phasing_info = {}
     for f in reads_bam:
-        id_gwas = list(map_ids['ID_GWAS'][map_ids['ID_PACBIO'] == f.split('/')[-1]]) if isinstance(map_ids, pd.DataFrame) == True else [f.split('/')[-1].split('_')[0]]          # find gwas id for the corresponding sample
-        # prepare files for phasing
-        tmp_snps = open('%s/tmp_snps_interest.txt' %(output_directory), 'w')
-        for x in snps_to_keep: to_write = '%s\n' %(x); tmp_snps.write(to_write)
-        tmp_snps.close()
-        tmp_samples = open('%s/tmp_samples_interest.txt' %(output_directory), 'w')
-        header = 'IID\n'; tmp_samples.write(header)
-        for x in id_gwas: to_write = '%s\n' %(x); tmp_samples.write(to_write)
-        tmp_samples.close()
-        # make subset of snps and sample of interest -- one sample at the time
-        os.system('/project/holstegelab/Software/bin/plink2 --pfile %s --extract %s/tmp_snps_interest.txt --keep %s/tmp_samples_interest.txt --recode vcf --out %s/tmp_genotypes' %(SNPs_data_directory[:-5], output_directory, output_directory, output_directory))
-        # check if file was created, otherwise skip
-        if os.path.isfile('%s/tmp_genotypes.vcf' %(output_directory)):
-            # add chr notation for chromosome to vcf
-            os.system('/project/holstegelab/Software/conda/miniconda3_v1/envs/py37/bin/bcftools annotate --rename-chrs test_data/chr_name_conv.txt %s/tmp_genotypes.vcf | bgzip > %s/tmp_genotypes.vcf.gz' %(output_directory, output_directory))
-            os.system('/home/holstegelab-ntesi/.conda/envs/whatshap/bin/tabix %s/tmp_genotypes.vcf.gz' %(output_directory))
-            # create a phased vcf with whatshap
-            os.system('/home/holstegelab-ntesi/.conda/envs/whatshap/bin/whatshap phase -o %s --reference=%s %s/tmp_genotypes.vcf.gz %s --ignore-read-groups --internal-downsampling 5' %(f.replace('.bam', '_phased.vcf.gz'), ref_path, output_directory, f))
-            # for haplotag command, need a phased vcf
-            os.system('/home/holstegelab-ntesi/.conda/envs/whatshap/bin/tabix %s' %(f.replace('.bam', '_phased.vcf.gz')))
-            os.system('/home/holstegelab-ntesi/.conda/envs/whatshap/bin/whatshap haplotag -o %s/tmp_haplotag.bam --reference=%s %s %s --ignore-read-groups' %(output_directory, ref_path, f.replace('.bam', '_phased.vcf.gz'), f))
-            # read haplotags
-            haplotags = {}
-            inBam = pysam.AlignmentFile('%s/tmp_haplotag.bam' %(output_directory), 'rb', check_sq=False)
-            for read in inBam:
-                info = read.tags
-                haplo = 'NA'
-                for x in info:
-                    if x[0] == 'HP': haplo = x[1]
-                haplotags[read.query_name] = haplo
-            # clean environment
-            os.system('rm %s/tmp_*' %(output_directory))
-            print('**** %s/%s phasing done' %(reads_bam.index(f) + 1, len(reads_bam)), end = '\r')
-            phasing_info[f.split('/')[-1]] = haplotags
+        fname = f.split('/')[-1].replace('_step1.bam', '.bam')
+        id_gwas = list(map_ids['ID_GWAS'][map_ids['ID_PACBIO'] == fname]) if isinstance(map_ids, pd.DataFrame) == True else [f.split('/')[-1].split('_')[0]]          # find gwas id for the corresponding sample
+        # throw error in case no match is found here
+        if id_gwas == []:
+            parser.error('!! Error while mapping GWAS and Long-read IDs. Please ensure the sample ID are the same or provide a file as described in docs!')
+            phasing_info = []
         else:
-            phasing_info[f.split('/')[-1]] = ['NA']
-    fout = open('%s/haplotags_reads.txt' %(output_directory), 'w')
-    header = 'SAMPLE\tREAD_ID\tHAPLOTYPE\n'
-    fout.write(header)
-    for sample in phasing_info.keys():
-        for read in phasing_info[sample]:
-            if read == 'NA':
-                to_write = '%s\t%s\t%s\n' %(sample, 'NA', 'NA')
+            # prepare files for phasing
+            tmp_snps = open('%s/tmp_snps_interest.txt' %(output_directory), 'w')
+            for x in snps_to_keep: to_write = '%s\n' %(x); tmp_snps.write(to_write)
+            tmp_snps.close()
+            tmp_samples = open('%s/tmp_samples_interest.txt' %(output_directory), 'w')
+            header = 'IID\n'; tmp_samples.write(header)
+            for x in id_gwas: to_write = '%s\n' %(x); tmp_samples.write(to_write)
+            tmp_samples.close()
+            # make subset of snps and sample of interest -- one sample at the time
+            print('**** %s: extract snps...' %(fname), end = '\r')
+            os.system('/project/holstegelab/Software/bin/plink2 --pfile %s --extract %s/tmp_snps_interest.txt --keep %s/tmp_samples_interest.txt --recode vcf --out %s/tmp_genotypes >/dev/null 2>&1' %(SNPs_data_directory[:-5], output_directory, output_directory, output_directory))
+            # check if file was created, otherwise skip
+            if os.path.isfile('%s/tmp_genotypes.vcf' %(output_directory)):
+                # add chr notation for chromosome to vcf
+                os.system('/project/holstegelab/Software/conda/miniconda3_v1/envs/py37/bin/bcftools annotate --rename-chrs /project/holstegelab/Software/nicco/bin/TRHT/test_data/chr_name_conv.txt %s/tmp_genotypes.vcf | bgzip > %s/tmp_genotypes.vcf.gz' %(output_directory, output_directory))
+                os.system('/home/holstegelab-ntesi/.conda/envs/whatshap/bin/tabix %s/tmp_genotypes.vcf.gz' %(output_directory))
+                # create a phased vcf with whatshap
+                print('**** %s: phasing snps...   ' %(fname), end = '\r')
+                os.system('/home/holstegelab-ntesi/.conda/envs/whatshap/bin/whatshap phase -o %s --reference=%s %s/tmp_genotypes.vcf.gz %s --ignore-read-groups --internal-downsampling 5 >/dev/null 2>&1' %(f.replace('.bam', '_phased.vcf.gz'), ref_path, output_directory, f))
+                # for haplotag command, need a phased vcf
+                os.system('/home/holstegelab-ntesi/.conda/envs/whatshap/bin/tabix %s' %(f.replace('.bam', '_phased.vcf.gz')))
+                print('**** %s: tagging reads...   ' %(fname), end = '\r')
+                os.system('/home/holstegelab-ntesi/.conda/envs/whatshap/bin/whatshap haplotag -o %s/tmp_haplotag.bam --reference=%s %s %s --ignore-read-groups >/dev/null 2>&1' %(output_directory, ref_path, f.replace('.bam', '_phased.vcf.gz'), f))
+                # read haplotags
+                haplotags = {}
+                inBam = pysam.AlignmentFile('%s/tmp_haplotag.bam' %(output_directory), 'rb', check_sq=False)
+                for read in inBam:
+                    info = read.tags
+                    haplo = 'NA'
+                    for x in info:
+                        if x[0] == 'HP': haplo = x[1]
+                    haplotags[read.query_name] = haplo
+                # clean environment
+                os.system('rm %s/tmp_*' %(output_directory))
+                print('**** %s: phasing and haplotagging done!' %(fname))
+                phasing_info[f.split('/')[-1]] = haplotags
             else:
-                to_write = '%s\t%s\t%s\n' %(sample, read, phasing_info[sample][read])
-            fout.write(to_write)
-    fout.close()
+                phasing_info[f.split('/')[-1]] = ['NA']
+        fout = open('%s/haplotags_reads.txt' %(output_directory), 'w')
+        header = 'SAMPLE\tREAD_ID\tHAPLOTYPE\n'
+        fout.write(header)
+        for sample in phasing_info.keys():
+            for read in phasing_info[sample]:
+                if read == 'NA':
+                    to_write = '%s\t%s\t%s\n' %(sample, 'NA', 'NA')
+                else:
+                    to_write = '%s\t%s\t%s\n' %(sample, read, phasing_info[sample][read])
+                fout.write(to_write)
+        fout.close()
     return(phasing_info)
 
 # Function to generate a coverage profile given a bam file and a bed file -- just counting the number of reads
@@ -783,4 +812,76 @@ def alignRawReads(target_bam, output_directory):
     cmd = "/project/holstegelab/Software/conda/miniconda3_v1/envs/py37/bin/pbmm2 align --preset SUBREAD %s -j %s --log-level FATAL --sort %s %s" %(hg38, thread, target_bam, outname_chm13)
     os.system(cmd)
     return('Files are aligned')
+
+# Function to create and save log file with run information
+def addLogRun(bed_file, anal_type, var_file, bam_directory, output_directory, store_temporary, window_size, assembly_type, assembly_ploidy, number_threads, polishing, snp_dir, snp_data_ids, step, target_reads, reference, fasta_dir, trf_file, phase_file, trf_type):
+    if anal_type == 'realign':
+        if os.path.isdir(fasta_dir) == True:
+            output_directory = fasta_dir
+            if fasta_dir[-1] == '/':
+                fasta_dir = fasta_dir[:-1]
+        else:
+            output_directory = '/'.join(fasta_dir.split('/')[:-1])
+    logfile = open('%s/TRHT_run_info.log' %(output_directory), 'w')
+    logfile.write('**  Tandem Repeat Haplotyping Toolkit  **\n\n')
+    logfile.write('Please find here belo your run parameters:\n')
+    logfile.write('**** GENERAL OPTIONS\n')
+    logfile.write('** analysis type --> %s\n' %(anal_type))
+    logfile.write('** bed file --> %s\n' %(bed_file))
+    logfile.write('** bam file(s) --> %s\n' %(bam_directory))
+    logfile.write('** output directory --> %s\n' %(output_directory))
+    logfile.write('** store temporary files --> %s\n' %(store_temporary))
+    logfile.write('** window size --> %s\n' %(window_size))
+    logfile.write('** polishing --> %s\n\n' %(polishing))
+    logfile.write('**** ASSEMBLY OPTIONS\n')
+    logfile.write('** assembly type --> %s\n' %(assembly_type))
+    logfile.write('** ploidy --> %s\n' %(assembly_ploidy))
+    logfile.write('** n. cpu --> %s\n' %(number_threads))
+    logfile.write('** assembly type --> %s\n' %(assembly_type))
+    logfile.write('** reference genome for alignment --> %s\n\n' %(reference))
+    logfile.write('**** PHASING OPTIONS\n')
+    logfile.write('** snp data directory --> %s\n' %(snp_dir))
+    logfile.write('** snp data id mapping --> %s\n\n' %(snp_data_ids))
+    logfile.write('**** COVERAGE ANALYSIS OPTIONS\n')
+    logfile.write('** step --> %s\n\n' %(step))
+    logfile.write('**** SNP ANALYSIS OPTIONS\n')
+    logfile.write('** SNP data --> %s\n\n' %(var_file))
+    logfile.write('**** SUBREADS ANALYSIS OPTIONS\n')
+    logfile.write('** Subreads data --> %s\n\n' %(target_reads))
+    logfile.write('**** REALIGNMENT\n')
+    logfile.write('** fasta file(s) input --> %s\n' %(fasta_dir))
+    logfile.write('** reference genome for alignment --> %s\n\n' %(reference))
+    logfile.write('**** HAPLOTYPING\n')
+    logfile.write('** TRF file(s) input --> %s\n' %(trf_file))
+    logfile.write('** TRF input type --> %s\n' %(trf_type))
+    logfile.write('** Phasing file(s) input --> %s\n\n' %(phase_file))
+    logfile.close()
+    return('** Log file created')
+
+# Function to find files to realign. Bam files are the input. Check if there are fasta files with the same name and use those
+def getFilesToRealign(fasta_dir):
+    if fasta_dir[-1] == '/':
+        fasta_dir = fasta_dir[:-1]
+    if os.path.isdir(fasta_dir) == True:              # in case a directory was submitted
+        all_fasta = [x.rstrip() for x in list(os.popen('ls %s/*.fasta' %(fasta_dir)))]
+        print("** found directory with %s fasta" %(len(all_fasta)))
+    elif os.path.isfile(fasta_dir) == True:           # in case is a single bam file
+        print("** found single fasta")
+        all_fasta = [all_fasta]
+    elif ',' in fasta_dir:                            # in case there is a comma-separated list of bams
+        all_fasta = fasta_dir.split(',')
+        print("** found %s fasta" %(len(all_fasta)))
+    return all_fasta
+
+# Function to realign fasta files given fasta, threads and reference genome, output directory is the same as the input
+def realignFasta(fasta_files, threads, reference):
+    # define output files
+    output_aligned = [x.replace('.fasta', '_aligned_%s.bam' %(reference)) for x in fasta_files]
+    # prepare reference fasta depending on selected reference from user
+    reference_mmi = '/project/holstegelab/Share/asalazar/data/chm13/assembly/v2_0/chm13v2.0_hifi.mmi' if reference == 'chm13' else '/project/holstegelab/Share/pacbio/resources/h38_ccs.mmi'
+    # loop to align fasta
+    for i in range(len(fasta_files)):
+        os.system("/project/holstegelab/Software/conda/miniconda3_v1/envs/py37/bin/pbmm2 align --preset CCS %s -j %s --log-level FATAL --sort %s %s" %(reference_mmi, threads, fasta_files[i], output_aligned[i]))       # command for alignment
+        print('**** %s/%s alignment done' %(fasta_files.index(fasta_files[i]) + 1, len(fasta_files)), end = '\r')
+    return output_aligned
 
