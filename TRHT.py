@@ -124,7 +124,7 @@ elif anal_type == 'measure':
     all_bams = checkBAM(bam_directory)
     reads_bam, reads_fasta = extractReads(bed, all_bams, output_directory, window_size)
     print('\n** calculate size of the regions of interest')
-    distances = measureDistance(bed, reads_bam, 25, output_directory)
+    distances = measureDistance(bed, reads_bam, 10, output_directory)
     if polishing == 'True':
         print('** polishing reads of interest now!')
         distances_polished = polishReads(bed, distances, output_directory)          # check from here!
@@ -137,7 +137,7 @@ elif anal_type == 'trf':
     motif = readMotif(bed_file)
     reads_bam, reads_fasta = extractReads(bed, all_bams, output_directory, window_size)
     print('\n** calculate size of the regions of interest')
-    distances = measureDistance(bed, reads_bam, 25, output_directory)
+    distances = measureDistance(bed, reads_bam, 10, output_directory)
     if polishing == 'True':
         print('** polishing reads of interest now!')
         distances_polished = polishReads(bed, distances, output_directory)   
@@ -213,7 +213,7 @@ elif anal_type == 'extract_raw_reads':
     target_bam = findTargetReads(target, all_bams, output_directory)
     print('** reads found, now aligning')
     alignment = alignRawReads(target_bam, output_directory)
-elif anal_type == 'tr_analysis':
+elif anal_type == 'complete':
     print('** TR analysis selected')
     print("**** reading bed file")
     bed = readBed(bed_file)
@@ -223,7 +223,7 @@ elif anal_type == 'tr_analysis':
     os.system('mkdir %s/raw_reads' %(output_directory))
     reads_bam, reads_fasta = extractReads(bed, all_bams, '%s/raw_reads' %(output_directory), window_size)
     print('\n** 1. calculate size of the regions of interest')
-    distances = measureDistance(bed, reads_bam, 25, output_directory)
+    distances = measureDistance(bed, reads_bam, 10, output_directory)
     print('\n** 2. tandem repeat finder on the single-reads')
     trf_info = trf(distances, output_directory, motif, polished = 'False')
     print('\n** 3. phasing and haplotagging')

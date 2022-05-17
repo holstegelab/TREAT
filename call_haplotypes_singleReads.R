@@ -4,6 +4,8 @@
     library(plyr)
     library(data.table)
     library(argparse)
+    library(universalmotif)
+    library(Biostrings)
 
 # Functions
     # Function to polish clustering of TR when no phasing information is available
@@ -268,6 +270,30 @@
         return(res)
     }
 
+    # Polish haplotypes after phasing is done
+    polishHaplo_afterPhasing_size = function(phased_data, thr_mad){
+        # split h1 from h2, reads and excluded
+        h1 = phased_data[which(phased_data$HAPLOTYPE == 1),]; h2 = phased_data[which(phased_data$HAPLOTYPE == 2),]
+        excluded = phased_data[is.na(phased_data$HAPLOTYPE),]; if (nrow(excluded) >=1) { excluded$polished_reads = 'exclude' }
+        # assign haplotypes before polishing
+        if (nrow(h1) >=1){ h1$haplo_value = median(h1$LENGTH_SEQUENCE) }
+        if (nrow(h2) >=1){ h2$haplo_value = median(h2$LENGTH_SEQUENCE) }
+        # using the thr_mad, split reads to keep from those to exclude
+        h1_thr_mad = max(1.5, ceiling(median(h1$LENGTH_SEQUENCE)*thr_mad))
+        h2_thr_mad = max(1.5, ceiling(median(h2$LENGTH_SEQUENCE)*thr_mad))
+        h1$polished_reads = ifelse(abs(h1$LENGTH_SEQUENCE - median(h1$LENGTH_SEQUENCE)) <= h1_thr_mad, 'keep', 'exclude')
+        h2$polished_reads = ifelse(abs(h2$LENGTH_SEQUENCE - median(h2$LENGTH_SEQUENCE)) <= h2_thr_mad, 'keep', 'exclude')
+        # assign haplotypes after polishing
+        if (nrow(h1) >= 1){ h1$polished_haplo_values = median(h1$LENGTH_SEQUENCE[which(h1$polished_reads == 'keep')]) }
+        if (nrow(h2) >= 1){ h2$polished_haplo_values = median(h2$LENGTH_SEQUENCE[which(h2$polished_reads == 'keep')]) }
+        # return combined object
+        res = rbind.fill(h1, h2)
+        # clean haplotypes -- sometimes there's haplotype 2 but not 1 --> make it 1
+        if (2 %in% res$HAPLOTYPE && (!(1 %in% res$HAPLOTYPE))){ res$HAPLOTYPE = 1 }
+        res = plyr::rbind.fill(res, excluded)
+        return(res)
+    }
+
     # Function to perform guided haplotyping using phasing information
     PhasingBased_haplotyping <- function(reads_df, sample_name, thr_mad){
         # split cn with haplotypes from those without
@@ -333,24 +359,85 @@
         return(all_res)
     }
 
+    # Function to perform guided haplotyping using phasing information using the sizes
+    PhasingBased_haplotyping_size <- function(reads_df, sample_name, thr_mad){
+        # split cn with haplotypes from those without
+        phased = reads_df[!is.na(reads_df$HAPLOTYPE),]; nonPhased = reads_df[is.na(reads_df$HAPLOTYPE),]
+        # if we're dealing with reference (only 1 haplotype), treat it differently -- the final df is all_res
+        if (sample_name == 'reference'){ 
+            reads_df$HAPLOTYPE = 1; reads_df$type = 'Assigned'; all_res = reads_df
+        } else {
+            # first check if there are non-phased reads
+            if (nrow(nonPhased) >0){
+                # if so, check if all reads are not phased
+                if (nrow(phased) == 0){
+                    # if so, we run the kmeans-based haplotyping
+                    res = KMeansBased_haplotyping(reads = nonPhased$LENGTH_SEQUENCE, thr = 2, min_support = 1, thr_mad_orig = thr_mad, type = 'single_sample')
+                    # then polish with the polisher without phasing
+                    res_polished = polishHaplo_noPhasing(res, thr_mad)
+                    # extract polished reads
+                    reads_h1 = unlist(strsplit(as.character(res_polished$reads_h1), ',')); reads_h2 = unlist(strsplit(as.character(res_polished$reads_h2), ','))
+                    reads_df$type = NA
+                    # make the final df with reads and haplotypes (depending on how many alleles were found)
+                    if (reads_h2 == 'homozygous' && !is.na(reads_h2)){
+                        reads_df$type[which(reads_df$LENGTH_SEQUENCE %in% reads_h1)] = 'Assigned'; reads_df$HAPLOTYPE[which(reads_df$LENGTH_SEQUENCE %in% reads_h1)] = 1
+                    } else if (!is.na(reads_h2)){
+                        reads_df$type[which(reads_df$LENGTH_SEQUENCE %in% c(reads_h1, reads_h2))] = 'Assigned'
+                        reads_df$HAPLOTYPE[which(reads_df$LENGTH_SEQUENCE %in% reads_h1)] = 1; reads_df$HAPLOTYPE[which(reads_df$LENGTH_SEQUENCE %in% reads_h2)] = 2
+                    }
+                    # the final df is all_res
+                    all_res = reads_df
+                # there is phasing information available, but only haplo 1 was found
+                } else if (length(unique(phased$HAPLOTYPE)) == 1) {
+                    reads_df$type = NA; reads_df$type[!is.na(reads_df$HAPLOTYPE)] <- 'Phased'
+                    # gather all reads within thr_mad from the haplotype
+                    median_cn = median(phased$LENGTH_SEQUENCE)
+                    thr_mad = max(1.5, ceiling(median(median_cn)*thr_mad))
+                    # idea: look at reads without phase and try to assign them a phase based on thr_mad 
+                    reads_df$type[which(abs(reads_df$LENGTH_SEQUENCE - median_cn) <= thr_mad)] <- 'Assigned'
+                    reads_df$HAPLOTYPE[which(abs(reads_df$LENGTH_SEQUENCE - median_cn) <= thr_mad)] <- 1
+                    # the remaining reads (those with mad > thr_mad) are haplotype 2
+                    reads_df$HAPLOTYPE[is.na(reads_df$HAPLOTYPE)] = 2
+                    reads_df$type[is.na(reads_df$HAPLOTYPE)] = 'Assigned'
+                    # the final df is all_res
+                    all_res = reads_df
+                # if there is phasing information for both alleles
+                } else {
+                    phased$type = 'Phased'
+                    # find centers (mean of copy number in the group of same haplotype)
+                    h1 = mean(phased$LENGTH_SEQUENCE[which(phased$HAPLOTYPE == 1)])
+                    h2 = mean(phased$LENGTH_SEQUENCE[which(phased$HAPLOTYPE == 2)])
+                    # idea: assign reads without phase based on distance from those with a phase --> lowest distance gets the assignment
+                    for (i in 1:nrow(nonPhased)){
+                        tmp = nonPhased$LENGTH_SEQUENCE[i]; closest_haplo = ifelse(abs(tmp - h1) < abs(tmp - h2), 1, 2)
+                        nonPhased$type[i] = 'Assigned'; nonPhased$HAPLOTYPE[i] = closest_haplo
+                    }
+                    # the final df is all_res
+                    all_res = rbind(phased, nonPhased)
+                }
+            # if phasing information is available for all reads, we don't need to do anything
+            } else {
+                phased$type = 'Phased'; all_res = phased
+            }
+        }
+        all_res$sample = sample_name
+        return(all_res)
+    }
+
     # Function to clean TRF matches per read based on percentage of coverage and percentage of TRF match
     cleanMotifsTRF <- function(entire_set){
-        # split exact matches and non-exact matches based on motif match type
-        exact_match = entire_set[which(entire_set$MATCH_TYPE %in% c('perm_motif', 'exact_motif')),]
-        non_exact_matches = entire_set[which(entire_set$MATCH_TYPE %in% c('different_length', 'different_motif')),]
-        # calculate percentage of sequence covered by TRF, for exact and non-exact matches
-        exact_match$PERC_SEQ_COVERED_TR = (nchar(exact_match$PADDING_AFTER) + nchar(exact_match$PADDING_BEFORE) + nchar(exact_match$SEQUENCE_TRF)) / exact_match$LENGTH_SEQUENCE
-        non_exact_matches$PERC_SEQ_COVERED_TR = (nchar(non_exact_matches$PADDING_AFTER) + nchar(non_exact_matches$PADDING_BEFORE) + nchar(non_exact_matches$SEQUENCE_TRF)) / non_exact_matches$LENGTH_SEQUENCE
-            #ggplot(exact_match, aes(x = PERC_SEQ_COVERED_TR)) + geom_density()
-            #plot(exact_match$PERC_SEQ_COVERED_TR)
-        # split well covered samples from non-well covered (EXACT MATCH)
+        # 1. calculate percentage of sequence covered by TRF
+        entire_set$PERC_SEQ_COVERED_TR = (nchar(entire_set$PADDING_AFTER) + nchar(entire_set$PADDING_BEFORE) + nchar(entire_set$SEQUENCE_TRF)) / entire_set$LENGTH_SEQUENCE
+
+        # 2. split exact matches and non-exact matches based on motif match type
+        exact_match = entire_set[which(entire_set$MATCH_TYPE %in% c('perm_motif', 'exact_motif', 'rev_motif', 'perm_rev_motif')),]
+        non_exact_matches = entire_set[which(entire_set$MATCH_TYPE %in% c('different_length', 'different_motif', 'No matches')),]
+        
+        # 3. look at exact matches -- split well covered samples from non-well covered
         well_covered = exact_match[which(exact_match$PERC_SEQ_COVERED_TR >= 0.95),]
         missing_cove = exact_match[which(exact_match$PERC_SEQ_COVERED_TR < 0.95),]
         
-        # look at DUPLICATED READS poorly covered reads
-        # these are reads with (1) multiple trf matches exact-motif 
-            #print(paste0(length(well_covered$READ_NAME[duplicated(well_covered$READ_NAME)]), ' duplicates in well-covered reads'))
-            #print(paste0(length(missing_cove$READ_NAME[duplicated(missing_cove$READ_NAME)]), ' duplicates in poorly-covered reads'))
+        # 4. look at DUPLICATED READS that have bad coverage: these are reads with multiple trf matches exact-motif 
         poorly_covered_duplicates = missing_cove[which(missing_cove$READ_NAME %in% missing_cove$READ_NAME[duplicated(missing_cove$READ_NAME)]),]
         results_poor_duplicates = list()
         # loop on duplicated reads to see if they are genuinely measuring 2 motifs or not
@@ -361,7 +448,7 @@
             # then calculate joined coverage and overlaps
             join_coverage = unlist(overlaps); overlaps = join_coverage[duplicated(join_coverage)]
             # calculate cumulative coverage (50 is the estimated padding)
-            cum_coverage = (length(join_coverage) + 50 - length(overlaps)) / tmp$LENGTH_SEQUENCE[1]
+            cum_coverage = (length(join_coverage) + 20 - length(overlaps)) / tmp$LENGTH_SEQUENCE[1]
             # check if there was a gain in doing this in terms of cumulative coverage compared to the original coverages
             if (max(cum_coverage, tmp$PERC_SEQ_COVERED_TR) == cum_coverage){
                 # if there is a gain, probably we're dealing with a true variable motif
@@ -379,10 +466,8 @@
         well_covered = rbind(well_covered, results_poor_duplicates)  
         # exclude duplicates from the poorly covered reads
         missing_cove = missing_cove[which(!(missing_cove$READ_NAME %in% well_covered$READ_NAME)),]
-        print(paste0(length(missing_cove$READ_NAME[duplicated(missing_cove$READ_NAME)]), ' duplicates in poorly-covered reads now'))
         
-        # (2) can be exact-matches with missing coverage + non-exact matches 
-            #print(paste0(length(which(unique(missing_cove$READ_NAME) %in% non_exact_matches$READ_NAME)), ' reads poorly covered have non-exact matches'))
+        # 5. look at reads with exact-matches with missing coverage AND non-exact matches 
         results_poor_nonexact = list()
         # loop on poorly covered with non-exact matches
         for (d in unique(missing_cove$READ_NAME)){
@@ -393,7 +478,7 @@
             # calculate joined coverage and overlaps
             join_coverage = unlist(overlaps); overlaps = join_coverage[duplicated(join_coverage)]
             # calculate cumulative coverage (50 is the estimated padding)
-            cum_coverage = (length(join_coverage) + 50 - length(overlaps)) / tmp$LENGTH_SEQUENCE[1]
+            cum_coverage = (length(join_coverage) + 20 - length(overlaps)) / tmp$LENGTH_SEQUENCE[1]
             # check if there was a gain in doing this
             if (max(cum_coverage, na.omit(tmp$PERC_SEQ_COVERED_TR)) == cum_coverage){
                 # if there is a gain, probably we're dealing with a true variable motif
@@ -412,7 +497,7 @@
         # exclude these non-exact matches from poorly covered reads
         missing_cove = missing_cove[which(!(missing_cove$READ_NAME %in% well_covered$READ_NAME)),]
 
-        # (3) or can be non-exact matches + exact-matches
+        # 6. look at reads with exact-matches AND non-exact matches + exact-matches
         results_nonexact = list()
         # loop on non-exact matches
         for (d in unique(non_exact_matches$READ_NAME)){
@@ -454,7 +539,7 @@
                 # calculate joined coverage and overlaps
                 join_coverage = unlist(overlaps); overlaps = join_coverage[duplicated(join_coverage)]
                 # calculate cumulative coverage (50 is the estimated padding)
-                cum_coverage = (length(join_coverage) + 50 - length(overlaps)) / tmp_non_exact$LENGTH_SEQUENCE[1]
+                cum_coverage = (length(join_coverage) + 20 - length(overlaps)) / tmp_non_exact$LENGTH_SEQUENCE[1]
                 # check if there was a gain in doing this
                 if (max(cum_coverage, na.omit(tmp_non_exact$PERC_SEQ_COVERED_TR)) == cum_coverage){
                     tmp_non_exact$EXITUS = 'true_variable_motif'; tmp_non_exact$CUM_PERC_MATCH = cum_coverage
@@ -540,6 +625,85 @@
                         # create the same df with NA values and add to growing list
                         tmp_df = data.frame(SAMPLE = unique(excl$sample), REGION = unique(excl$REGION), H1 = NA, H2 = NA, 
                             H1_MOTIF = NA, H2_MOTIF = NA, H1_LENGTH = NA, H2_LENGTH = NA, COEF_VAR_H1 = NA, COEF_VAR_H2 = NA,
+                            EXCLUDED = excl_info, EXCLUDED_LEN = excl_len)
+                        all_haplo[[(length(all_haplo) + 1)]] = tmp_df
+                    }
+                }
+            }
+        }
+        # convert list to df at the end
+        all_haplo = rbindlist(all_haplo)
+        return(all_haplo)
+    }
+
+    # Function to call haplotypes and combine information
+    callHaplo_size <- function(data){
+        # find all unique samples
+        all_samples = unique(data$sample); all_regions = unique(data$REGION); all_haplo = list()
+        # main loop across samples
+        for (s in all_samples){
+            for (r in all_regions){
+                # gather all data together, excluded reads and good reads
+                tmp = data[which(data$sample == s & data$REGION == r),]
+                excl = tmp[which(tmp$polished_reads == 'exclude'),]; tmp = tmp[which(tmp$polished_reads != 'exclude'),]
+                # first we managed to identify the haplotypes
+                if (nrow(tmp) >0){
+                    if (!(NA %in% tmp$HAPLOTYPE) & nrow(tmp) >0){
+                        # if we have both haplotypes assigned, get the relative info: copies, motif, coef. of variation, length, info
+                        if (1 %in% tmp$HAPLOTYPE & 2 %in% tmp$HAPLOTYPE){
+                            h1_info = median(tmp$CONSENSUS_COPY_NUMBER[which(tmp$HAPLOTYPE == 1)])
+                            h1_motif = paste(unique(tmp$CONSENSUS_MOTIF[which(tmp$HAPLOTYPE == 1)]), collapse = ',')
+                            h1_var = sd(tmp$CONSENSUS_COPY_NUMBER[which(tmp$HAPLOTYPE == 1)]) / mean(tmp$CONSENSUS_COPY_NUMBER[which(tmp$HAPLOTYPE == 1)])
+                            h1_len = paste(unique(tmp$LENGTH_SEQUENCE[which(tmp$HAPLOTYPE == 1)]), collapse = ',')
+                            h1_motif_info = unique(tmp$CONSENSUS_MOTIF_COMPLEX[which(tmp$HAPLOTYPE == 1)])
+                            h1_add_motifs = unique(tmp$ADDITIONAL_MOTIFS[which(tmp$HAPLOTYPE == 1)])
+                            h2_info = median(tmp$CONSENSUS_COPY_NUMBER[which(tmp$HAPLOTYPE == 2)])
+                            h2_motif = paste(unique(tmp$CONSENSUS_MOTIF[which(tmp$HAPLOTYPE == 2)]), collapse = ',')
+                            h2_var = sd(tmp$CONSENSUS_COPY_NUMBER[which(tmp$HAPLOTYPE == 2)]) / mean(tmp$CONSENSUS_COPY_NUMBER[which(tmp$HAPLOTYPE == 2)])
+                            h2_len = paste(unique(tmp$LENGTH_SEQUENCE[which(tmp$HAPLOTYPE == 2)]), collapse = ',')
+                            h2_motif_info = unique(tmp$CONSENSUS_MOTIF_COMPLEX[which(tmp$HAPLOTYPE == 2)])
+                            h2_add_motifs = unique(tmp$ADDITIONAL_MOTIFS[which(tmp$HAPLOTYPE == 2)])
+                        # otherwise if only h1 is present, only gather h1 info
+                        } else if (1 %in% tmp$HAPLOTYPE){
+                            h1_info = median(tmp$CONSENSUS_COPY_NUMBER[which(tmp$HAPLOTYPE == 1)])
+                            h1_motif = paste(unique(tmp$CONSENSUS_MOTIF[which(tmp$HAPLOTYPE == 1)]), collapse = ',')
+                            h1_var = sd(tmp$CONSENSUS_COPY_NUMBER[which(tmp$HAPLOTYPE == 1)]) / mean(tmp$CONSENSUS_COPY_NUMBER[which(tmp$HAPLOTYPE == 1)])
+                            h1_len = paste(unique(tmp$LENGTH_SEQUENCE[which(tmp$HAPLOTYPE == 1)]), collapse = ',')
+                            h1_motif_info = unique(tmp$CONSENSUS_MOTIF_COMPLEX[which(tmp$HAPLOTYPE == 1)])
+                            h1_add_motifs = unique(tmp$ADDITIONAL_MOTIFS[which(tmp$HAPLOTYPE == 1)])
+                            h2_info = NA; h2_motif = NA; h2_var = NA; h2_len = NA
+                        # otherwise gather only h2 info
+                        } else {
+                            h2_info = median(tmp$CONSENSUS_COPY_NUMBER[which(tmp$HAPLOTYPE == 2)])
+                            h2_motif = paste(unique(tmp$CONSENSUS_MOTIF[which(tmp$HAPLOTYPE == 2)]), collapse = ',')
+                            h2_var = sd(tmp$CONSENSUS_COPY_NUMBER[which(tmp$HAPLOTYPE == 2)]) / mean(tmp$CONSENSUS_COPY_NUMBER[which(tmp$HAPLOTYPE == 2)])
+                            h2_len = paste(unique(tmp$LENGTH_SEQUENCE[which(tmp$HAPLOTYPE == 2)]), collapse = ',')
+                            h2_motif_info = unique(tmp$CONSENSUS_MOTIF_COMPLEX[which(tmp$HAPLOTYPE == 2)])
+                            h2_add_motifs = unique(tmp$ADDITIONAL_MOTIFS[which(tmp$HAPLOTYPE == 2)])
+                            h1_info = NA; h1_motif = NA; h1_var = NA; h1_len = NA
+                        }
+                        # then check excluded reads
+                        if (nrow(excl) >0){ 
+                            excl_info = paste(paste0(excl$CONSENSUS_MOTIF, '(', excl$CONSENSUS_COPY_NUMBER, ')'), collapse = '_')
+                            excl_len = paste(excl$LENGTH_SEQUENCE, collapse = ',')
+                        } else { 
+                            excl_info = NA; excl_len = NA
+                        }
+                        # finally save a df with all info regarding TR
+                        tmp_df = data.frame(SAMPLE = unique(tmp$sample), REGION = unique(tmp$REGION), H1 = h1_info, H2 = h2_info, 
+                            H1_MOTIF = h1_motif, H2_MOTIF = h2_motif, H1_LENGTH = h1_len, H2_LENGTH = h2_len, COEF_VAR_H1 = h1_var, COEF_VAR_H2 = h2_var,
+                            H1_MOTIF_TYPE = h1_motif_info, H2_MOTIF_TYPE = h2_motif_info, H1_ADDITIONAL_MOTIF = h1_add_motifs, H2_ADDITIONAL_MOTIF = h2_add_motifs,
+                            EXCLUDED = excl_info, EXCLUDED_LEN = excl_len)
+                        # and add to the growing list
+                        all_haplo[[(length(all_haplo) + 1)]] = tmp_df
+                    # if haplotypes were not identified (i.e they are NAs)
+                    } else {
+                        excl_info = paste(paste0(excl$CONSENSUS_MOTIF, '(', excl$CONSENSUS_COPY_NUMBER, ')'), collapse = '_')
+                        excl_len = paste(excl$LENGTH_SEQUENCE, collapse = ',')
+                        # create the same df with NA values and add to growing list
+                        tmp_df = data.frame(SAMPLE = unique(excl$sample), REGION = unique(excl$REGION), H1 = NA, H2 = NA, 
+                            H1_MOTIF = NA, H2_MOTIF = NA, H1_LENGTH = NA, H2_LENGTH = NA, COEF_VAR_H1 = NA, COEF_VAR_H2 = NA,
+                            H1_MOTIF_TYPE = NA, H2_MOTIF_TYPE = NA, H1_ADDITIONAL_MOTIF = NA, H2_ADDITIONAL_MOTIF = NA,
                             EXCLUDED = excl_info, EXCLUDED_LEN = excl_len)
                         all_haplo[[(length(all_haplo) + 1)]] = tmp_df
                     }
@@ -721,6 +885,142 @@
         return(data)
     }
 
+    # Function to call haplotypes when dealing with assembly-based TRF
+    assemblyBased_size = function(data, sample_name, region, thr_mad){
+        # assign variables to fill
+        data$type = NA
+        data$sample = sample_name
+        # if we're dealing with assemblies, in theory it is simpler the haplotyping
+        # we need to check whether we have enough data (>0 contigs)
+        if (nrow(data) >0){
+            # flag cases when there are multiple data (>2 contigs)
+            if (nrow(data) >2){
+                # in this case run the normal kmean function
+                res = KMeansBased_haplotyping(reads = data$LENGTH_SEQUENCE, thr = 2, min_support = 1, thr_mad_orig = thr_mad, type = 'single_sample')
+                # then polish with the polisher without phasing
+                res_polished = polishHaplo_noPhasing(res, thr_mad)
+                # extract polished reads
+                reads_h1 = unlist(strsplit(as.character(res_polished$reads_h1), ',')); reads_h2 = unlist(strsplit(as.character(res_polished$reads_h2), ','))
+                # make the final df with reads and haplotypes (depending on how many alleles were found)
+                if (reads_h2 == 'homozygous' && !is.na(reads_h2)){
+                    data$type[which(data$LENGTH_SEQUENCE %in% reads_h1)] = 'Assigned'; data$HAPLOTYPE[which(data$LENGTH_SEQUENCE %in% reads_h1)] = 1
+                }
+            } else {
+                # then we need to check if it is an homozygous call (1 contig)
+                if (nrow(data) == 1){
+                    # homozygous call
+                    data$HAPLOTYPE = 1
+                    data$type = 'assembly'
+                } else {
+                    # heterozygous call
+                    data$HAPLOTYPE = c(1, 2)
+                    data$type = 'assembly'
+                }
+            }
+        }
+        return(data)
+    }
+
+    # Function to check consensus motif given a list of motifs -- greedy approach
+    consensusMotif_greedy = function(motifs){
+        # first thing is to check whether we only have 1 single motif --> easy case
+        if (length(unique(motifs$UNIFORM_MOTIF)) == 1){
+            motifs$CONSENSUS_MOTIF = unique(motifs$UNIFORM_MOTIF)
+            motifs$CONSENSUS_COPY_NUMBER = motifs$COPIES_TRF
+        } else {
+            # calculate frequencies of each motif
+            motifs_frq = data.frame(table(motifs$UNIFORM_MOTIF)); motifs_frq$Perc = motifs_frq$Freq / nrow(motifs)
+            # keep motifs with highest frequency
+            motifs_frq = motifs_frq[order(-motifs_frq$Perc),]
+            consensus_motif = as.character(motifs_frq$Var1[1])
+            # but we need to re-estimate copy-number when the motif is different
+            motifs$CONSENSUS_MOTIF = consensus_motif
+            motifs$CONSENSUS_COPY_NUMBER = NA; motifs$CONSENSUS_COPY_NUMBER[which(motifs$UNIFORM_MOTIF == consensus_motif)] = motifs$COPIES_TRF[which(motifs$UNIFORM_MOTIF == consensus_motif)]
+            motifs$CONSENSUS_COPY_NUMBER[is.na(motifs$CONSENSUS_COPY_NUMBER)] = median(motifs$CONSENSUS_COPY_NUMBER[which(motifs$UNIFORM_MOTIF == consensus_motif)])
+        }
+        return(motifs)
+    }
+
+    # Function to check consensus motif given a list of motifs -- more conscious approach
+    consensusMotif_conscious = function(motifs){
+        # first thing is to check whether we only have 1 single motif --> easy case
+        if (length(na.omit(unique(motifs$UNIFORM_MOTIF))) == 1){
+            # before assigning, let's check for NA, and if there are too many, exclude the call
+            tb = data.frame(table(motifs$UNIFORM_MOTIF, exclude = F)); tb$Perc = tb$Freq / nrow(motifs)
+            if (NA %in% tb$Var1 && tb$Perc[is.na(tb$Var1)] > 0.8){
+                motifs$CONSENSUS_MOTIF = NA
+                motifs$CONSENSUS_COPY_NUMBER = NA
+                motifs$CONSENSUS_MOTIF_COMPLEX = NA
+                motifs$ADDITIONAL_MOTIFS = NA
+            } else {
+                motifs$CONSENSUS_MOTIF = unique(na.omit(motifs$UNIFORM_MOTIF))
+                motifs$CONSENSUS_COPY_NUMBER = motifs$COPIES_TRF
+                motifs$CONSENSUS_MOTIF_COMPLEX = 'simple'
+                motifs$ADDITIONAL_MOTIFS = NA
+            }
+        } else if (length(na.omit(unique(motifs$UNIFORM_MOTIF))) == 0){
+            motifs$CONSENSUS_MOTIF = NA
+            motifs$CONSENSUS_COPY_NUMBER = NA
+            motifs$CONSENSUS_MOTIF_COMPLEX = NA
+            motifs$ADDITIONAL_MOTIFS = NA
+        } else {
+            # calculate frequencies of each motif
+            motifs_frq = data.frame(table(motifs$UNIFORM_MOTIF)); motifs_frq$Perc = motifs_frq$Freq / nrow(motifs)
+            # keep motifs with highest frequency
+            motifs_frq = motifs_frq[order(-motifs_frq$Perc),]
+            consensus_motif = as.character(motifs_frq$Var1[1])
+            # raise a flag when the frequency of most common motif is <0.8
+            if (motifs_frq$Perc[1] < 0.8){ 
+                # in this case: either the motif is really variable across reads, or there is a clear pattern, such as each read has two motifs that suggests these should be combined
+                # then it depends on the number of duplicated reads, if this approximate 50%, we should further look, otherwise not
+                dups = unique(motifs$READ_NAME[duplicated(motifs$READ_NAME)])
+                if (length(dups)/nrow(motifs) >= 0.4){
+                    # if there are many duplicates, there are 2 options: either there are multiple motifs that combine together (nested repeats), or there are two alternative motifs that can be estimated
+                    # to distinguish the two cases, we can look at the percentage of coverage
+                    tmp = motifs; tmp$coverage = (tmp$END_TRF - tmp$START_TRF + 20) / tmp$LENGTH_SEQUENCE
+                    # if the coverage is very high, that means we are dealing with alternative motifs for the same TR: take the motif with highest coverage
+                    if (TRUE %in% (tmp$coverage >0.90)){
+                        consensus_motif = unique(tmp$UNIFORM_MOTIF[which(tmp$coverage == max(tmp$coverage))])
+                        motifs$CONSENSUS_MOTIF = consensus_motif
+                        motifs$CONSENSUS_COPY_NUMBER = NA; motifs$CONSENSUS_COPY_NUMBER[which(motifs$UNIFORM_MOTIF == consensus_motif)] = motifs$COPIES_TRF[which(motifs$UNIFORM_MOTIF == consensus_motif)]
+                        motifs$CONSENSUS_COPY_NUMBER[is.na(motifs$CONSENSUS_COPY_NUMBER)] = median(motifs$CONSENSUS_COPY_NUMBER[which(motifs$UNIFORM_MOTIF == consensus_motif)])
+                        motifs$CONSENSUS_MOTIF_COMPLEX = 'alternative'; motifs$ADDITIONAL_MOTIFS = paste(unique(motifs$UNIFORM_MOTIF[which(motifs$UNIFORM_MOTIF != consensus_motif)]), collapse = ',')
+                        motifs = motifs[!duplicated(motifs$READ_NAME),]
+                    } else {
+                        print(paste0('**** look at ', unique(motifs$sample), ' in ', unique(motifs$REGION)))
+                    }
+                } else {
+                    # otherwise remove the wrong motif and keep the consensus motif from reads with duplicated motifs
+                    wrong_dup = motifs[which(motifs$UNIFORM_MOTIF != consensus_motif),]
+                    for (i in 1:nrow(wrong_dup)){
+                        good_dup = motifs[which(motifs$READ_NAME == wrong_dup$READ_NAME[i] & motifs$UNIFORM_MOTIF == consensus_motif),]
+                        if (nrow(good_dup) >0){ motifs = motifs[-which(motifs$READ_NAME == wrong_dup$READ_NAME[i] & motifs$UNIFORM_MOTIF == wrong_dup$UNIFORM_MOTIF[i])] }
+                    }
+                    # the remaining reads: those with different motifs and no duplicate with consensus motif, will be forced to be with the consensus motif
+                    # at the end we need to re-estimate copy-number when the motif is different and the read with the wrong motif has no duplicated with the consensus motif
+                    motifs$CONSENSUS_MOTIF = consensus_motif
+                    motifs$CONSENSUS_COPY_NUMBER = NA; motifs$CONSENSUS_COPY_NUMBER[which(motifs$UNIFORM_MOTIF == consensus_motif)] = motifs$COPIES_TRF[which(motifs$UNIFORM_MOTIF == consensus_motif)]
+                    motifs$CONSENSUS_COPY_NUMBER[is.na(motifs$CONSENSUS_COPY_NUMBER)] = median(motifs$CONSENSUS_COPY_NUMBER[which(motifs$UNIFORM_MOTIF == consensus_motif)])
+                    motifs$CONSENSUS_MOTIF_COMPLEX = 'variable'; motifs$ADDITIONAL_MOTIFS = paste(unique(motifs$UNIFORM_MOTIF[which(motifs$UNIFORM_MOTIF != consensus_motif)]), collapse = ',')
+                }
+            } else {
+                # most times TRF finds two motifs for the same read, one of which is the consensus and the other is not
+                # if the consensun motif is largely the most frequent, just delete the other motif for the duplicated read
+                wrong_dup = motifs[which(motifs$UNIFORM_MOTIF != consensus_motif),]
+                for (i in 1:nrow(wrong_dup)){
+                    good_dup = motifs[which(motifs$READ_NAME == wrong_dup$READ_NAME[i] & motifs$UNIFORM_MOTIF == consensus_motif),]
+                    if (nrow(good_dup) >0){ motifs = motifs[-which(motifs$READ_NAME == wrong_dup$READ_NAME[i] & motifs$UNIFORM_MOTIF == wrong_dup$UNIFORM_MOTIF[i])] }
+                }
+                # at the end we need to re-estimate copy-number when the motif is different and the read with the wrong motif has no duplicated with the consensus motif
+                motifs$CONSENSUS_MOTIF = consensus_motif
+                motifs$CONSENSUS_COPY_NUMBER = NA; motifs$CONSENSUS_COPY_NUMBER[which(motifs$UNIFORM_MOTIF == consensus_motif)] = motifs$COPIES_TRF[which(motifs$UNIFORM_MOTIF == consensus_motif)]
+                motifs$CONSENSUS_COPY_NUMBER[is.na(motifs$CONSENSUS_COPY_NUMBER)] = median(motifs$CONSENSUS_COPY_NUMBER[which(motifs$UNIFORM_MOTIF == consensus_motif)])
+                motifs$CONSENSUS_MOTIF_COMPLEX = 'simple'; motifs$ADDITIONAL_MOTIFS = NA
+            }
+        }
+        return(motifs)
+    }
+
 # Manage arguments
     parser <- ArgumentParser()
     # add arguments: --trf is the trf output
@@ -855,3 +1155,88 @@
     # plain text for genotypes per read and per sample
     write.table(trf_matches_genotypes_per_read, paste0(out_dir, '/Haplotypes_per_read.txt'), quote=F, row.names=F, sep = '\t')
     write.table(trf_matches_genotypes_per_sample, paste0(out_dir, '/Haplotypes_per_sample.txt'), quote=F, row.names=F, sep = '\t')
+
+    ######
+    # Alternative would be to first look at the sizes and separate haplotypes based on those, and then look at the motif
+    # in this case we should start from trf_pha object
+    # 1. add the TR size by substracting 20 (10*2 padding) to LENGTH_SEQUENCE
+    trf_pha$TR_LENGHT = trf_pha$LENGTH_SEQUENCE - 20
+
+    # 2. good to exclude duplicated reads otherwise results would be biased towards sequences with more complex motifs (where TRF finds multiple matches)
+    trf_pha = trf_pha[which(trf_pha$SEQUENCE_WITH_WINDOW != ''),]
+    trf_pha_nodup = trf_pha[!duplicated(trf_pha$READ_NAME),]; dups = trf_pha[duplicated(trf_pha$READ_NAME),]
+
+    # 3. we do genotyping on the sizes
+    cat('** Genotyping TRs\n')
+    all_samples = unique(trf_pha_nodup$SAMPLE_NAME); all_regions = unique(trf_pha_nodup$REGION); all_res = list()
+    for (s in all_samples){
+        print(paste0('** processing sample --> ', s))
+        for (r in all_regions){
+            # get data of the sample and the region of interest
+            tmp_data = trf_pha_nodup[which(trf_pha_nodup$SAMPLE_NAME == s & trf_pha_nodup$REGION == r),]
+            if (nrow(tmp_data) >0){
+                if (inp_typ == 'single_reads'){
+                    reads_df = tmp_data[, c('COPIES_TRF', 'HAPLOTYPE', 'UNIFORM_MOTIF', 'REGION', 'PASSES', 'READ_QUALITY', 'LENGTH_SEQUENCE', 'READ_NAME', 'START_TRF', 'END_TRF', 'PC_MATCH_TRF', 'PC_INDEL_TRF', 'SEQUENCE_WITH_WINDOW')]
+                    phased_data = PhasingBased_haplotyping_size(reads_df, sample_name = s, thr_mad = 0.05)
+                    polished_data = polishHaplo_afterPhasing_size(phased_data, 0.05)
+                    all_res[[(length(all_res) + 1)]] = polished_data
+                } else {
+                    reads_df = tmp_data[, c('COPIES_TRF', 'HAPLOTYPE', 'UNIFORM_MOTIF', 'REGION', 'PASSES', 'READ_QUALITY', 'LENGTH_SEQUENCE', 'READ_NAME', 'START_TRF', 'END_TRF', 'PC_MATCH_TRF', 'PC_INDEL_TRF', 'SEQUENCE_WITH_WINDOW')]
+                    phased_data = assemblyBased_size(reads_df, sample_name = s, region = r, 0.05)
+                    polished_data = polishHaplo_afterPhasing_size(phased_data, 0.05)
+                    all_res[[(length(all_res) + 1)]] = polished_data
+                }
+            }
+        }
+    }
+    # Merge all results together
+    all_res = data.table::rbindlist(all_res, fill=T)
+
+    # 4. now let's bring the duplicates in again and assign the correct haplotype based on the other duplicate
+    dups_name = unique(dups$READ_NAME)
+    for (d in dups_name){
+        tmp_dup_haplo = all_res[which(all_res$READ_NAME == d),]; tmp_dup_noinfo = dups[which(dups$READ_NAME == d),]
+        # then create as many rows as the number of dups row with same columns as tmp_dup_haplo with values from tmp_dup_noinfo
+        n_dups = nrow(tmp_dup_noinfo)
+        tmp_df = data.frame(COPIES_TRF = tmp_dup_noinfo$COPIES_TRF, HAPLOTYPE = rep(tmp_dup_haplo$HAPLOTYPE, n_dups), UNIFORM_MOTIF = tmp_dup_noinfo$UNIFORM_MOTIF, REGION = tmp_dup_noinfo$REGION, 
+                            PASSES = tmp_dup_noinfo$PASSES, READ_QUALITY = tmp_dup_noinfo$READ_QUALITY, LENGTH_SEQUENCE = tmp_dup_noinfo$LENGTH_SEQUENCE, READ_NAME = rep(d, n_dups), 
+                            START_TRF = tmp_dup_noinfo$START_TRF, END_TRF = tmp_dup_noinfo$END_TRF, PC_MATCH_TRF = tmp_dup_noinfo$PC_MATCH_TRF, PC_INDEL_TRF = tmp_dup_noinfo$PC_INDEL_TRF, 
+                            SEQUENCE_WITH_WINDOW = tmp_dup_noinfo$SEQUENCE_WITH_WINDOW, type = rep(tmp_dup_haplo$type, n_dups), sample = rep(tmp_dup_haplo$sample, n_dups), 
+                            haplo_value = rep(tmp_dup_haplo$haplo_value, n_dups), polished_reads = rep(tmp_dup_haplo$polished_reads, n_dups), polished_haplo_values = rep(tmp_dup_haplo$polished_haplo_values, n_dups))
+        # finally add this df to the main dataset
+        all_res = rbind(all_res, tmp_df)
+    }
+
+    # 5. now we should look at the motifs
+    all_samples = unique(all_res$sample); all_regions = unique(all_res$REGION); motif_res = list()
+    for (s in all_samples){
+        for (r in all_regions){
+            # take all reads
+            tmp = all_res[which(all_res$sample == s & all_res$REGION == r),]
+            # check number of haplotypes
+            n_haplo = unique(tmp$HAPLOTYPE)
+            # treat haplotypes independently from each other
+            if (1 %in% tmp$HAPLOTYPE & 2 %in% tmp$HAPLOTYPE){
+                h1 = tmp[which(tmp$HAPLOTYPE == 1),]; h2 = tmp[which(tmp$HAPLOTYPE == 2),]
+                # calculate consensus motif
+                h1_consensus_motif = consensusMotif_conscious(h1); h2_consensus_motif = consensusMotif_conscious(h2)
+                tmp_res = rbind(h1_consensus_motif, h2_consensus_motif)
+            } else if (1 %in% tmp$HAPLOTYPE){
+                h1 = tmp[which(tmp$HAPLOTYPE == 1),]
+                # calculate consensus motif
+                tmp_res = consensusMotif_conscious(h1)
+            } else if (2 %in% tmp$HAPLOTYPE){
+                h2 = tmp[which(tmp$HAPLOTYPE == 2),]
+                # calculate consensus motif
+                tmp_res = consensusMotif_conscious(h2)
+            }
+            # add to results list
+            motif_res[[(length(motif_res) + 1)]] = tmp_res
+        }
+    }
+    motif_res = rbindlist(motif_res)
+    # there are some NAs, check them
+    nas = motif_res[is.na(motif_res$CONSENSUS_MOTIF),]
+
+    # 6. finally call haplotypes
+    all_haplo = callHaplo_size(data = motif_res)

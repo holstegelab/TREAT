@@ -123,6 +123,10 @@ def findPositionOfInterest(cigar, positions_of_interest):
     # type 4 --> S
         elif x == 4:
             counter_raw = counter_raw + 1
+    # type 5 --> H
+        elif x == 5:
+            counter_raw = counter_raw + 1
+            print('!!! hard-clipping found, your sequence could be trimmed!')
     # if other types, notify:
         else:
             print("!!! new term in cigar string --> %s" %(x))
@@ -163,9 +167,9 @@ def extractReads(bed, all_bams, out_dir, window):
         outf.close()
         all_out_bam.append(outname)
         all_out_fasta.append(outname_fasta)
-        os.system('/project/holstegelab/Software/nicco/tools/samtools-1.11/samtools sort %s > %s' %(outname, outname + '_sorted'))
+        os.system('samtools sort %s > %s' %(outname, outname + '_sorted'))
         os.system('mv %s %s' %(outname + '_sorted', outname))
-        os.system('/project/holstegelab/Software/nicco/tools/samtools-1.11/samtools index %s' %(outname))
+        os.system('samtools index %s' %(outname))
     return all_out_bam, all_out_fasta
 
 # Polish reads using Alex's script
@@ -199,7 +203,7 @@ def polishReads(bed, distances, out_dir):
                             to_write = '>' + read_in_order + '\n' + read[-3] + '\n'
                             tmp_f.write(to_write)
             tmp_f.close()
-            corrected_reads = os.popen('/project/holstegelab/Software/nicco/tools/urchin/build/urchin correct -m 3 ' + tmp_fname).read().split('\n')
+            corrected_reads = os.popen('urchin correct -m 3 ' + tmp_fname).read().split('\n')
             corrected_reads = corrected_reads[:-1]
             corrected_reads_id = [x for x in corrected_reads if x.startswith('>')]
             corrected_reads_seq = [x for x in corrected_reads if not x.startswith('>')]
@@ -319,14 +323,36 @@ def trf(distances, out_dir, motif, polished):
             tmp_out.write('>%s\n%s\n' %(bam, seq))
             tmp_out.close()
             # run tandem repeat finder specifying as maximum motif length the known one
-            cmd = '/project/holstegelab/Software/nicco/tools/trf409.linux64 ' + tmp_name + ' 2 7 7 80 10 50 %s -ngs -h' %(len(exact_motifs[0]))
+            cmd = 'trf4.10.0-rc.2.linux64.exe ' + tmp_name + ' 2 7 7 80 10 50 %s -ngs -h' %(len(exact_motifs[0]))
             trf = [x for x in os.popen(cmd).read().split('\n') if x != '']
-            # if no trf results were found, try to make the motif larger, let's say 5nt bigger, before going to the results
             motif_len = 'no_motif'
             if len(trf) == 0:
-                cmd = '/project/holstegelab/Software/nicco/tools/trf409.linux64 ' + tmp_name + ' 2 7 7 80 10 50 200 -ngs -h'
-                trf = [x for x in os.popen(cmd).read().split('\n') if x != '']
-                motif_len = 'different_length'
+                add_trial = 0
+                while len(trf) == 0 and add_trial <3:
+                    # if no trf results were found, first try to lower the minimum score to 40 for TRF match
+                    if add_trial == 0:
+                        cmd = 'trf4.10.0-rc.2.linux64.exe ' + tmp_name + ' 2 7 7 80 10 40 %s -ngs -h' %(len(exact_motifs[0]))
+                        trf = [x for x in os.popen(cmd).read().split('\n') if x != '']
+                        add_trial += 1
+                        motif_len = 'same_length'
+                    # if no trf results were found again, first try to lower the minimum score to 30 for TRF match
+                    elif add_trial == 1:
+                        cmd = 'trf4.10.0-rc.2.linux64.exe ' + tmp_name + ' 2 7 7 80 10 30 %s -ngs -h' %(len(exact_motifs[0]))
+                        trf = [x for x in os.popen(cmd).read().split('\n') if x != '']
+                        add_trial += 1
+                        motif_len = 'same_length'
+                    # if again no matches, try to match any motif with higher score
+                    elif add_trial == 2:
+                        cmd = 'trf4.10.0-rc.2.linux64.exe ' + tmp_name + ' 2 7 7 80 10 50 200 -ngs -h'
+                        trf = [x for x in os.popen(cmd).read().split('\n') if x != '']
+                        add_trial += 1
+                        motif_len = 'different_length'
+                    # if again no matches, try to match any motif with looser score
+                    else:
+                        cmd = 'trf4.10.0-rc.2.linux64.exe ' + tmp_name + ' 2 7 7 80 10 30 200 -ngs -h'
+                        trf = [x for x in os.popen(cmd).read().split('\n') if x != '']
+                        add_trial += 1
+                        motif_len = 'different_length'
             else:
                 motif_len = 'same_length'
             # look whether there are hits for the corresponding motif -- if so, save results into dictionary
@@ -410,13 +436,13 @@ def localAssembly(strategy, out_dir, ploidy, thread):
     for group_name in strategy.keys():
         inp_fasta = ' '.join(strategy[group_name])
         outname = '%s/%s_asm' %(out_dir, group_name)
-        cmd_assembly = '/project/holstegelab/Software/nicco/tools/hifiasm/hifiasm -o %s -t %s --n-hap %s -n 2 -r 3 -N 200 %s >/dev/null 2>&1' %(outname, thread, ploidy, inp_fasta)
+        cmd_assembly = 'hifiasm -o %s -t %s --n-hap %s -n 2 -r 3 -N 200 %s >/dev/null 2>&1' %(outname, thread, ploidy, inp_fasta)
         try:
             os.system(cmd_assembly)
-            subprocess.run("/project/holstegelab/Software/nicco/tools/gfatools/gfatools gfa2fa %s.bp.hap1.p_ctg.gfa > %s_haps.fasta" %(outname, outname), shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)          # convert gfa of hap 1 to fasta
-            subprocess.run("/project/holstegelab/Software/nicco/tools/gfatools/gfatools gfa2fa %s.bp.hap2.p_ctg.gfa >> %s_haps.fasta" %(outname, outname), shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)          # convert gfa of hap 2 to fasta
+            subprocess.run("gfatools gfa2fa %s.bp.hap1.p_ctg.gfa > %s_haps.fasta" %(outname, outname), shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)          # convert gfa of hap 1 to fasta
+            subprocess.run("gfatools gfa2fa %s.bp.hap2.p_ctg.gfa >> %s_haps.fasta" %(outname, outname), shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)          # convert gfa of hap 2 to fasta
             subprocess.run("mv %s.bp.p_ctg.gfa %s_p_ctg.gfa" %(outname, outname), shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)    # rename primary contigs
-            subprocess.run("/project/holstegelab/Software/nicco/tools/gfatools/gfatools gfa2fa %s_p_ctg.gfa >> %s_p_ctg.fasta" %(outname, outname), shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)          # convert gfa of hap 2 to fasta
+            subprocess.run("gfatools gfa2fa %s_p_ctg.gfa >> %s_p_ctg.fasta" %(outname, outname), shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)          # convert gfa of hap 2 to fasta
             subprocess.run("rm %s.*" %(outname), shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)                 # clean non-necessary files
             print('**** %s/%s assemblies done' %(list(strategy.keys()).index(group_name) + 1, len(list(strategy.keys()))), end = '\r')
             outnames_list.append(outname)
@@ -438,12 +464,12 @@ def alignAssembly(outname_list, thread, reference):
         # haplotype-aware fastas
         asm_name = asm + '_haps.fasta'
         outname = asm + outname_prefix
-        cmd = "/project/holstegelab/Software/conda/miniconda3_v1/envs/py37/bin/pbmm2 align --preset CCS %s -j %s --log-level FATAL --sort %s %s" %(ref_hifi, thread, asm_name, outname)       # command for alignment
+        cmd = "pbmm2 align --preset CCS %s -j %s --log-level FATAL --sort %s %s" %(ref_hifi, thread, asm_name, outname)       # command for alignment
         os.system(cmd)
         # primary contigs as well
         asm_name = asm + '_p_ctg.fasta'
         outname_primary = asm + outname_primary_prefix
-        cmd = "/project/holstegelab/Software/conda/miniconda3_v1/envs/py37/bin/pbmm2 align --preset CCS %s -j %s --log-level FATAL --sort %s %s" %(ref_hifi, thread, asm_name, outname_primary)       # command for alignment
+        cmd = "pbmm2 align --preset CCS %s -j %s --log-level FATAL --sort %s %s" %(ref_hifi, thread, asm_name, outname_primary)       # command for alignment
         os.system(cmd)
         print('**** %s/%s alignment done' %(outname_list.index(asm) + 1, len(outname_list)), end = '\r')
     return(print('\n** alignment done'))
@@ -702,19 +728,19 @@ def phase_reads(reads_bam, snps_to_keep, output_directory, SNPs_data_directory, 
             tmp_samples.close()
             # make subset of snps and sample of interest -- one sample at the time
             print('**** %s: extract snps...' %(fname), end = '\r')
-            os.system('/project/holstegelab/Software/bin/plink2 --pfile %s --extract %s/tmp_snps_interest.txt --keep %s/tmp_samples_interest.txt --recode vcf --out %s/tmp_genotypes >/dev/null 2>&1' %(SNPs_data_directory[:-5], output_directory, output_directory, output_directory))
+            os.system('plink2 --pfile %s --extract %s/tmp_snps_interest.txt --keep %s/tmp_samples_interest.txt --recode vcf --out %s/tmp_genotypes >/dev/null 2>&1' %(SNPs_data_directory[:-5], output_directory, output_directory, output_directory))
             # check if file was created, otherwise skip
             if os.path.isfile('%s/tmp_genotypes.vcf' %(output_directory)):
                 # add chr notation for chromosome to vcf
-                os.system('/project/holstegelab/Software/conda/miniconda3_v1/envs/py37/bin/bcftools annotate --rename-chrs /project/holstegelab/Software/nicco/bin/TRHT/test_data/chr_name_conv.txt %s/tmp_genotypes.vcf | bgzip > %s/tmp_genotypes.vcf.gz' %(output_directory, output_directory))
-                os.system('/home/holstegelab-ntesi/.conda/envs/whatshap/bin/tabix %s/tmp_genotypes.vcf.gz' %(output_directory))
+                os.system('bcftools annotate --rename-chrs /project/holstegelab/Software/nicco/bin/TRHT/test_data/chr_name_conv.txt %s/tmp_genotypes.vcf | bgzip > %s/tmp_genotypes.vcf.gz' %(output_directory, output_directory))
+                os.system('tabix %s/tmp_genotypes.vcf.gz' %(output_directory))
                 # create a phased vcf with whatshap
                 print('**** %s: phasing snps...   ' %(fname), end = '\r')
-                os.system('/home/holstegelab-ntesi/.conda/envs/whatshap/bin/whatshap phase -o %s --reference=%s %s/tmp_genotypes.vcf.gz %s --ignore-read-groups --internal-downsampling 5 >/dev/null 2>&1' %(f.replace('.bam', '_phased.vcf.gz'), ref_path, output_directory, f))
+                os.system('whatshap phase -o %s --reference=%s %s/tmp_genotypes.vcf.gz %s --ignore-read-groups --internal-downsampling 5 >/dev/null 2>&1' %(f.replace('.bam', '_phased.vcf.gz'), ref_path, output_directory, f))
                 # for haplotag command, need a phased vcf
-                os.system('/home/holstegelab-ntesi/.conda/envs/whatshap/bin/tabix %s' %(f.replace('.bam', '_phased.vcf.gz')))
+                os.system('tabix %s' %(f.replace('.bam', '_phased.vcf.gz')))
                 print('**** %s: tagging reads...   ' %(fname), end = '\r')
-                os.system('/home/holstegelab-ntesi/.conda/envs/whatshap/bin/whatshap haplotag -o %s/tmp_haplotag.bam --reference=%s %s %s --ignore-read-groups >/dev/null 2>&1' %(output_directory, ref_path, f.replace('.bam', '_phased.vcf.gz'), f))
+                os.system('whatshap haplotag -o %s/tmp_haplotag.bam --reference=%s %s %s --ignore-read-groups >/dev/null 2>&1' %(output_directory, ref_path, f.replace('.bam', '_phased.vcf.gz'), f))
                 # read haplotags
                 haplotags = {}
                 inBam = pysam.AlignmentFile('%s/tmp_haplotag.bam' %(output_directory), 'rb', check_sq=False)
@@ -788,7 +814,7 @@ def findTargetReads(target, all_bams, output_directory):
         inBam.close()
         outBam.close()
     # then merge the bam files in tmp_list and remove the temporary
-    cmd = '/project/holstegelab/Software/nicco/tools/samtools-1.11/samtools merge %s/subreads_information.bam %s' %(output_directory, ' '.join(tmp_list))
+    cmd = 'samtools merge %s/subreads_information.bam %s' %(output_directory, ' '.join(tmp_list))
     os.system(cmd)
     for bam in tmp_list:
         cmd = 'rm %s' %(bam)
@@ -805,11 +831,11 @@ def alignRawReads(target_bam, output_directory):
     chm13 = '/project/holstegelab/Share/asalazar/data/chm13/assembly/v2_0/chm13v2.0_subreads.mmi'
     # commands for alignment to hg38
     print('**** aligning to GRCh38')
-    cmd = "/project/holstegelab/Software/conda/miniconda3_v1/envs/py37/bin/pbmm2 align --preset SUBREAD %s -j %s --log-level FATAL --sort %s %s" %(hg38, thread, target_bam, outname_hg38)
+    cmd = "pbmm2 align --preset SUBREAD %s -j %s --log-level FATAL --sort %s %s" %(hg38, thread, target_bam, outname_hg38)
     os.system(cmd)
     # commands for alignment to chm13
     print('**** aligning to chm13')
-    cmd = "/project/holstegelab/Software/conda/miniconda3_v1/envs/py37/bin/pbmm2 align --preset SUBREAD %s -j %s --log-level FATAL --sort %s %s" %(hg38, thread, target_bam, outname_chm13)
+    cmd = "pbmm2 align --preset SUBREAD %s -j %s --log-level FATAL --sort %s %s" %(hg38, thread, target_bam, outname_chm13)
     os.system(cmd)
     return('Files are aligned')
 
@@ -881,7 +907,7 @@ def realignFasta(fasta_files, threads, reference):
     reference_mmi = '/project/holstegelab/Share/asalazar/data/chm13/assembly/v2_0/chm13v2.0_hifi.mmi' if reference == 'chm13' else '/project/holstegelab/Share/pacbio/resources/h38_ccs.mmi'
     # loop to align fasta
     for i in range(len(fasta_files)):
-        os.system("/project/holstegelab/Software/conda/miniconda3_v1/envs/py37/bin/pbmm2 align --preset CCS %s -j %s --log-level FATAL --sort %s %s" %(reference_mmi, threads, fasta_files[i], output_aligned[i]))       # command for alignment
+        os.system("pbmm2 align --preset CCS %s -j %s --log-level FATAL --sort %s %s" %(reference_mmi, threads, fasta_files[i], output_aligned[i]))       # command for alignment
         print('**** %s/%s alignment done' %(fasta_files.index(fasta_files[i]) + 1, len(fasta_files)), end = '\r')
     return output_aligned
 
