@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/usr/bin/env python
 
 #############################################################
 # SET OF TOOLS THAT CAN BE USED TO MANAGE AND ANALYZE DATA  #
