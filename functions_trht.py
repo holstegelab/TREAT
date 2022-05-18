@@ -4,7 +4,6 @@ from inspect import getsourcefile
 from os.path import abspath
 import sys
 import pathlib
-from functions_trht import *
 import argparse
 import os.path
 import pysam
