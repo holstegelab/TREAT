@@ -1,4 +1,4 @@
-#!~/.conda/envs/treat/bin/python
+#!/usr/bin/python3
 
 #############################################################
 # SET OF TOOLS THAT CAN BE USED TO MANAGE AND ANALYZE DATA  #
