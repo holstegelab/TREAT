@@ -853,7 +853,7 @@
                 if (nrow(tmp_data) >0){
                     reads_df = tmp_data[, c('COPIES_TRF', 'HAPLOTYPE', 'UNIFORM_MOTIF', 'REGION', 'PASSES', 'READ_QUALITY', 'LENGTH_SEQUENCE', 'READ_NAME', 'START_TRF', 'END_TRF', 'PC_MATCH_TRF', 'PC_INDEL_TRF', 'SEQUENCE_WITH_WINDOW')]
                     phased_data = PhasingBased_haplotyping_size(reads_df, sample_name = s, thr_mad = 0.05)
-                    polished_data = polishHaplo_afterPhasing_size(phased_data, 0.05)
+                    polished_data = polishHaplo_afterPhasing_size(phased_data, 0.10)
                     polished_data$DATA_TYPE = 'reads-spanning'
                     all_res[[(length(all_res) + 1)]] = polished_data
                 }
