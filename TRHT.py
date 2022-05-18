@@ -263,7 +263,6 @@ elif anal_type == 'assembly':
     
     # 3. extract reads mapping to regions of interest in bed -- multiprocessing
     print("\n** 1. extracting reads")
-    os.system('mkdir %s/raw_reads' %(output_directory))
     pool = multiprocessing.Pool(processes=number_threads)
     extract_fun = partial(extractReads_MP, bed = bed_regions, out_dir = output_directory, window = window_size, all_bams = all_bam_files)
     extract_results = pool.map(extract_fun, all_bam_files); print('**** read extraction done!                                         ')
@@ -272,7 +271,7 @@ elif anal_type == 'assembly':
     reads_bam = [x[0] for x in extract_results]; reads_fasta = [x[1] for x in extract_results]
 
     # 5. assembly
-    print('** 5. assembly')
+    print('** 2. assembly')
     strategy = AsmStrategy(assembly_type, reads_fasta, output_directory)
     # decide how many assembly in parallel to run (keep 2 cores per assembly, then depends on the total number of cores available)
     threads_per_asm = 4; parallel_assemblies = int(number_threads / threads_per_asm); all_samples = list(strategy.keys())
@@ -282,26 +281,57 @@ elif anal_type == 'assembly':
     print('**** done with assembly                                     ')
 
     # 12. clean contigs
-    print('** 6. clean assembled contigs')
+    print('** 3. clean assembled contigs')
     out_dir = cleanContigs(output_directory)
 
     # 13. alignment
-    print('** 7. align contigs')
+    print('** 4. align contigs')
     threads_per_aln = 4; parallel_alignment = int(number_threads / threads_per_aln)
     pool = multiprocessing.Pool(processes=parallel_alignment)
     align_fun = partial(alignAssembly_MP, outname_list = assembly_results, thread = threads_per_aln, reference = reference)
     align_results = pool.map(align_fun, assembly_results)
     print('**** done with contig alignment                                     ')
 elif anal_type == 'phase_reads':
-    print("** reading bed file")
-    bed = readBed(bed_file)
+    # 1. read bed regions
+    print("**** reading bed file")
+    bed_regions = readBed(bed_file)
+
+    # 2. check bam files
     print("** checking bam files")
-    all_bams = checkBAM(bam_directory)
-    reads_bam, reads_fasta = extractReads(bed, all_bams, output_directory, window_size)
-    print('\n** find SNPs for phasing')
-    snps_for_phasing, snps_to_keep, SNPs_data_path = findSNPs_gwas(snp_dir, bed, window_size)
-    print('** phasing')
-    phasing_info = phase_reads(reads_bam, snps_to_keep, output_directory, SNPs_data_path, snp_data_ids)
+    all_bam_files = checkBAM(bam_directory)
+    
+    # 3. extract reads mapping to regions of interest in bed -- multiprocessing
+    print("\n** 1. extracting reads")
+    pool = multiprocessing.Pool(processes=number_threads)
+    extract_fun = partial(extractReads_MP, bed = bed_regions, out_dir = output_directory, window = window_size, all_bams = all_bam_files)
+    extract_results = pool.map(extract_fun, all_bam_files); print('**** read extraction done!                                         ')
+    
+    # 4. combine results together
+    reads_bam = [x[0] for x in extract_results]; reads_fasta = [x[1] for x in extract_results]
+
+    # 5. phasing and haplotagging -- multiprocessing
+    print('** 2. phasing and haplotagging')
+    print('**** finding SNPs for phasing')
+    snps_for_phasing, snps_to_keep, SNPs_data_path = findSNPs_gwas(snp_dir, bed_regions, window_size)
+    print('**** start phasing                                  ', end = '\r')
+    pool = multiprocessing.Pool(processes=number_threads)
+    phasing_fun = partial(phase_reads_MP, reads_bam = reads_bam, snps_to_keep = snps_to_keep, output_directory = output_directory, SNPs_data_directory = SNPs_data_path, snp_data_ids = snp_data_ids)
+    phasing_results = pool.map(phasing_fun, reads_bam)
+    print('**** done with phasing                                     ')
+
+    # 6. combine results and output files if phasing was selected
+    phasing_info = {k:v for element in phasing_results for k,v in element.items()}
+    fout = open('%s/haplotags_reads.txt' %(output_directory), 'w')
+    header = 'SAMPLE\tREAD_ID\tHAPLOTYPE\n'
+    fout.write(header)
+    for sample in phasing_info.keys():
+        for read in phasing_info[sample]:
+            if read == 'NA':
+                to_write = '%s\t%s\t%s\n' %(sample, 'NA', 'NA')
+            else:
+                to_write = '%s\t%s\t%s\n' %(sample, read, phasing_info[sample][read])
+            fout.write(to_write)
+    fout.close()    
 elif anal_type == 'extract_snps':
     print("** reading bed file")
     bed = readBed(args.bed_dir)
