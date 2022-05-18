@@ -131,23 +131,53 @@ if anal_type == 'extract_reads':
     
     # 4. extract reads mapping to regions of interest in bed -- multiprocessing
     print("\n** 1. extracting reads")
-    os.system('mkdir %s/raw_reads' %(output_directory))
     pool = multiprocessing.Pool(processes=number_threads)
-    extract_fun = partial(extractReads_MP, bed = bed_regions, out_dir = '%s/raw_reads' %(output_directory), window = window_size, all_bams = all_bam_files)
+    extract_fun = partial(extractReads_MP, bed = bed_regions, out_dir = output_directory, window = window_size, all_bams = all_bam_files)
+    extract_results = pool.map(extract_fun, all_bam_files); print('**** read extraction done!                                         ')
+elif anal_type == 'measure':    
+    # 1. read bed regions
+    print("**** reading bed file")
+    bed_regions = readBed(bed_file)
+
+    # 2. check bam files
+    print("** checking bam files")
+    all_bam_files = checkBAM(bam_directory)
+    
+    # 3. read motif
+    motif = readMotif(bed_file)
+    
+    # 4. extract reads mapping to regions of interest in bed -- multiprocessing
+    print("\n** 1. extracting reads")
+    pool = multiprocessing.Pool(processes=number_threads)
+    extract_fun = partial(extractReads_MP, bed = bed_regions, out_dir = output_directory, window = window_size, all_bams = all_bam_files)
     extract_results = pool.map(extract_fun, all_bam_files); print('**** read extraction done!                                         ')
     
-elif anal_type == 'measure':    
-    print("** reading bed file")
-    bed = readBed(bed_file)
-    print("** checking bam files")
-    all_bams = checkBAM(bam_directory)
-    reads_bam, reads_fasta = extractReads(bed, all_bams, output_directory, window_size)
-    print('\n** calculate size of the regions of interest')
-    distances = measureDistance(bed, reads_bam, 10, output_directory)
-    if polishing == 'True':
-        print('** polishing reads of interest now!')
-        distances_polished = polishReads(bed, distances, output_directory)          # check from here!
-        os.system('rm ' + output_directory + '/measures_spanning_reads.txt')
+    # 5. combine results together
+    reads_bam = [x[0] for x in extract_results]; reads_fasta = [x[1] for x in extract_results]
+    
+    # 6. calculate size of the regions of interest -- multiprocessing
+    print('** 2. calculate size of the regions of interest')
+    pool = multiprocessing.Pool(processes=number_threads)
+    measure_fun = partial(measureDistance_MP, bed = bed_regions, window = 10)
+    extract_results = pool.map(measure_fun, reads_bam)
+    print('**** done measuring reference                                     ', end = '\r')
+    dist_reference = measureDistance_reference(bed_regions, 10); print('**** read measurement done!                                         ')
+    extract_results.append(dist_reference)
+    # combine results
+    distances = {k:v for element in extract_results for k,v in element.items()}
+    # make output file
+    outf = open('%s/measures_spanning_reads.txt' %(output_directory), 'w')
+    outf.write('REGION\tSAMPLE_NAME\tREAD_NAME\tPASSES\tREAD_QUALITY\tMAPPING_CONSENSUS\tSEQUENCE_WITH_WINDOW\tLENGTH_SEQUENCE\tPADDING_SIZE\n')
+    for x in distances.keys():
+        for read in distances[x]:
+            outf.write('%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' %(read[0], x, read[1], read[2], read[3], read[4], read[5], read[6], read[7]))
+    outf.close()
+
+    # 7. check if polishing was requested and in case run that -- to be implemented
+    #if polishing == 'True':
+    #    print('** polishing reads of interest now!')
+    #    distances_polished = polishReads(bed, distances, output_directory)          # check from here!
+    #    os.system('rm ' + output_directory + '/measures_spanning_reads.txt')
 elif anal_type == 'trf':
     print("** reading bed file")
     bed = readBed(bed_file)
