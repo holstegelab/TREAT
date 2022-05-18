@@ -271,7 +271,7 @@ elif anal_type == 'complete':
         outf.write('REGION\tSAMPLE_NAME\tREAD_NAME\tPASSES\tREAD_QUALITY\tMAPPING_CONSENSUS\tSEQUENCE_WITH_WINDOW\tLENGTH_SEQUENCE\tPADDING_SIZE\tSTART_TRF\tEND_TRF\tLENGTH_MOTIF_TRF\tCOPIES_TRF\tPC_MATCH_TRF\tPC_INDEL_TRF\tMOTIF_TRF\tPADDING_BEFORE\tSEQUENCE_TRF\tPADDING_AFTER\tMATCH_TYPE\n')
     for x in trf_info.keys():
         for read in trf_info[x]:
-            trf_res = read[8::] if polished != 'True' else read[10::]
+            trf_res = read[8::] if polishing != 'True' else read[10::]
             for trf_match in trf_res:
                 if isinstance(trf_match, list):
                     if trf_match[0] == 'No matches':
