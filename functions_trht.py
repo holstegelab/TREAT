@@ -993,7 +993,6 @@ def phase_reads_MP(f, reads_bam, snps_to_keep, output_directory, SNPs_data_direc
     if id_gwas == []:
         print('!! Error while mapping GWAS and Long-read IDs. Please ensure the sample ID are the same or provide a file as described in docs!')
         phasing_info = []
-        break
     else:
         # make random number for the sample
         rand_num = str(random()).replace('.', '')
