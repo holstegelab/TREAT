@@ -210,7 +210,12 @@ elif anal_type == 'trf':
     # combine results
     distances = {k:v for element in extract_results for k,v in element.items()}
 
-    # consider to add there the polishing step
+    # then we need to manage if reads need to be polished -- not implemented yet
+    #if polishing == 'True':
+    #    print('** polishing reads of interest now!')
+    #    distances_polished = polishReads(bed, distances, output_directory)   
+    #    print('** tandem repeat finder on corrected reads')
+    #    trf_info_polished = trf(distances_polished, output_directory, motif, polished = 'True')
 
     # 7. TRF on single-reads
     print('** 3. tandem repeat finder on the single-reads')
@@ -247,26 +252,46 @@ elif anal_type == 'trf':
                     else:
                         outf.write('%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' %(read[0], x, read[1], read[2], read[3], read[4], read[5], read[6], read[7], 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA'))
     outf.close()
-
-    # then we need to manage if reads need to be polished -- not implemented yet
-    #if polishing == 'True':
-    #    print('** polishing reads of interest now!')
-    #    distances_polished = polishReads(bed, distances, output_directory)   
-    #    print('** tandem repeat finder on corrected reads')
-    #    trf_info_polished = trf(distances_polished, output_directory, motif, polished = 'True')
 elif anal_type == 'assembly':
-    print("** reading bed file")
-    bed = readBed(bed_file)
+    # 1. read bed regions
+    print("**** reading bed file")
+    bed_regions = readBed(bed_file)
+
+    # 2. check bam files
     print("** checking bam files")
-    all_bams = checkBAM(bam_directory)
-    reads_bam, reads_fasta = extractReads(bed, all_bams, output_directory, window_size)
+    all_bam_files = checkBAM(bam_directory)
+    
+    # 3. extract reads mapping to regions of interest in bed -- multiprocessing
+    print("\n** 1. extracting reads")
+    os.system('mkdir %s/raw_reads' %(output_directory))
+    pool = multiprocessing.Pool(processes=number_threads)
+    extract_fun = partial(extractReads_MP, bed = bed_regions, out_dir = output_directory, window = window_size, all_bams = all_bam_files)
+    extract_results = pool.map(extract_fun, all_bam_files); print('**** read extraction done!                                         ')
+    
+    # 4. combine results together
+    reads_bam = [x[0] for x in extract_results]; reads_fasta = [x[1] for x in extract_results]
+
+    # 5. assembly
+    print('** 5. assembly')
     strategy = AsmStrategy(assembly_type, reads_fasta, output_directory)
-    print('** running local assembly')
-    outname_list = localAssembly(strategy, output_directory, assembly_ploidy, number_threads)
-    print('** cleaning assembled contigs')
+    # decide how many assembly in parallel to run (keep 2 cores per assembly, then depends on the total number of cores available)
+    threads_per_asm = 4; parallel_assemblies = int(number_threads / threads_per_asm); all_samples = list(strategy.keys())
+    pool = multiprocessing.Pool(processes=parallel_assemblies)
+    assembly_fun = partial(localAssembly_MP, strategy = strategy, out_dir = output_directory, ploidy = assembly_ploidy, thread = threads_per_asm)
+    assembly_results = pool.map(assembly_fun, all_samples)
+    print('**** done with assembly                                     ')
+
+    # 12. clean contigs
+    print('** 6. clean assembled contigs')
     out_dir = cleanContigs(output_directory)
-    print('** aligning assembled contigs')
-    alignAssembly(outname_list, number_threads, reference)
+
+    # 13. alignment
+    print('** 7. align contigs')
+    threads_per_aln = 4; parallel_alignment = int(number_threads / threads_per_aln)
+    pool = multiprocessing.Pool(processes=parallel_alignment)
+    align_fun = partial(alignAssembly_MP, outname_list = assembly_results, thread = threads_per_aln, reference = reference)
+    align_results = pool.map(align_fun, assembly_results)
+    print('**** done with contig alignment                                     ')
 elif anal_type == 'phase_reads':
     print("** reading bed file")
     bed = readBed(bed_file)
