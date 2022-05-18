@@ -263,7 +263,7 @@ elif anal_type == 'complete':
 
     # 8. combine these results and make output
     trf_info = {k:v for element in trf_results for k,v in element.items()}
-    if polished == 'True':
+    if polishing == 'True':
         outf = open(trf_out_dir + '/measures_spanning_reads_and_trf_polished.txt', 'w')
         outf.write('REGION\tSAMPLE_NAME\tREAD_NAME\tPASSES\tREAD_QUALITY\tMAPPING_CONSENSUS\tSEQUENCE_WITH_WINDOW\tLENGTH_SEQUENCE\tPADDING_SIZE\tPOLISHED_SEQUENCE\tLENGTH_POLISHED\tDIFF_WITH_ORIGINAL\tSTART_TRF\tEND_TRF\tLENGTH_MOTIF_TRF\tCOPIES_TRF\tPC_MATCH_TRF\tPC_INDEL_TRF\tMOTIF_TRF\tPADDING_BEFORE\tSEQUENCE_TRF\tPADDING_AFTER\tMATCH_TYPE\n')
     else:
@@ -278,12 +278,12 @@ elif anal_type == 'complete':
                         start_rep, end_rep, mot_len, cp, cons_size, pc_match, pc_indel, aln_score, pc_a, pc_c, pc_g, pc_t, entropy, motif, sequence_trf, padding_before, padding_after, match_type = ['NA']*17 + ['No matches']
                     else:
                         start_rep, end_rep, mot_len, cp, cons_size, pc_match, pc_indel, aln_score, pc_a, pc_c, pc_g, pc_t, entropy, motif, sequence_trf, padding_before, padding_after, match_type = trf_match[0].split(' ') + [trf_match[1]]
-                    if polished == 'True':
+                    if polishing == 'True':
                         outf.write('%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' %(read[0], x, read[1], read[2], read[3], read[4], read[5], read[6], read[7], read[8], len(read[8]), read[9], start_rep, end_rep, mot_len, cp, pc_match, pc_indel, motif, padding_before, sequence_trf, padding_after, match_type))
                     else:
                         outf.write('%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' %(read[0], x, read[1], read[2], read[3], read[4], read[5], read[6], read[7], start_rep, end_rep, mot_len, cp, pc_match, pc_indel, motif, padding_before, sequence_trf, padding_after, match_type))
                 else:
-                    if polished == 'True':
+                    if polishing == 'True':
                         outf.write('%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' %(read[0], x, read[1], read[2], read[3], read[4], read[5], read[6], read[7], read[8], len(read[8]), read[9], 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA'))
                     else:
                         outf.write('%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' %(read[0], x, read[1], read[2], read[3], read[4], read[5], read[6], read[7], 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA'))
