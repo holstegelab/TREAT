@@ -11,6 +11,10 @@
     list.of.packages <- c("plyr", "data.table", "argparse", "stringr")
     new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[, "Package"])]
     if(length(new.packages)) install.packages(new.packages)
+    library(plyr)
+    library(data.table)
+    library(argparse)
+    library(stringr)
 
 # Functions
     # Function to make permutations of letters given a word, used to check motifs

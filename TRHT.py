@@ -1,4 +1,4 @@
-#!/project/holstegelab/Software/conda/miniconda3_v1/envs/py37/bin/python
+#!/python
 
 #############################################################
 # SET OF TOOLS THAT CAN BE USED TO MANAGE AND ANALYZE DATA  #
@@ -7,6 +7,8 @@
 
 ## Libraries
 import os
+from inspect import getsourcefile
+from os.path import abspath
 import sys
 import pathlib
 from functions_trht import *
@@ -21,12 +23,15 @@ import subprocess
 import json
 import pandas as pd
 from datetime import datetime
+from functools import partial
+from itertools import repeat
+import multiprocessing
 
 ## Main
 ## Define Arguments
 parser = argparse.ArgumentParser(description = 'Find information about a specific region/tandem repeat')
 parser.add_argument('--bed', dest = 'bed_dir', type = str, help = '.bed file containing the region(s) to look. Header is not required but if present, it must starts with #.', required = False, default = 'None')
-parser.add_argument('--analysis-type', dest = 'analysis_type', type = str, help = 'Type of analysis to perform [extract_reads / measure / trf / assembly / extract_snps / annotate_snps / extract_annotate / genotype_snps_pacbio / phase_reads / coverage_profile / extract_raw_reads / realign / tr_analysis / haplotyping]. See docs for further information.', required = True)
+parser.add_argument('--analysis-type', dest = 'analysis_type', type = str, help = 'Type of analysis to perform [extract_reads / measure / trf / assembly / extract_snps / annotate_snps / extract_annotate / genotype_snps_pacbio / phase_reads / coverage_profile / extract_raw_reads / realign / complete / haplotyping]. See docs for further information.', required = True)
 parser.add_argument('--variant-file', dest = 'variant_file', type = str, help = 'If the analysis_type is annotate_snps or genotype_snps_pacbio, please provide here the path to the file including the SNPs to annotate/extract.', required = False, default = 'None')
 parser.add_argument('--bam-dir', dest = 'bam_dir', type = str, help = 'Directory of bam file(s). If a directory is provided, will use all .bam in the directory. If a single .bam file is provided, will use that file.', required = False, default = 'None')
 parser.add_argument('--fasta-dir', dest = 'fasta_dir', type = str, help = 'Directory of fasta file(s). If a directory is provided, will use all .fasta/fa in the directory. If a single .fasta file is provided, will use that file.', required = False, default = 'None')
@@ -35,16 +40,16 @@ parser.add_argument('--store-temp', dest = 'store_temp', type = str, help = 'Boo
 parser.add_argument('--window', dest = 'window', type = int, help = 'Integer. Will use this value to take reads surrounding the provided .bed file.', required = False, default = 1000)
 parser.add_argument('--assembly-type', dest = 'ass_type', type = str, help = 'Type of local assembly to perform. By default, each .bam will result in an assembly. If you prefer to use multiple .bam files for an assembly, please submit a file with no header and 2 columns: the first column should report, for each line, a comma-separated list of .bam files to combine in the assembly. The second column, for each line, should report the output prefix of the final assembly for each group.', required = False, default = 'asm_per_bam')
 parser.add_argument('--assembly-ploidy', dest = 'ass_ploidy', type = int, help = 'Ploidy to be used for the local assembly procedure. Default value is 2 (for diploid organisms).', required = False, default = 2)
-parser.add_argument('--thread', dest = 'thread', type = int, help = 'Number of parallel threads to be used during assembly.', required = False, default = 4)
+parser.add_argument('--thread', dest = 'thread', type = int, help = 'Number of parallel threads to be used', required = False, default = 1)
 parser.add_argument('--polish', dest = 'polish', type = str, help = 'Boolean (True/False). If True, reads containing the region of interest will also be polished.', required = False, default = 'False')
-parser.add_argument('--snp-data', dest = 'snp_dir', type = str, help = 'If assembly is selected, please add here the path to SNP data (in PLINK2 format). This information is necessary for phasing.', required = False, default = 'False')
+parser.add_argument('--snp-data', dest = 'snp_dir', type = str, help = 'If phasing is selected, please add here the path to SNP data (in PLINK2 format). This information is necessary for phasing.', required = False, default = 'False')
 parser.add_argument('--snp-data-ids', dest = 'snp_data_ids', type = str, help = 'Please submit here a 2-column file with GWAS ID and ID in sequencing data. If not provided, will assume the IDs are the same.', required = False, default = 'False')
 parser.add_argument('--coverage-step', dest = 'step', type = int, help = 'Number of nt based on which the region(s) of interest will be split to calculate coverage.', required = False, default = 500)
 parser.add_argument('--reads-ids', dest = 'target_reads', type = str, help = 'If analysis type was extract_raw_reads, please provide here a tab-separated file with two columns: the first column should contain the .bam file to extract reads from, the second column should contain the reads ID to extract, one read ID per line.', required = False, default = 'False')
 parser.add_argument('--reference-genome', dest = 'reference', type = str, help = 'If analysis type was assembly, use this parameter to decide whether assembled contigs should be aligned to hg38 or chm13. choises are [hg38 / chm13]. Default is hg38.', required = False, default = 'hg38')
 parser.add_argument('--trf', dest = 'trf_file', type = str, help = 'If analysis type was haplotyping, please input here the path to the TRF output file.', required = False, default = 'None')
 parser.add_argument('--phase', dest = 'phase_file', type = str, help = 'If analysis type was haplotyping, please input here the path to the PHASING output file.', required = False, default = 'None')
-parser.add_argument('--trf-type', dest = 'trf_type', type = str, help = 'If analysis type was haplotyping, please input here the type of TRF input used [single_reads / assembly].', required = False, default = 'None')
+parser.add_argument('--asm', dest = 'asm_file', type = str, help = 'If analysis type was haplotyping, please input here the path to the TRF output of assembly.', required = False, default = 'None')
 
 args = parser.parse_args()
 # Check arguments
@@ -64,8 +69,8 @@ elif (args.analysis_type not in ['haplotyping', 'genotype_snps_pacbio', 'annotat
 if (args.analysis_type == 'extract_raw_reads' and args.target_reads == 'False'):
     parser.error('!! Your should provide either a text file containing the IDs of interest or a comma-separated list of IDs')
 # Six, throw error when trf_file is not specified and analysis type is haplotyping
-if (args.analysis_type == 'haplotyping' and (args.trf_file == 'None' or args.trf_type == 'None')):
-    parser.error('!! Your should provide at least one TRF-output (along with its TRF file type) file when the analysis type is haplotyping.')
+if (args.analysis_type == 'haplotyping' and args.trf_file == 'None' and args.asm_file == 'None'):
+    parser.error('!! Your should provide at least one TRF-output of single-reads or assembly (or both) when the analysis type is haplotyping.')
 
 # Print arguments
 print("\n** Tandem Repeat Haplotyping Toolkit (TRHT) **\n")
@@ -73,7 +78,7 @@ print("********************\n** Your settings:")
 print("** analysis type --> %s" %(args.analysis_type))
 if args.analysis_type == 'haplotyping':
     print("** trf file --> %s" %(args.trf_file))
-    print("** trf type --> %s" %(args.trf_type))
+    print("** asm file --> %s" %(args.asm_file))
     print("** phasing file --> %s" %(args.phase_file))
 print("** bed file --> %s" %(args.bed_dir))
 if args.analysis_type == 'realign_assembly':
@@ -83,23 +88,24 @@ if args.analysis_type == 'realign_assembly':
 else:
     print("** bam file(s) --> %s" %(args.bam_dir))
     print("** output folder --> %s" %(args.out_dir))
-if args.analysis_type == 'phase_reads':
+if args.analysis_type in ['phase_reads', 'complete']:
     print("** phasing using SNPs in --> %s" %(args.snp_dir))
     print("** mapping IDs between long-read and SNPs using --> %s" %(args.snp_data_ids))
 print('** polishing --> %s' %(args.polish))
-if args.analysis_type == 'assembly':
+if args.analysis_type in ['assembly', 'complete']:
     print("** assembly type --> %s" %(args.ass_type))
     print("** reference for alignment --> %s" %(args.reference))
-if args.analysis_type == 'coverage_profile':
+if args.analysis_type in ['coverage_profile', 'complete']:
     print("** step --> %s" %(args.step))
 if args.analysis_type == 'extract_raw_reads':
     print('** read IDs to extract --> %s' %(args.target_reads))
 print("** intermediate files --> %s" %(args.store_temp))
 print('** variant file --> %s' %(args.variant_file))
+print('** number of cpus --> %s' %(args.thread))
 print("** window used --> %s\n********************\n" %(args.window))
 
 # Store arguments
-bed_file, anal_type, var_file, bam_directory, output_directory, store_temporary, window_size, assembly_type, assembly_ploidy, number_threads, polishing, snp_dir, snp_data_ids, step, target_reads, reference, fasta_dir, trf_file, phase_file, trf_type = args.bed_dir, args.analysis_type, args.variant_file, args.bam_dir, args.out_dir, args.store_temp, args.window, args.ass_type, args.ass_ploidy, args.thread, args.polish, args.snp_dir, args.snp_data_ids, args.step, args.target_reads, args.reference, args.fasta_dir, args.trf_file, args.phase_file, args.trf_type
+bed_file, anal_type, var_file, bam_directory, output_directory, store_temporary, window_size, assembly_type, assembly_ploidy, number_threads, polishing, snp_dir, snp_data_ids, step, target_reads, reference, fasta_dir, trf_file, phase_file, asm_file = args.bed_dir, args.analysis_type, args.variant_file, args.bam_dir, args.out_dir, args.store_temp, args.window, args.ass_type, args.ass_ploidy, args.thread, args.polish, args.snp_dir, args.snp_data_ids, args.step, args.target_reads, args.reference, args.fasta_dir, args.trf_file, args.phase_file, args.asm_file
 # Store arguments (for debugging only)
 #bed_file, anal_type, var_file, bam_directory, output_directory, store_temporary, window_size, assembly_type, assembly_ploidy, number_threads, polishing, snp_dir, snp_data_ids, step, target_reads = '/project/holstegelab/Share/nicco/workspaces/20211013_target_approach/automatic_pipeline/DMPK/dmpk.bed', '', '', '/project/holstegelab/Share/nicco/workspaces/20211013_target_approach/automatic_pipeline/DMPK/extract_reads/case/DNA15-20132_2.haplotagged_step1_hifi.bam', '/project/holstegelab/Share/nicco/workspaces/20211013_target_approach/automatic_pipeline/DMPK/phase_reads/case', 'True', 100000, '', 2, 4, 'True', '/project/holstegelab/Share/pacbio/radbound_rfc1_cases/DNA15-20132-DMPK/Analyzed/GRCh38_20220408/SNVCalling_20220411_deepvariant//DNA15-20132_2.phased.pvar', '/project/holstegelab/Share/nicco/workspaces/20211013_target_approach/automatic_pipeline/DMPK/phase_reads/case/map.txt', 500, '/project/holstegelab/Share/nicco/workspaces/20211013_target_approach/automatic_pipeline/RFC1/subreads/c7_all_reads.txt'
 
@@ -108,7 +114,7 @@ print("** checking directories")
 print(checkOutDir(output_directory, anal_type))
 
 ## Add log file with run information in the output folder
-print(addLogRun(bed_file, anal_type, var_file, bam_directory, output_directory, store_temporary, window_size, assembly_type, assembly_ploidy, number_threads, polishing, snp_dir, snp_data_ids, step, target_reads, reference, fasta_dir, trf_file, phase_file, trf_type))
+print(addLogRun(bed_file, anal_type, var_file, bam_directory, output_directory, store_temporary, window_size, assembly_type, assembly_ploidy, number_threads, polishing, snp_dir, snp_data_ids, step, target_reads, reference, fasta_dir, trf_file, phase_file, asm_file))
 
 ## Extract reads mapping to the location of interest
 if anal_type == 'extract_reads':
@@ -215,31 +221,195 @@ elif anal_type == 'extract_raw_reads':
     alignment = alignRawReads(target_bam, output_directory)
 elif anal_type == 'complete':
     print('** TR analysis selected')
+    # 1. read bed regions
     print("**** reading bed file")
-    bed = readBed(bed_file)
+    bed_regions = readBed(bed_file)
+
+    # 2. check bam files
     print("** checking bam files")
-    all_bams = checkBAM(bam_directory)
+    all_bam_files = checkBAM(bam_directory)
+    
+    # 3. read motif
     motif = readMotif(bed_file)
+    
+    # 4. extract reads mapping to regions of interest in bed -- multiprocessing
+    print("** 1. extracting reads")
     os.system('mkdir %s/raw_reads' %(output_directory))
-    reads_bam, reads_fasta = extractReads(bed, all_bams, '%s/raw_reads' %(output_directory), window_size)
-    print('\n** 1. calculate size of the regions of interest')
-    distances = measureDistance(bed, reads_bam, 10, output_directory)
-    print('\n** 2. tandem repeat finder on the single-reads')
-    trf_info = trf(distances, output_directory, motif, polished = 'False')
-    print('\n** 3. phasing and haplotagging')
-    os.system('mkdir %s/phasing' %(output_directory))
-    snps_for_phasing, snps_to_keep, SNPs_data_path = findSNPs_gwas(snp_dir, bed, window_size)
-    phasing_info = phase_reads(reads_bam, snps_to_keep, '%s/phasing' %(output_directory), SNPs_data_path, snp_data_ids)
-    print('\n** 4. assembly')
+    pool = multiprocessing.Pool(processes=number_threads)
+    extract_fun = partial(extractReads_MP, bed = bed_regions, out_dir = '%s/raw_reads' %(output_directory), window = window_size, all_bams = all_bam_files)
+    extract_results = pool.map(extract_fun, all_bam_files); print('**** read extraction done!                                         ')
+    
+    # 5. combine results together
+    reads_bam = [x[0] for x in extract_results]; reads_fasta = [x[1] for x in extract_results]
+    
+    # 6. calculate size of the regions of interest -- multiprocessing
+    print('\n** 2. calculate size of the regions of interest')
+    pool = multiprocessing.Pool(processes=number_threads)
+    measure_fun = partial(measureDistance_MP, bed = bed_regions, window = 10)
+    extract_results = pool.map(measure_fun, reads_bam)
+    print('**** done measuring reference                                     ', end = '\r')
+    dist_reference = measureDistance_reference(bed, 10); print('**** read measurement done!                                         ')
+    extract_results.append(dist_reference)
+    
+    # 7. TRF on single-reads
+    print('\n** 3. tandem repeat finder on the single-reads')
+    all_bams = list(distances.keys()); trf_out_dir = '%s/trf_reads' %(output_directory); os.system('mkdir %s' %(trf_out_dir));
+    pool = multiprocessing.Pool(processes=number_threads)
+    trf_fun = partial(trf_MP, out_dir = trf_out_dir, motif = motif, polished = 'False', distances = distances)
+    trf_results = pool.map(trf_fun, all_bams)
+    print('**** done running TRF                                     ')
+
+    # 8. combine these results and make output
+    trf_info = {k:v for element in trf_results for k,v in element.items()}
+    if polished == 'True':
+        outf = open(trf_out_dir + '/measures_spanning_reads_and_trf_polished.txt', 'w')
+        outf.write('REGION\tSAMPLE_NAME\tREAD_NAME\tPASSES\tREAD_QUALITY\tMAPPING_CONSENSUS\tSEQUENCE_WITH_WINDOW\tLENGTH_SEQUENCE\tPADDING_SIZE\tPOLISHED_SEQUENCE\tLENGTH_POLISHED\tDIFF_WITH_ORIGINAL\tSTART_TRF\tEND_TRF\tLENGTH_MOTIF_TRF\tCOPIES_TRF\tPC_MATCH_TRF\tPC_INDEL_TRF\tMOTIF_TRF\tPADDING_BEFORE\tSEQUENCE_TRF\tPADDING_AFTER\tMATCH_TYPE\n')
+    else:
+        outf = open(trf_out_dir + '/measures_spanning_reads_and_trf.txt', 'w')
+        outf.write('REGION\tSAMPLE_NAME\tREAD_NAME\tPASSES\tREAD_QUALITY\tMAPPING_CONSENSUS\tSEQUENCE_WITH_WINDOW\tLENGTH_SEQUENCE\tPADDING_SIZE\tSTART_TRF\tEND_TRF\tLENGTH_MOTIF_TRF\tCOPIES_TRF\tPC_MATCH_TRF\tPC_INDEL_TRF\tMOTIF_TRF\tPADDING_BEFORE\tSEQUENCE_TRF\tPADDING_AFTER\tMATCH_TYPE\n')
+    for x in trf_info.keys():
+        for read in trf_info[x]:
+            trf_res = read[8::] if polished != 'True' else read[10::]
+            for trf_match in trf_res:
+                if isinstance(trf_match, list):
+                    if trf_match[0] == 'No matches':
+                        start_rep, end_rep, mot_len, cp, cons_size, pc_match, pc_indel, aln_score, pc_a, pc_c, pc_g, pc_t, entropy, motif, sequence_trf, padding_before, padding_after, match_type = ['NA']*17 + ['No matches']
+                    else:
+                        start_rep, end_rep, mot_len, cp, cons_size, pc_match, pc_indel, aln_score, pc_a, pc_c, pc_g, pc_t, entropy, motif, sequence_trf, padding_before, padding_after, match_type = trf_match[0].split(' ') + [trf_match[1]]
+                    if polished == 'True':
+                        outf.write('%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' %(read[0], x, read[1], read[2], read[3], read[4], read[5], read[6], read[7], read[8], len(read[8]), read[9], start_rep, end_rep, mot_len, cp, pc_match, pc_indel, motif, padding_before, sequence_trf, padding_after, match_type))
+                    else:
+                        outf.write('%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' %(read[0], x, read[1], read[2], read[3], read[4], read[5], read[6], read[7], start_rep, end_rep, mot_len, cp, pc_match, pc_indel, motif, padding_before, sequence_trf, padding_after, match_type))
+                else:
+                    if polished == 'True':
+                        outf.write('%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' %(read[0], x, read[1], read[2], read[3], read[4], read[5], read[6], read[7], read[8], len(read[8]), read[9], 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA'))
+                    else:
+                        outf.write('%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' %(read[0], x, read[1], read[2], read[3], read[4], read[5], read[6], read[7], 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA'))
+    outf.close()
+
+    # 9. phasing and haplotagging -- multiprocessing
+    if snp_dir == 'False':
+        print('\n** 4. phasing and haplotagging NOT selected (not specified any SNP data)')
+    else:
+        print('\n** 4. phasing and haplotagging')
+        os.system('mkdir %s/phasing' %(output_directory))
+        print('**** finding SNPs for phasing')
+        snps_for_phasing, snps_to_keep, SNPs_data_path = findSNPs_gwas(snp_dir, bed, window_size)
+        print('**** start phasing                                  ', end = '\r')
+        pool = multiprocessing.Pool(processes=number_threads)
+        phasing_fun = partial(phase_reads_MP, reads_bam = reads_bam, snps_to_keep = snps_to_keep, output_directory = '%s/phasing' %(output_directory), SNPs_data_directory = SNPs_data_path, snp_data_ids = snp_data_ids)
+        phasing_results = pool.map(phasing_fun, reads_bam)
+        print('**** done with phasing                                     ')
+
+    # 10. combine results and output files if phasing was selected
+    if snp_dir != 'False':
+        phasing_info = {k:v for element in phasing_results for k,v in element.items()}
+        fout = open('%s/phasing/haplotags_reads.txt' %(output_directory), 'w')
+        header = 'SAMPLE\tREAD_ID\tHAPLOTYPE\n'
+        fout.write(header)
+        for sample in phasing_info.keys():
+            for read in phasing_info[sample]:
+                if read == 'NA':
+                    to_write = '%s\t%s\t%s\n' %(sample, 'NA', 'NA')
+                else:
+                    to_write = '%s\t%s\t%s\n' %(sample, read, phasing_info[sample][read])
+                fout.write(to_write)
+        fout.close()
+    
+    # 11. assembly
+    print('\n** 5. assembly')
     os.system('mkdir %s/assembly' %(output_directory))
     strategy = AsmStrategy(assembly_type, reads_fasta, '%s/assembly' %(output_directory))
-    outname_list = localAssembly(strategy, '%s/assembly' %(output_directory), assembly_ploidy, number_threads)
-    print('**** cleaning assembled contigs')
+    # decide how many assembly in parallel to run (keep 2 cores per assembly, then depends on the total number of cores available)
+    threads_per_asm = 4; parallel_assemblies = int(number_threads / threads_per_asm); all_samples = list(strategy.keys())
+    pool = multiprocessing.Pool(processes=parallel_assemblies)
+    assembly_fun = partial(localAssembly_MP, strategy = strategy, out_dir = '%s/assembly' %(output_directory), ploidy = assembly_ploidy, thread = threads_per_asm)
+    assembly_results = pool.map(assembly_fun, all_samples)
+    print('**** done with assembly                                     ')
+
+    # 12. clean contigs
+    print('\n** 6. clean assembled contigs')
     out_dir = cleanContigs('%s/assembly' %(output_directory))
-    print('**** aligning assembled contigs')
-    alignAssembly(outname_list, number_threads, reference)
-    print("** 5. generating coverage profile")
-    coverage_profile = generateCoverageProfile(bed, all_bams, window_size, step, output_directory)
+
+    # 13. alignment
+    print('** 7. align contigs')
+    threads_per_aln = 4; parallel_alignment = int(number_threads / threads_per_aln)
+    pool = multiprocessing.Pool(processes=parallel_alignment)
+    align_fun = partial(alignAssembly_MP, outname_list = assembly_results, thread = threads_per_aln, reference = reference)
+    align_results = pool.map(align_fun, assembly_results)
+    print('**** done with contig alignment                                     ')
+
+    # 14. measure distance on contigs
+    print('\n** 8. calculate size of the regions of interest in contigs')
+    # list all files that should be processed
+    haps_to_process = ['%s_haps_hg38.bam' %(x) for x in assembly_results]; prim_to_process = ['%s_p_ctg_hg38.bam' %(x) for x in assembly_results]; files_to_process = haps_to_process + prim_to_process
+    pool = multiprocessing.Pool(processes=number_threads)
+    measure_fun = partial(measureDistance_MP, bed = bed_regions, window = 10)
+    extract_results = pool.map(measure_fun, files_to_process)
+    print('**** read measurement done!                                         ')
+    
+    # 15. combine results together and make output
+    distances = {k:v for element in extract_results for k,v in element.items()}; os.system('mkdir %s/trf_assembly' %(output_directory))
+
+    # 16. tandem repeat finder on assembled contigs
+    print('** 8. tandem repeat finder on contigs')
+    all_bams = list(distances.keys())
+    pool = multiprocessing.Pool(processes=number_threads)
+    trf_fun = partial(trf_MP, out_dir = '%s/trf_assembly' %(output_directory), motif = motif, polished = 'False', distances = distances)
+    trf_results = pool.map(trf_fun, all_bams)
+    print('**** done running TRF on assemblies                                     ')
+
+    # 17. combine these results and make output
+    trf_info = {k:v for element in trf_results for k,v in element.items()}
+    if polished == 'True':
+        outf = open('%s/trf_assembly/measures_spanning_reads_and_trf_polished.txt' %(output_directory), 'w')
+        outf.write('REGION\tSAMPLE_NAME\tREAD_NAME\tPASSES\tREAD_QUALITY\tMAPPING_CONSENSUS\tSEQUENCE_WITH_WINDOW\tLENGTH_SEQUENCE\tPADDING_SIZE\tPOLISHED_SEQUENCE\tLENGTH_POLISHED\tDIFF_WITH_ORIGINAL\tSTART_TRF\tEND_TRF\tLENGTH_MOTIF_TRF\tCOPIES_TRF\tPC_MATCH_TRF\tPC_INDEL_TRF\tMOTIF_TRF\tPADDING_BEFORE\tSEQUENCE_TRF\tPADDING_AFTER\tMATCH_TYPE\n')
+    else:
+        outf = open('%s/trf_assembly/measures_spanning_reads_and_trf.txt' %(output_directory), 'w')
+        outf.write('REGION\tSAMPLE_NAME\tREAD_NAME\tPASSES\tREAD_QUALITY\tMAPPING_CONSENSUS\tSEQUENCE_WITH_WINDOW\tLENGTH_SEQUENCE\tPADDING_SIZE\tSTART_TRF\tEND_TRF\tLENGTH_MOTIF_TRF\tCOPIES_TRF\tPC_MATCH_TRF\tPC_INDEL_TRF\tMOTIF_TRF\tPADDING_BEFORE\tSEQUENCE_TRF\tPADDING_AFTER\tMATCH_TYPE\n')
+    for x in trf_info.keys():
+        for read in trf_info[x]:
+            trf_res = read[8::] if polished != 'True' else read[10::]
+            for trf_match in trf_res:
+                if isinstance(trf_match, list):
+                    if trf_match[0] == 'No matches':
+                        start_rep, end_rep, mot_len, cp, cons_size, pc_match, pc_indel, aln_score, pc_a, pc_c, pc_g, pc_t, entropy, motif, sequence_trf, padding_before, padding_after, match_type = ['NA']*17 + ['No matches']
+                    else:
+                        start_rep, end_rep, mot_len, cp, cons_size, pc_match, pc_indel, aln_score, pc_a, pc_c, pc_g, pc_t, entropy, motif, sequence_trf, padding_before, padding_after, match_type = trf_match[0].split(' ') + [trf_match[1]]
+                    if polished == 'True':
+                        outf.write('%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' %(read[0], x, read[1], read[2], read[3], read[4], read[5], read[6], read[7], read[8], len(read[8]), read[9], start_rep, end_rep, mot_len, cp, pc_match, pc_indel, motif, padding_before, sequence_trf, padding_after, match_type))
+                    else:
+                        outf.write('%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' %(read[0], x, read[1], read[2], read[3], read[4], read[5], read[6], read[7], start_rep, end_rep, mot_len, cp, pc_match, pc_indel, motif, padding_before, sequence_trf, padding_after, match_type))
+                else:
+                    if polished == 'True':
+                        outf.write('%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' %(read[0], x, read[1], read[2], read[3], read[4], read[5], read[6], read[7], read[8], len(read[8]), read[9], 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA'))
+                    else:
+                        outf.write('%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' %(read[0], x, read[1], read[2], read[3], read[4], read[5], read[6], read[7], 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA'))
+    outf.close()
+
+    # 18. coverage profile
+    print("** 8. generating coverage profile")
+    os.system('mkdir %s/coverage' %(output_directory))
+    pool = multiprocessing.Pool(processes=number_threads)
+    coverage_fun = partial(generateCoverageProfile_MP, bed = bed_regions, all_bams = reads_bam, window_size = window_size, step = step, output_directory = '%s/coverage' %(output_directory))
+    coverage_results = pool.map(coverage_fun, reads_bam)
+    print('**** done with coverage profiles                                     ')
+
+    # 19. combine results and output files
+    coverage_info = {k:v for element in coverage_results for k,v in element.items()}
+    outname = open('%s/coverage/coverage_profiles.bed' %(output_directory), 'w')
+    outname.write('CHROM\tSTART_POS\tEND_POS\tSAMPLE\tCOVERAGE\tREGION_ID\n')
+    for s in coverage_info.keys():
+        for x in coverage_info[s]:
+            outname.write('%s\t%s\t%s\t%s\t%s\t%s\n' %(x[0], x[1], x[2], x[3], x[4], x[5]))
+    outname.close()
+
+    # 20. haplotyping
+    print("** 9. haplotype calling and reads-spanning vs. assembly comparison")
+    if snp_dir == 'False':
+        os.system("Rscript %s/call_haplotypes.R --reads_spanning %s/trf_reads/measures_spanning_reads_and_trf.txt --asm %s/trf_assembly/measures_spanning_reads_and_trf.txt --out %s/haplotyping" %('/'.join(abspath(getsourcefile(lambda:0)).split('/')[:-1]), output_directory, output_directory, output_directory, output_directory))
+    else:
+        os.system("Rscript %s/call_haplotypes.R --reads_spanning %s/trf_reads/measures_spanning_reads_and_trf.txt --phase %s/phasing/haplotags_reads.txt --asm %s/trf_assembly/measures_spanning_reads_and_trf.txt --out %s/haplotyping" %('/'.join(abspath(getsourcefile(lambda:0)).split('/')[:-1]), output_directory, output_directory, output_directory, output_directory))
 elif anal_type == 'realign':
     filestorealign = getFilesToRealign(fasta_dir)
     print("** aligning fasta files")
@@ -248,8 +418,12 @@ elif anal_type == 'haplotyping':
     print('** haplotyping')
     file_path = os.path.realpath(__file__)
     file_path = '/'.join(file_path.split('/')[:-1])
-    os.system('/usr/bin/Rscript %s/call_haplotypes_singleReads.R --trf %s --phase %s --trf_type %s --out %s' %(file_path, trf_file, phase_file, trf_type, output_directory))
+    os.system('/usr/bin/Rscript %s/call_haplotypes.R --trf %s --phase %s --trf_type %s --out %s' %(file_path, trf_file, phase_file, trf_type, output_directory))
+    if snp_dir == 'False':
+        os.system("Rscript %s/call_haplotypes.R --reads_spanning %s --asm %s --out %s" %(file_path, trf_file, asm_file, output_directory))
+    else:
+        os.system("Rscript %s/call_haplotypes.R --reads_spanning %s --phase %s --asm %s --out %s" %(file_path, trf_file, phase_file, asm_file, output_directory))
 
-if (store_temporary == 'False' and anal_type not in ['haplotyping', 'extract_reads', 'coverage_profile']):
+if (store_temporary == 'False' and anal_type not in ['haplotyping', 'extract_reads', 'coverage_profile', 'complete']):
     print(cleanTemp(output_directory, anal_type))
 print('\n** run complete! all results are correctly stored. \ngoing to sleep now \nciao!')

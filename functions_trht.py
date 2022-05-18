@@ -141,14 +141,14 @@ def findPositionOfInterest(cigar, positions_of_interest):
     return(pos_interest)
 
 # Extract reads mapping the the location of interest
-def extractReads(bed, all_bams, out_dir, window):
+def extractReads(all_bams, bed, out_dir, window):
     all_out_bam = []
     all_out_fasta = []
     for bam in all_bams:
         print("**** %s/%s bam done" %(all_bams.index(bam) + 1, len(all_bams)), end = '\r')
         fasta_seqs = {}
-        outname = out_dir + '/' + bam.split('/')[-1][:-4] + '_step1.bam'
-        outname_fasta = out_dir + '/' + bam.split('/')[-1][:-4] + '_step1.fasta'
+        outname = out_dir + '/' + bam.split('/')[-1][:-4] + '__rawReads.bam'
+        outname_fasta = out_dir + '/' + bam.split('/')[-1][:-4] + '__rawReads.fasta'
         inBam = pysam.AlignmentFile(bam, 'rb', check_sq=False)
         outBam = pysam.AlignmentFile(outname, "wb", template=inBam)
         for chrom in bed.keys():
@@ -171,6 +171,33 @@ def extractReads(bed, all_bams, out_dir, window):
         os.system('mv %s %s' %(outname + '_sorted', outname))
         os.system('samtools index %s' %(outname))
     return all_out_bam, all_out_fasta
+
+# Extract reads mapping the the location of interest
+def extractReads_MP(bam, bed, out_dir, window, all_bams):
+    fasta_seqs = {}
+    outname = out_dir + '/' + bam.split('/')[-1][:-4] + '__rawReads.bam'
+    outname_fasta = out_dir + '/' + bam.split('/')[-1][:-4] + '__rawReads.fasta'
+    inBam = pysam.AlignmentFile(bam, 'rb', check_sq=False)
+    outBam = pysam.AlignmentFile(outname, "wb", template=inBam)
+    for chrom in bed.keys():
+        for region in bed[chrom]:
+            start, end = int(region[0]) - window, int(region[1]) + window
+            for read in inBam.fetch(chrom, start, end):
+                outBam.write(read)                              # write to new bam file
+                sequence_interest = str(read.query_sequence)    # save fasta sequences
+                read_name = read.query_name
+                fasta_seqs[read_name] = sequence_interest
+    outBam.close()
+    inBam.close()
+    outf = open(outname_fasta, 'w')
+    for read in fasta_seqs.keys():
+        outf.write('>%s\n%s\n' %(read, fasta_seqs[read]))
+    outf.close()
+    os.system('samtools sort %s > %s' %(outname, outname + '_sorted'))
+    os.system('mv %s %s' %(outname + '_sorted', outname))
+    os.system('samtools index %s' %(outname))
+    print("**** done with %s          " %(bam.split('/')[-1]), end = '\r')
+    return outname, outname_fasta
 
 # Polish reads using Alex's script
 def polishReads(bed, distances, out_dir):
@@ -280,7 +307,7 @@ def measureDistance(bed, reads_bam, window, out_dir):
         for region in bed[chrom]:
             region_id = chrom + ':' + region[0] + '-' + region[1]
             start, end = int(region[0]) - window, int(region[1]) + window
-            sequence_in_reference = [x.rstrip() for x in list(os.popen('/project/holstegelab/Software/nicco/tools/samtools-1.11/samtools faidx /project/holstegelab/Software/resources/GRCh38_full_analysis_set_plus_decoy_hla.fa %s:%s-%s' %(chrom, start, end)))]
+            sequence_in_reference = [x.rstrip() for x in list(os.popen('samtools faidx /project/holstegelab/Software/resources/GRCh38_full_analysis_set_plus_decoy_hla.fa %s:%s-%s' %(chrom, start, end)))]
             seq_merged = ''.join(sequence_in_reference[1:])
             if 'reference' in distances.keys():
                 distances['reference'].append([region_id, 'NA', 'NA', 'NA', 'NA', seq_merged, len(seq_merged), window])
@@ -293,6 +320,62 @@ def measureDistance(bed, reads_bam, window, out_dir):
         for read in distances[x]:
             outf.write('%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' %(read[0], x, read[1], read[2], read[3], read[4], read[5], read[6], read[7]))
     outf.close()
+    return distances
+
+# Given two position, measure the size in the reads
+def measureDistance_MP(reads_bam, bed, window):
+    distances = {}
+    bam_name = reads_bam.split('/')[-1]
+    inBam = pysam.AlignmentFile(reads_bam, 'rb', check_sq=False)
+    for chrom in bed.keys():
+        for region in bed[chrom]:
+            region_id = chrom + ':' + region[0] + '-' + region[1]
+            start, end = int(region[0]) - window, int(region[1]) + window
+            for read in inBam.fetch(chrom, start, end):
+                ref_start = int(read.reference_start)           # take the reference start position
+                ref_end = int(read.reference_end)               # take the reference end position
+                if (ref_end != "NA") and (int(ref_start) <= start) and (int(ref_end) >= end):
+                    start_poi_dist = start - int(ref_start)         # calculate distance in the aligned sequence between start and positions of interest
+                    end_poi_dist = end - int(ref_start)
+                    cigar = read.cigartuples                        # take cigar string
+                    poi_start = findPositionOfInterest(cigar, start_poi_dist)                             # find start position of interest
+                    poi_end = findPositionOfInterest(cigar, end_poi_dist)                                 # find end position of interest
+                    padding_before = str(read.query_sequence)[0 : poi_start]                                # find padding sequence before sequence of interest
+                    padding_after = str(read.query_sequence)[poi_end :]                                     # find padding sequence after sequence of interest   
+                    sequence_interest = str(read.query_sequence)[poi_start : poi_end]                       # find sequence of interest
+                    read_name = str(read.query_name)
+                    info = read.tags                                                                        # read tags
+                    np, rq, mc = 'NA', 'NA', 'NA'
+                    for x in info:
+                        if x[0] == "np":
+                            np = "NP:%s" %(x[1])
+                        elif x[0] == "rq":
+                            rq = "RQ:%s" %(x[1])
+                        elif x[0] == "mc":
+                            mc = "MC:%s" %(x[1])
+                    sec_aln = str(read.is_secondary)
+                    sup_aln = str(read.is_supplementary)
+                    if bam_name in distances.keys():
+                        distances[bam_name].append([region_id, read_name, np, rq, mc, sequence_interest, len(sequence_interest), window])
+                    else:
+                        distances[bam_name] = [[region_id, read_name, np, rq, mc, sequence_interest, len(sequence_interest), window]]
+    inBam.close()
+    print('**** done measuring %s                   ' %(bam_name), end = '\r')
+    return distances
+
+# Measure the distance in the reference genome
+def measureDistance_reference(bed, window):
+    distances = {}
+    for chrom in bed.keys():
+        for region in bed[chrom]:
+            region_id = chrom + ':' + region[0] + '-' + region[1]
+            start, end = int(region[0]) - window, int(region[1]) + window
+            sequence_in_reference = [x.rstrip() for x in list(os.popen('samtools faidx /project/holstegelab/Software/resources/GRCh38_full_analysis_set_plus_decoy_hla.fa %s:%s-%s' %(chrom, start, end)))]
+            seq_merged = ''.join(sequence_in_reference[1:])
+            if 'reference' in distances.keys():
+                distances['reference'].append([region_id, 'NA', 'NA', 'NA', 'NA', seq_merged, len(seq_merged), window])
+            else:
+                distances['reference'] = [[region_id, 'NA', 'NA', 'NA', 'NA', seq_merged, len(seq_merged), window]]
     return distances
 
 # Run TRF given a sequence
@@ -412,6 +495,94 @@ def trf(distances, out_dir, motif, polished):
     #os.system('rm %s/measures_spanning_reads.txt' %(out_dir))
     return trf_info
 
+# Run TRF given a sequence
+def trf_MP(bam, out_dir, motif, polished, distances):
+    trf_info = {}
+    for read in distances[bam]:                 # then loop on each read, that is, every read on every region
+        seq = read[-2] if polished == 'True' else read[-3]
+        if bam == 'reference' and polished == 'True':
+            seq = read[-5]
+        elif bam == 'reference' and polished != 'True':
+            seq = read[-3]
+        region = read[0]         # extract sequence and region name
+        motif_type = motif[region]              # get the correspondin motif
+        exact_motifs = motif_type.split(',') if ',' in motif_type else [motif_type]         # find motif and all permutations of that
+        perm_motifs, rev_motifs, rev_perm_motifs = [], [], []       
+        for m in exact_motifs:
+            tmp_perm = [m[x:] + m[:x] for x in range(len(m))]
+            tmp_perm.remove(m)
+            reverse = str(Seq(m).reverse_complement())
+            perm_reverse = [reverse[x:] + reverse[:x] for x in range(len(reverse))]
+            perm_reverse.remove(reverse)
+            perm_motifs, rev_motifs, rev_perm_motifs = perm_motifs + tmp_perm, rev_motifs + [reverse], rev_perm_motifs + perm_reverse
+        tmp_name = out_dir + '/tmp_trf_' + str(random()).replace('.', '') + '.fasta'            # then create fasta file for running trf
+        tmp_out = open(tmp_name, 'w')
+        tmp_out.write('>%s\n%s\n' %(bam, seq))
+        tmp_out.close()
+        # run tandem repeat finder specifying as maximum motif length the known one
+        cmd = 'trf4.10.0-rc.2.linux64.exe ' + tmp_name + ' 2 7 7 80 10 50 %s -ngs -h' %(len(exact_motifs[0]))
+        trf = [x for x in os.popen(cmd).read().split('\n') if x != '']
+        motif_len = 'no_motif'
+        if len(trf) == 0:
+            add_trial = 0
+            while len(trf) == 0 and add_trial <3:
+                # if no trf results were found, first try to lower the minimum score to 40 for TRF match
+                if add_trial == 0:
+                    cmd = 'trf4.10.0-rc.2.linux64.exe ' + tmp_name + ' 2 7 7 80 10 40 %s -ngs -h' %(len(exact_motifs[0]))
+                    trf = [x for x in os.popen(cmd).read().split('\n') if x != '']
+                    add_trial += 1
+                    motif_len = 'same_length'
+                # if no trf results were found again, first try to lower the minimum score to 30 for TRF match
+                elif add_trial == 1:
+                    cmd = 'trf4.10.0-rc.2.linux64.exe ' + tmp_name + ' 2 7 7 80 10 30 %s -ngs -h' %(len(exact_motifs[0]))
+                    trf = [x for x in os.popen(cmd).read().split('\n') if x != '']
+                    add_trial += 1
+                    motif_len = 'same_length'
+                # if again no matches, try to match any motif with higher score
+                elif add_trial == 2:
+                    cmd = 'trf4.10.0-rc.2.linux64.exe ' + tmp_name + ' 2 7 7 80 10 50 200 -ngs -h'
+                    trf = [x for x in os.popen(cmd).read().split('\n') if x != '']
+                    add_trial += 1
+                    motif_len = 'different_length'
+                # if again no matches, try to match any motif with looser score
+                else:
+                    cmd = 'trf4.10.0-rc.2.linux64.exe ' + tmp_name + ' 2 7 7 80 10 30 200 -ngs -h'
+                    trf = [x for x in os.popen(cmd).read().split('\n') if x != '']
+                    add_trial += 1
+                    motif_len = 'different_length'
+        else:
+            motif_len = 'same_length'
+        # look whether there are hits for the corresponding motif -- if so, save results into dictionary
+        if len(trf) > 1:
+            for match in trf:
+                if '@' in match:
+                    pass
+                elif motif_len == 'same_length':
+                    trf_motif = match.split()[13]
+                    if trf_motif in exact_motifs:
+                        motif_match = "exact_motif"
+                    elif trf_motif in perm_motifs:
+                        motif_match = "perm_motif"
+                    elif trf_motif in rev_motifs:
+                        motif_match = "rev_motif"
+                    elif trf_motif in rev_perm_motifs:
+                        motif_match = "perm_rev_motif"
+                    else:
+                        motif_match = "different_motif"
+                    read.append([match, motif_match])
+                elif motif_len == 'different_length':
+                    read.append([match, 'different_length'])
+        else:
+            read.append(['No matches'])
+        if bam in trf_info.keys():
+            trf_info[bam].append(read)
+        else:
+            trf_info[bam] = [read]
+        # finally remove temporary file
+        os.system('rm ' + tmp_name)
+    print('**** done TRF on %s                                       ' %(bam), end = '\r')        
+    return trf_info
+
 # Read strategy file for assembly
 def AsmStrategy(ass_type, reads_fasta, out_dir):
     strategy = {}
@@ -420,13 +591,13 @@ def AsmStrategy(ass_type, reads_fasta, out_dir):
         for line in finp:
             samples_to_combine, asm_name = line.rstrip().split('\t')
             samples_to_combine = samples_to_combine.replace(' ', '').replace('.bam', '').replace('.fasta', '').replace('.fa', '').split(',')
-            samples_to_combine = [out_dir + '/' + x + '_step1.fasta' for x in samples_to_combine]
+            samples_to_combine = [out_dir + '/' + x + '__rawReads.fasta' for x in samples_to_combine]
             strategy[asm_name] = samples_to_combine
-        print('\n** file describing assembly with %s groups found' %(len(strategy)))
+        print('**** file describing assembly with %s groups found' %(len(strategy)))
     else:
-        print('\n** using default settings for assembly, that is, one per .bam')
+        print('**** using default settings for assembly, that is, one per .bam')
         for x in reads_fasta:
-            x_name = x.split('/')[-1].replace('_step1.fasta', '')
+            x_name = x.split('/')[-1].replace('__rawReads.fasta', '')
             strategy[x_name] = [x]
     return strategy
 
@@ -449,6 +620,23 @@ def localAssembly(strategy, out_dir, ploidy, thread):
         except:
             pass
     return outnames_list
+
+# Local assembly given the strategy and output directory for the fasta files
+def localAssembly_MP(group_name, strategy, out_dir, ploidy, thread):
+    inp_fasta = ' '.join(strategy[group_name])
+    outname = '%s/%s__Assembly' %(out_dir, group_name)
+    cmd_assembly = 'hifiasm -o %s -t %s --n-hap %s -n 2 -r 3 -N 200 %s >/dev/null 2>&1' %(outname, thread, ploidy, inp_fasta)
+    try:
+        os.system(cmd_assembly)
+        subprocess.run("gfatools gfa2fa %s.bp.hap1.p_ctg.gfa > %s_haps.fasta" %(outname, outname), shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)          # convert gfa of hap 1 to fasta
+        subprocess.run("gfatools gfa2fa %s.bp.hap2.p_ctg.gfa >> %s_haps.fasta" %(outname, outname), shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)          # convert gfa of hap 2 to fasta
+        subprocess.run("mv %s.bp.p_ctg.gfa %s_p_ctg.gfa" %(outname, outname), shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)    # rename primary contigs
+        subprocess.run("gfatools gfa2fa %s_p_ctg.gfa >> %s_p_ctg.fasta" %(outname, outname), shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)          # convert gfa of hap 2 to fasta
+        subprocess.run("rm %s.*" %(outname), shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)                 # clean non-necessary files
+    except:
+        pass
+    print('**** done assembly for %s                                   ' %(group_name), end = '\r')
+    return outname
 
 # Align assembly
 def alignAssembly(outname_list, thread, reference):
@@ -473,6 +661,29 @@ def alignAssembly(outname_list, thread, reference):
         os.system(cmd)
         print('**** %s/%s alignment done' %(outname_list.index(asm) + 1, len(outname_list)), end = '\r')
     return(print('\n** alignment done'))
+
+# Align assembly
+def alignAssembly_MP(asm, outname_list, thread, reference):
+    if reference == 'chm13':
+        ref_hifi = '/project/holstegelab/Share/asalazar/data/chm13/assembly/v2_0/chm13v2.0_hifi.mmi'
+        outname_prefix = '_haps_chm13.bam'
+        outname_primary_prefix = '_p_ctg_chm13.bam'
+    else:
+        ref_hifi = '/project/holstegelab/Share/pacbio/resources/h38_ccs.mmi'
+        outname_prefix = '_haps_hg38.bam'
+        outname_primary_prefix = '_p_ctg_hg38.bam'
+    # haplotype-aware fastas
+    asm_name = asm + '_haps.fasta'
+    outname = asm + outname_prefix
+    cmd = "pbmm2 align --preset CCS %s -j %s --log-level FATAL --sort %s %s" %(ref_hifi, thread, asm_name, outname)       # command for alignment
+    os.system(cmd)
+    # primary contigs as well
+    asm_name = asm + '_p_ctg.fasta'
+    outname_primary = asm + outname_primary_prefix
+    cmd = "pbmm2 align --preset CCS %s -j %s --log-level FATAL --sort %s %s" %(ref_hifi, thread, asm_name, outname_primary)       # command for alignment
+    os.system(cmd)
+    print('**** done alignment for %s                                            ' %(asm.split('/')[-1]), end = '\r')
+    return(outname)
 
 # Clean temporary files
 def cleanTemp(out_dir, analysis_type):
@@ -648,7 +859,7 @@ def writeGenotypes(out_dir, calledGenotypes):
 # Clean assembly -- remove the same contigs
 def cleanContigs(out_dir):
     # list the haplotype-aware assemblies in the output folder
-    flist = os.popen('ls ' + out_dir + '/*asm*fasta').read().split('\n'); flist = flist[:-1]
+    flist = os.popen('ls ' + out_dir + '/*__Assembly*fasta').read().split('\n'); flist = flist[:-1]
     # loop on the files
     for f in flist:
         # read fasta file
@@ -769,6 +980,61 @@ def phase_reads(reads_bam, snps_to_keep, output_directory, SNPs_data_directory, 
         fout.close()
     return(phasing_info)
 
+# Function that uses whatshap to assign a haplotype to reads given a vcf file to take snps -- this uses whatshap haplotag
+def phase_reads_MP(f, reads_bam, snps_to_keep, output_directory, SNPs_data_directory, snp_data_ids):
+    map_ids = pd.read_csv(snp_data_ids, sep = " |\t", engine = 'python') if snp_data_ids != 'False' else False
+    ref_path = '/project/holstegelab/Software/resources/GRCh38_full_analysis_set_plus_decoy_hla.fa'
+    phasing_info = {}
+    fname = f.split('/')[-1].replace('__rawReads.bam', '.bam')
+    id_gwas = list(map_ids['ID_GWAS'][map_ids['ID_PACBIO'] == fname]) if isinstance(map_ids, pd.DataFrame) == True else [f.split('/')[-1].split('_')[0]]          # find gwas id for the corresponding sample
+    # throw error in case no match is found here
+    if id_gwas == []:
+        parser.error('!! Error while mapping GWAS and Long-read IDs. Please ensure the sample ID are the same or provide a file as described in docs!')
+        phasing_info = []
+    else:
+        # make random number for the sample
+        rand_num = str(random()).replace('.', '')
+        # prepare files for phasing
+        tmp_snps = open('%s/tmp_snps_interest_%s.txt' %(output_directory, rand_num), 'w')
+        for x in snps_to_keep: to_write = '%s\n' %(x); tmp_snps.write(to_write)
+        tmp_snps.close()
+        tmp_samples = open('%s/tmp_samples_interest_%s.txt' %(output_directory, rand_num), 'w')
+        header = 'IID\n'; tmp_samples.write(header)
+        for x in id_gwas: to_write = '%s\n' %(x); tmp_samples.write(to_write)
+        tmp_samples.close()
+        # make subset of snps and sample of interest -- one sample at the time
+        os.system('plink2 --pfile %s --extract %s/tmp_snps_interest_%s.txt --keep %s/tmp_samples_interest_%s.txt --recode vcf --out %s/tmp_genotypes_%s >/dev/null 2>&1' %(SNPs_data_directory[:-5], output_directory, rand_num, output_directory, rand_num, output_directory, rand_num))
+        # check if file was created, otherwise skip
+        if os.path.isfile('%s/tmp_genotypes_%s.vcf' %(output_directory, rand_num)):
+            # add chr notation for chromosome to vcf
+            os.system('bcftools annotate --rename-chrs %s %s/tmp_genotypes_%s.vcf | bgzip > %s/tmp_genotypes_%s.vcf.gz' %('/'.join(abspath(getsourcefile(lambda:0)).split('/')[:-1]) + '/test_data/chr_name_conv.txt', output_directory, rand_num, output_directory, rand_num))
+            os.system('tabix %s/tmp_genotypes_%s.vcf.gz' %(output_directory, rand_num))
+            # create a phased vcf with whatshap
+            #print('**** %s: phasing snps...   ' %(fname), end = '\r')
+            os.system('whatshap phase -o %s/%s --reference=%s %s/tmp_genotypes_%s.vcf.gz %s --ignore-read-groups --internal-downsampling 5 >/dev/null 2>&1' %(output_directory, fname.replace('.bam', '__Phased.vcf.gz'), ref_path, output_directory, rand_num, f))
+            # for haplotag command, need a phased vcf
+            os.system('tabix %s/%s' %(output_directory, fname.replace('.bam', '__Phased.vcf.gz')))
+            #print('**** %s: tagging reads...   ' %(fname), end = '\r')
+            os.system('whatshap haplotag -o %s/tmp_haplotag_%s.bam --reference=%s %s/%s %s --ignore-read-groups >/dev/null 2>&1' %(output_directory, rand_num, ref_path, output_directory, fname.replace('.bam', '__Phased.vcf.gz'), f))
+            # also index so that everything is ok
+            os.system('samtools index %s/tmp_haplotag_%s.bam >/dev/null 2>&1' %(output_directory, rand_num))
+            # read haplotags
+            haplotags = {}
+            inBam = pysam.AlignmentFile('%s/tmp_haplotag_%s.bam' %(output_directory, rand_num), 'rb', check_sq=False)
+            for read in inBam:
+                info = read.tags
+                haplo = 'NA'
+                for x in info:
+                    if x[0] == 'HP': haplo = x[1]
+                haplotags[read.query_name] = haplo
+            # clean environment
+            os.system('rm %s/*_%s.*' %(output_directory, rand_num))
+            phasing_info[f.split('/')[-1]] = haplotags
+        else:
+            phasing_info[f.split('/')[-1]] = ['NA']
+    print('**** done phasing for %s                                 ' %(fname), end = '\r')
+    return(phasing_info)
+
 # Function to generate a coverage profile given a bam file and a bed file -- just counting the number of reads
 def generateCoverageProfile(bed, all_bams, window_size, step, output_directory):
     outname = open('%s/coverage_profile.bed' %(output_directory), 'w')
@@ -790,6 +1056,29 @@ def generateCoverageProfile(bed, all_bams, window_size, step, output_directory):
         inBam.close()
     outname.close()
     return('Done')
+
+# Function to generate a coverage profile given a bam file and a bed file -- just counting the number of reads
+def generateCoverageProfile_MP(bam, bed, all_bams, window_size, step, output_directory):
+    cov_info = {}
+    inBam = pysam.AlignmentFile(bam, 'rb', check_sq=False)
+    bam_name = bam.split('/')[-1]
+    for chrom in bed:   # loop on chromosomes
+        for region in bed[chrom]:   # loop on single regions
+            start, end, locus = region
+            region_id = region[-1]
+            start, end = int(start) - int(window_size/2), int(end) + int(window_size/2)
+            intervals = [x for x in range(start, end, step)]
+            for x in intervals:         # loop on intervals
+                counter = 0
+                for read in inBam.fetch(chrom, x, x+step):
+                    counter += 1
+                if bam_name in cov_info.keys():
+                    cov_info[bam_name].append([chrom, x, x+step, bam_name, counter, region_id])
+                else:
+                    cov_info[bam_name] = [[chrom, x, x+step, bam_name, counter, region_id]]
+    print('**** profiles done for %s                           ' %(bam_name), end = '\r')
+    inBam.close()
+    return cov_info
 
 # Function to read target file containing the reads of interest and the target .bam file(s)
 def findTargetReads(target, all_bams, output_directory):
@@ -840,7 +1129,7 @@ def alignRawReads(target_bam, output_directory):
     return('Files are aligned')
 
 # Function to create and save log file with run information
-def addLogRun(bed_file, anal_type, var_file, bam_directory, output_directory, store_temporary, window_size, assembly_type, assembly_ploidy, number_threads, polishing, snp_dir, snp_data_ids, step, target_reads, reference, fasta_dir, trf_file, phase_file, trf_type):
+def addLogRun(bed_file, anal_type, var_file, bam_directory, output_directory, store_temporary, window_size, assembly_type, assembly_ploidy, number_threads, polishing, snp_dir, snp_data_ids, step, target_reads, reference, fasta_dir, trf_file, phase_file, asm_file):
     if anal_type == 'realign':
         if os.path.isdir(fasta_dir) == True:
             output_directory = fasta_dir
@@ -878,8 +1167,8 @@ def addLogRun(bed_file, anal_type, var_file, bam_directory, output_directory, st
     logfile.write('** fasta file(s) input --> %s\n' %(fasta_dir))
     logfile.write('** reference genome for alignment --> %s\n\n' %(reference))
     logfile.write('**** HAPLOTYPING\n')
-    logfile.write('** TRF file(s) input --> %s\n' %(trf_file))
-    logfile.write('** TRF input type --> %s\n' %(trf_type))
+    logfile.write('** TRF file(s) on reads-spanning --> %s\n' %(trf_file))
+    logfile.write('** TRF file(s) on assembly --> %s\n' %(asm_file))
     logfile.write('** Phasing file(s) input --> %s\n\n' %(phase_file))
     logfile.close()
     return('** Log file created')
