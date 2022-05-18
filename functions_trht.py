@@ -66,15 +66,15 @@ def readMotif(bed_dir):
 # Check directory
 def checkOutDir(out_dir, analysis_type):
     if analysis_type == 'realign':
-        return("** output directory will be the same as input")
+        return("**** output directory will be the same as input")
     else:
         if out_dir[-1] == '/':
             out_dir = out_dir[:-1]
         if os.path.isdir(out_dir) == False:
             os.system('mkdir %s' %(out_dir))
-            return("** output directory not found, will create.")
+            return("**** output directory not found, will create.")
         else:
-            return("** output directory found, will add outputs there.")
+            return("**** output directory found, will add outputs there.")
 
 # Check bam file(s)
 def checkBAM(bam_dir):
@@ -82,13 +82,13 @@ def checkBAM(bam_dir):
         bam_dir = bam_dir[:-1]
     if os.path.isdir(bam_dir) == True:              # in case a directory was submitted
         all_bams = [x.rstrip()for x in list(os.popen('ls %s/*bam' %(bam_dir)))]
-        print("** found directory with %s bam" %(len(all_bams)))
+        print("**** found directory with %s bam" %(len(all_bams)))
     elif os.path.isfile(bam_dir) == True:           # in case is a single bam file
-        print("** found single bam")
+        print("**** found single bam")
         all_bams = [bam_dir]
     elif ',' in bam_dir:                            # in case there is a comma-separated list of bams
         all_bams = bam_dir.split(',')
-        print("** found %s bam" %(len(all_bams)))
+        print("**** found %s bam" %(len(all_bams)))
     return all_bams
 
 # Extract sequence of interest precisely through CIGAR string
@@ -1171,7 +1171,7 @@ def addLogRun(bed_file, anal_type, var_file, bam_directory, output_directory, st
     logfile.write('** TRF file(s) on assembly --> %s\n' %(asm_file))
     logfile.write('** Phasing file(s) input --> %s\n\n' %(phase_file))
     logfile.close()
-    return('** Log file created')
+    return('** log file created')
 
 # Function to find files to realign. Bam files are the input. Check if there are fasta files with the same name and use those
 def getFilesToRealign(fasta_dir):

@@ -220,7 +220,7 @@ elif anal_type == 'extract_raw_reads':
     print('** reads found, now aligning')
     alignment = alignRawReads(target_bam, output_directory)
 elif anal_type == 'complete':
-    print('** TR analysis selected')
+    print('** complete analysis selected')
     # 1. read bed regions
     print("**** reading bed file")
     bed_regions = readBed(bed_file)
@@ -233,7 +233,7 @@ elif anal_type == 'complete':
     motif = readMotif(bed_file)
     
     # 4. extract reads mapping to regions of interest in bed -- multiprocessing
-    print("** 1. extracting reads")
+    print("\n** 1. extracting reads")
     os.system('mkdir %s/raw_reads' %(output_directory))
     pool = multiprocessing.Pool(processes=number_threads)
     extract_fun = partial(extractReads_MP, bed = bed_regions, out_dir = '%s/raw_reads' %(output_directory), window = window_size, all_bams = all_bam_files)
@@ -243,12 +243,12 @@ elif anal_type == 'complete':
     reads_bam = [x[0] for x in extract_results]; reads_fasta = [x[1] for x in extract_results]
     
     # 6. calculate size of the regions of interest -- multiprocessing
-    print('\n** 2. calculate size of the regions of interest')
+    print('** 2. calculate size of the regions of interest')
     pool = multiprocessing.Pool(processes=number_threads)
     measure_fun = partial(measureDistance_MP, bed = bed_regions, window = 10)
     extract_results = pool.map(measure_fun, reads_bam)
     print('**** done measuring reference                                     ', end = '\r')
-    dist_reference = measureDistance_reference(bed, 10); print('**** read measurement done!                                         ')
+    dist_reference = measureDistance_reference(bed_regions, 10); print('**** read measurement done!                                         ')
     extract_results.append(dist_reference)
     
     # 7. TRF on single-reads
