@@ -570,7 +570,7 @@
 
     # Function to compare reads-spanning and assembly-based approached
     compareReadsSpanning_Asm = function(all_haplo, deviation){
-        all_haplo$SAME_NAME = str_split_fixed(all_haplo$SAMPLE, '_step1', 2)[, 1]
+        all_haplo$SAME_NAME = str_split_fixed(all_haplo$SAMPLE, '__', 2)[, 1]
         # exclude reference
         reference = all_haplo[which(all_haplo$SAME_NAME == 'reference'),]; all_haplo = all_haplo[which(all_haplo$SAME_NAME != 'reference'),]
         # loop on each sample
@@ -580,6 +580,8 @@
                 tmp = all_haplo[which(all_haplo$SAME_NAME == s & all_haplo$REGION == r),]
                 # split assembly and reads-spanning
                 asm = tmp[which(tmp$DATA_TYPE == 'assembly'),]; spa = tmp[which(tmp$DATA_TYPE == 'reads-spanning'),]
+                # for the assembly, keep the haplotype-aware contigs if there are multiple entries
+                if (nrow(asm) >1){ asm = asm[grep('Assembly_haps', asm$SAMPLE),] }
                 # first check if we have asm and reads-spanning
                 if (nrow(asm) >0 & nrow(spa)){
                     # pairwise comparison of haplotypes. first extract data for asm and spa for h1 and h2
