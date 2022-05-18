@@ -690,13 +690,13 @@ def alignAssembly_MP(asm, outname_list, thread, reference):
 # Clean temporary files
 def cleanTemp(out_dir, analysis_type):
     if analysis_type == 'assembly':
-        os.system('rm %s/*step1.bam*' %(out_dir))
+        os.system('rm %s/*__rawReads.bam*' %(out_dir))
     elif analysis_type in ['extract_snps', 'annotate_snps', 'extract_annotate', 'realign']:
         pass
     else:
-        os.system('rm %s/*step1*bam' %(out_dir))
-        os.system('rm %s/*step1*bai' %(out_dir))
-        os.system('rm %s/*step1*fasta' %(out_dir))
+        os.system('rm %s/*__rawReads*bam' %(out_dir))
+        os.system('rm %s/*__rawReads*bai' %(out_dir))
+        os.system('rm %s/*__rawReads*fasta' %(out_dir))
     return('** intermediate files are removed')
 
 # Extract SNPs from TOPMED of the region of interest
