@@ -735,18 +735,18 @@
         } else {
             anal_type = 'reads-spanning + assembly + comparison'
         }
-        cat('\n** Haplotyping Tandem Repeats\n\n')
+        #cat('\n** Haplotyping Tandem Repeats\n\n')
         cat(paste0('**** input TRF (reads-spanning) selected -> ', inp_trf, '\n'))
         cat(paste0('**** input TRF (assembly-based) selected -> ', inp_asm, '\n'))
         cat(paste0('**** input PHASING selected -> ', inp_pha, '\n'))
         cat(paste0('**** analysis type based on input(s) --> ', anal_type, '\n'))
-        cat(paste0('**** output directory -> ', out_dir, '\n\n'))
+        cat(paste0('**** output directory -> ', out_dir, '\n'))
     }
 
 # Main script
     # 1. Read and combine all input TRF files
-    cat('** Analysis started\n')
-    cat('** Reading TRF input(s)\n')
+    cat('**** Analysis started\n')
+    cat('****** Reading TRF input(s)\n')
     if (anal_type == 'reads-spanning'){
         # read reads-spanning TRF
         all_trf = list()
@@ -790,7 +790,7 @@
 
     # 2. Read and combine all input PHASING files
     if (inp_pha != 'None'){
-        cat('** Reading PHASING input\n')
+        cat('****** Reading PHASING input\n')
         all_pha = list()
         for (i in 1:length(inp_pha)){
             # load trf datasets
@@ -811,7 +811,7 @@
     trf_pha = rbind.fill(trf_pha, reference)
   
     # 4. Let's adjust the motifs -- generate a consensus -- essentially merging the same motifs together -- this for both analyses
-    cat('** Merging similar motifs together\n')
+    cat('****** Merging similar motifs together\n')
     all_motifs = data.frame(motif = unique(trf_pha$MOTIF_TRF), stringsAsFactors = F); all_motifs$main_motif = NA
     all_motifs = all_motifs[!is.na(all_motifs$motif),]
     trf_pha$UNIFORM_MOTIF = NA
@@ -836,14 +836,14 @@
     trf_pha_nodup = trf_pha[!duplicated(trf_pha$READ_NAME),]; dups = trf_pha[duplicated(trf_pha$READ_NAME),]
 
     # 7. we do genotyping on the sizes
-    cat('** Genotyping TRs\n')
+    cat('****** Genotyping TRs\n')
     # temporarily disable warnings
     defaultW <- getOption("warn"); options(warn = -1)
     # split reads-spanning and assembly-based
     reads_span = trf_pha_nodup[which(trf_pha_nodup$DATA_TYPE == 'reads-spanning'),]; asm = trf_pha_nodup[which(trf_pha_nodup$DATA_TYPE == 'assembly'),]
     all_res = list()
     if (anal_type %in% c('reads-spanning', 'reads-spanning + assembly + comparison')){
-        cat(paste0('**** Processing reads-spanning data\n'))
+        cat(paste0('****** Processing reads-spanning data\n'))
         all_samples = unique(reads_span$SAMPLE_NAME); all_regions = unique(reads_span$REGION)
         for (s in all_samples){
             #print(paste0('** processing sample --> ', s))
@@ -861,7 +861,7 @@
         }
     }
     if (anal_type %in% c('assembly', 'reads-spanning + assembly + comparison')){
-        cat(paste0('**** Processing assembly-based data\n'))
+        cat(paste0('****** Processing assembly-based data\n'))
         all_samples = unique(asm$SAMPLE_NAME); all_regions = unique(asm$REGION)
         for (s in all_samples){
             #print(paste0('** processing sample --> ', s))
@@ -899,7 +899,7 @@
     }
 
     # 9. now we should look at the motifs
-    cat('** Generating consensus motifs\n')
+    cat('****** Generating consensus motifs\n')
     all_samples = unique(all_res$sample); all_regions = unique(all_res$REGION); motif_res = list()
     for (s in all_samples){
         for (r in all_regions){
@@ -932,11 +932,11 @@
     motif_res = rbindlist(motif_res)
 
     # 10. finally call haplotypes
-    cat('** Haplotype calling\n')
+    cat('****** Haplotype calling\n')
     all_haplo = callHaplo_size(data = motif_res)
 
     # 11. if analysis type was different from the combined, we are done here: save output tables
-    cat('** Generating tables\n')
+    cat('****** Generating tables\n')
     out_dir = str_replace_all(out_dir, '/$', ''); if (!dir.exists(out_dir)){ system(paste0('mkdir ', out_dir)) }
     write.table(motif_res, paste0(out_dir, '/haplotyping_single_reads.txt'), quote=F, row.names = F, sep = '\t')
     write.table(all_haplo, paste0(out_dir, '/haplotyping_single_samples.txt'), quote=F, row.names = F, sep = '\t')
@@ -944,7 +944,7 @@
     # 12. if both reads-spanning and assembly were submitted, we should compare them and make a unified call
     # this will assume the names are the same. Will split with '.' and take the name before that.
     if (anal_type == 'reads-spanning + assembly + comparison'){
-        cat('** Comparing reads-spanning with assembly\n')
+        cat('****** Comparing reads-spanning with assembly\n')
         # first label asm and reads-spanning based approaches
         all_haplo_annotated = compareReadsSpanning_Asm(all_haplo, 0.10)
         # then make a final decision
@@ -953,5 +953,5 @@
         write.table(decisions, paste0(out_dir, '/haplotyping_reads_spanning_VS_assembly.txt'), quote=F, row.names = F, sep = '\t')
     }
 
-    cat('** Analysis done!!\n\n')
+    cat('**** Analysis done!!\n')
 
