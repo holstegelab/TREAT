@@ -356,6 +356,7 @@ elif anal_type == 'complete':
     # 16. tandem repeat finder on assembled contigs
     print('** 9. tandem repeat finder on contigs')
     all_bams = list(distances.keys())
+    motif = readMotif(bed_file)
     pool = multiprocessing.Pool(processes=number_threads)
     trf_fun = partial(trf_MP, out_dir = '%s/trf_assembly' %(output_directory), motif = motif, polished = 'False', distances = distances)
     trf_results = pool.map(trf_fun, all_bams)
