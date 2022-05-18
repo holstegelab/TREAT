@@ -250,9 +250,11 @@ elif anal_type == 'complete':
     print('**** done measuring reference                                     ', end = '\r')
     dist_reference = measureDistance_reference(bed_regions, 10); print('**** read measurement done!                                         ')
     extract_results.append(dist_reference)
+    # combine results
+    distances = {k:v for element in extract_results for k,v in element.items()}
     
     # 7. TRF on single-reads
-    print('\n** 3. tandem repeat finder on the single-reads')
+    print('** 3. tandem repeat finder on the single-reads')
     all_bams = list(distances.keys()); trf_out_dir = '%s/trf_reads' %(output_directory); os.system('mkdir %s' %(trf_out_dir));
     pool = multiprocessing.Pool(processes=number_threads)
     trf_fun = partial(trf_MP, out_dir = trf_out_dir, motif = motif, polished = 'False', distances = distances)
@@ -289,9 +291,9 @@ elif anal_type == 'complete':
 
     # 9. phasing and haplotagging -- multiprocessing
     if snp_dir == 'False':
-        print('\n** 4. phasing and haplotagging NOT selected (not specified any SNP data)')
+        print('** 4. phasing and haplotagging NOT selected (not specified any SNP data)')
     else:
-        print('\n** 4. phasing and haplotagging')
+        print('** 4. phasing and haplotagging')
         os.system('mkdir %s/phasing' %(output_directory))
         print('**** finding SNPs for phasing')
         snps_for_phasing, snps_to_keep, SNPs_data_path = findSNPs_gwas(snp_dir, bed, window_size)
@@ -317,7 +319,7 @@ elif anal_type == 'complete':
         fout.close()
     
     # 11. assembly
-    print('\n** 5. assembly')
+    print('** 5. assembly')
     os.system('mkdir %s/assembly' %(output_directory))
     strategy = AsmStrategy(assembly_type, reads_fasta, '%s/assembly' %(output_directory))
     # decide how many assembly in parallel to run (keep 2 cores per assembly, then depends on the total number of cores available)
@@ -328,7 +330,7 @@ elif anal_type == 'complete':
     print('**** done with assembly                                     ')
 
     # 12. clean contigs
-    print('\n** 6. clean assembled contigs')
+    print('** 6. clean assembled contigs')
     out_dir = cleanContigs('%s/assembly' %(output_directory))
 
     # 13. alignment
@@ -340,7 +342,7 @@ elif anal_type == 'complete':
     print('**** done with contig alignment                                     ')
 
     # 14. measure distance on contigs
-    print('\n** 8. calculate size of the regions of interest in contigs')
+    print('** 8. calculate size of the regions of interest in contigs')
     # list all files that should be processed
     haps_to_process = ['%s_haps_hg38.bam' %(x) for x in assembly_results]; prim_to_process = ['%s_p_ctg_hg38.bam' %(x) for x in assembly_results]; files_to_process = haps_to_process + prim_to_process
     pool = multiprocessing.Pool(processes=number_threads)
@@ -352,7 +354,7 @@ elif anal_type == 'complete':
     distances = {k:v for element in extract_results for k,v in element.items()}; os.system('mkdir %s/trf_assembly' %(output_directory))
 
     # 16. tandem repeat finder on assembled contigs
-    print('** 8. tandem repeat finder on contigs')
+    print('** 9. tandem repeat finder on contigs')
     all_bams = list(distances.keys())
     pool = multiprocessing.Pool(processes=number_threads)
     trf_fun = partial(trf_MP, out_dir = '%s/trf_assembly' %(output_directory), motif = motif, polished = 'False', distances = distances)
@@ -388,7 +390,7 @@ elif anal_type == 'complete':
     outf.close()
 
     # 18. coverage profile
-    print("** 8. generating coverage profile")
+    print("** 10. generating coverage profile")
     os.system('mkdir %s/coverage' %(output_directory))
     pool = multiprocessing.Pool(processes=number_threads)
     coverage_fun = partial(generateCoverageProfile_MP, bed = bed_regions, all_bams = reads_bam, window_size = window_size, step = step, output_directory = '%s/coverage' %(output_directory))
@@ -405,7 +407,7 @@ elif anal_type == 'complete':
     outname.close()
 
     # 20. haplotyping
-    print("** 9. haplotype calling and reads-spanning vs. assembly comparison")
+    print("** 11. haplotype calling and reads-spanning vs. assembly comparison")
     if snp_dir == 'False':
         os.system("Rscript %s/call_haplotypes.R --reads_spanning %s/trf_reads/measures_spanning_reads_and_trf.txt --asm %s/trf_assembly/measures_spanning_reads_and_trf.txt --out %s/haplotyping" %('/'.join(abspath(getsourcefile(lambda:0)).split('/')[:-1]), output_directory, output_directory, output_directory, output_directory))
     else:
