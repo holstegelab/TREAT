@@ -1,6 +1,10 @@
 ## Packages
 import os
+from inspect import getsourcefile
+from os.path import abspath
 import sys
+import pathlib
+from functions_trht import *
 import argparse
 import os.path
 import pysam
@@ -12,7 +16,9 @@ import subprocess
 import json
 import pandas as pd
 from datetime import datetime
-from contextlib import contextmanager
+from functools import partial
+from itertools import repeat
+import multiprocessing
 
 ## Functions
 # Function to suppress standard output
