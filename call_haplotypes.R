@@ -843,7 +843,7 @@
     reads_span = trf_pha_nodup[which(trf_pha_nodup$DATA_TYPE == 'reads-spanning'),]; asm = trf_pha_nodup[which(trf_pha_nodup$DATA_TYPE == 'assembly'),]
     all_res = list()
     if (anal_type %in% c('reads-spanning', 'reads-spanning + assembly + comparison')){
-        cat(paste0('****** Processing reads-spanning data\n'))
+        cat(paste0('******** Processing reads-spanning data\n'))
         all_samples = unique(reads_span$SAMPLE_NAME); all_regions = unique(reads_span$REGION)
         for (s in all_samples){
             #print(paste0('** processing sample --> ', s))
@@ -861,7 +861,7 @@
         }
     }
     if (anal_type %in% c('assembly', 'reads-spanning + assembly + comparison')){
-        cat(paste0('****** Processing assembly-based data\n'))
+        cat(paste0('******** Processing assembly-based data\n'))
         all_samples = unique(asm$SAMPLE_NAME); all_regions = unique(asm$REGION)
         for (s in all_samples){
             #print(paste0('** processing sample --> ', s))

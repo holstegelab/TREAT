@@ -118,11 +118,24 @@ print(addLogRun(bed_file, anal_type, var_file, bam_directory, output_directory, 
 
 ## Extract reads mapping to the location of interest
 if anal_type == 'extract_reads':
-    print("** reading bed file")
-    bed = readBed(bed_file)
+    # 1. read bed regions
+    print("**** reading bed file")
+    bed_regions = readBed(bed_file)
+
+    # 2. check bam files
     print("** checking bam files")
-    all_bams = checkBAM(bam_directory)
-    reads_bam, reads_fasta = extractReads(bed, all_bams, output_directory, window_size)
+    all_bam_files = checkBAM(bam_directory)
+    
+    # 3. read motif
+    motif = readMotif(bed_file)
+    
+    # 4. extract reads mapping to regions of interest in bed -- multiprocessing
+    print("\n** 1. extracting reads")
+    os.system('mkdir %s/raw_reads' %(output_directory))
+    pool = multiprocessing.Pool(processes=number_threads)
+    extract_fun = partial(extractReads_MP, bed = bed_regions, out_dir = '%s/raw_reads' %(output_directory), window = window_size, all_bams = all_bam_files)
+    extract_results = pool.map(extract_fun, all_bam_files); print('**** read extraction done!                                         ')
+    
 elif anal_type == 'measure':    
     print("** reading bed file")
     bed = readBed(bed_file)
@@ -220,7 +233,6 @@ elif anal_type == 'extract_raw_reads':
     print('** reads found, now aligning')
     alignment = alignRawReads(target_bam, output_directory)
 elif anal_type == 'complete':
-    print('** complete analysis selected')
     # 1. read bed regions
     print("**** reading bed file")
     bed_regions = readBed(bed_file)
