@@ -179,22 +179,81 @@ elif anal_type == 'measure':
     #    distances_polished = polishReads(bed, distances, output_directory)          # check from here!
     #    os.system('rm ' + output_directory + '/measures_spanning_reads.txt')
 elif anal_type == 'trf':
-    print("** reading bed file")
-    bed = readBed(bed_file)
+    # 1. read bed regions
+    print("**** reading bed file")
+    bed_regions = readBed(bed_file)
+
+    # 2. check bam files
     print("** checking bam files")
-    all_bams = checkBAM(bam_directory)
+    all_bam_files = checkBAM(bam_directory)
+    
+    # 3. read motif
     motif = readMotif(bed_file)
-    reads_bam, reads_fasta = extractReads(bed, all_bams, output_directory, window_size)
-    print('\n** calculate size of the regions of interest')
-    distances = measureDistance(bed, reads_bam, 10, output_directory)
+    
+    # 4. extract reads mapping to regions of interest in bed -- multiprocessing
+    print("\n** 1. extracting reads")
+    pool = multiprocessing.Pool(processes=number_threads)
+    extract_fun = partial(extractReads_MP, bed = bed_regions, out_dir = output_directory, window = window_size, all_bams = all_bam_files)
+    extract_results = pool.map(extract_fun, all_bam_files); print('**** read extraction done!                                         ')
+    
+    # 5. combine results together
+    reads_bam = [x[0] for x in extract_results]; reads_fasta = [x[1] for x in extract_results]
+    
+    # 6. calculate size of the regions of interest -- multiprocessing
+    print('** 2. calculate size of the regions of interest')
+    pool = multiprocessing.Pool(processes=number_threads)
+    measure_fun = partial(measureDistance_MP, bed = bed_regions, window = 10)
+    extract_results = pool.map(measure_fun, reads_bam)
+    print('**** done measuring reference                                     ', end = '\r')
+    dist_reference = measureDistance_reference(bed_regions, 10); print('**** read measurement done!                                         ')
+    extract_results.append(dist_reference)
+    # combine results
+    distances = {k:v for element in extract_results for k,v in element.items()}
+
+    # consider to add there the polishing step
+
+    # 7. TRF on single-reads
+    print('** 3. tandem repeat finder on the single-reads')
+    all_bams = list(distances.keys())
+    pool = multiprocessing.Pool(processes=number_threads)
+    trf_fun = partial(trf_MP, out_dir = output_directory, motif = motif, polished = 'False', distances = distances)
+    trf_results = pool.map(trf_fun, all_bams)
+    print('**** done running TRF                                     ')
+
+    # 8. combine these results and make output
+    trf_info = {k:v for element in trf_results for k,v in element.items()}
     if polishing == 'True':
-        print('** polishing reads of interest now!')
-        distances_polished = polishReads(bed, distances, output_directory)   
-    print('** tandem repeat finder')
-    trf_info = trf(distances, output_directory, motif, polished = 'False')
-    if polishing == 'True':
-        print('** tandem repeat finder on corrected reads')
-        trf_info_polished = trf(distances_polished, output_directory, motif, polished = 'True')
+        outf = open(output_directory + '/measures_spanning_reads_and_trf_polished.txt', 'w')
+        outf.write('REGION\tSAMPLE_NAME\tREAD_NAME\tPASSES\tREAD_QUALITY\tMAPPING_CONSENSUS\tSEQUENCE_WITH_WINDOW\tLENGTH_SEQUENCE\tPADDING_SIZE\tPOLISHED_SEQUENCE\tLENGTH_POLISHED\tDIFF_WITH_ORIGINAL\tSTART_TRF\tEND_TRF\tLENGTH_MOTIF_TRF\tCOPIES_TRF\tPC_MATCH_TRF\tPC_INDEL_TRF\tMOTIF_TRF\tPADDING_BEFORE\tSEQUENCE_TRF\tPADDING_AFTER\tMATCH_TYPE\n')
+    else:
+        outf = open(output_directory + '/measures_spanning_reads_and_trf.txt', 'w')
+        outf.write('REGION\tSAMPLE_NAME\tREAD_NAME\tPASSES\tREAD_QUALITY\tMAPPING_CONSENSUS\tSEQUENCE_WITH_WINDOW\tLENGTH_SEQUENCE\tPADDING_SIZE\tSTART_TRF\tEND_TRF\tLENGTH_MOTIF_TRF\tCOPIES_TRF\tPC_MATCH_TRF\tPC_INDEL_TRF\tMOTIF_TRF\tPADDING_BEFORE\tSEQUENCE_TRF\tPADDING_AFTER\tMATCH_TYPE\n')
+    for x in trf_info.keys():
+        for read in trf_info[x]:
+            trf_res = read[8::] if polishing != 'True' else read[10::]
+            for trf_match in trf_res:
+                if isinstance(trf_match, list):
+                    if trf_match[0] == 'No matches':
+                        start_rep, end_rep, mot_len, cp, cons_size, pc_match, pc_indel, aln_score, pc_a, pc_c, pc_g, pc_t, entropy, motif, sequence_trf, padding_before, padding_after, match_type = ['NA']*17 + ['No matches']
+                    else:
+                        start_rep, end_rep, mot_len, cp, cons_size, pc_match, pc_indel, aln_score, pc_a, pc_c, pc_g, pc_t, entropy, motif, sequence_trf, padding_before, padding_after, match_type = trf_match[0].split(' ') + [trf_match[1]]
+                    if polishing == 'True':
+                        outf.write('%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' %(read[0], x, read[1], read[2], read[3], read[4], read[5], read[6], read[7], read[8], len(read[8]), read[9], start_rep, end_rep, mot_len, cp, pc_match, pc_indel, motif, padding_before, sequence_trf, padding_after, match_type))
+                    else:
+                        outf.write('%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' %(read[0], x, read[1], read[2], read[3], read[4], read[5], read[6], read[7], start_rep, end_rep, mot_len, cp, pc_match, pc_indel, motif, padding_before, sequence_trf, padding_after, match_type))
+                else:
+                    if polishing == 'True':
+                        outf.write('%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' %(read[0], x, read[1], read[2], read[3], read[4], read[5], read[6], read[7], read[8], len(read[8]), read[9], 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA'))
+                    else:
+                        outf.write('%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' %(read[0], x, read[1], read[2], read[3], read[4], read[5], read[6], read[7], 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA'))
+    outf.close()
+
+    # then we need to manage if reads need to be polished -- not implemented yet
+    #if polishing == 'True':
+    #    print('** polishing reads of interest now!')
+    #    distances_polished = polishReads(bed, distances, output_directory)   
+    #    print('** tandem repeat finder on corrected reads')
+    #    trf_info_polished = trf(distances_polished, output_directory, motif, polished = 'True')
 elif anal_type == 'assembly':
     print("** reading bed file")
     bed = readBed(bed_file)
