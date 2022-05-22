@@ -577,7 +577,7 @@ elif anal_type == 'haplotyping':
     print('** haplotyping')
     file_path = os.path.realpath(__file__)
     file_path = '/'.join(file_path.split('/')[:-1])
-    os.system('/usr/bin/Rscript %s/call_haplotypes.R --trf %s --phase %s --trf_type %s --out %s' %(file_path, trf_file, phase_file, trf_type, output_directory))
+    #os.system('/usr/bin/Rscript %s/call_haplotypes.R --trf %s --phase %s --trf_type %s --out %s' %(file_path, trf_file, phase_file, trf_type, output_directory))
     if snp_dir == 'False':
         os.system("Rscript %s/call_haplotypes.R --reads_spanning %s --asm %s --out %s" %(file_path, trf_file, asm_file, output_directory))
     else:

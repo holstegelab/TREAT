@@ -529,7 +529,26 @@
                             # these cases can be multiple motifs that need to be merged together, or a missing call
                             # check whether if summing the motifs coverage we reach a high value
                             if (sum(tmp$coverage) > 0.8){
-                                print(paste0('**** look at ', unique(motifs$sample), ' in ', unique(motifs$REGION)))
+                                # in this case it suggests that we should merge the motifs together. loop on each unique read
+                                for (read in unique(tmp$READ_NAME)){
+                                    tmp_duplicated_reads = tmp[which(tmp$READ_NAME == read),]
+                                    # measure the overlap between the duplicates
+                                    overlaps = list(); for (i in 1:nrow(tmp_duplicated_reads)){ overlaps[[(length(overlaps) + 1)]] = seq(tmp_duplicated_reads$START_TRF[i], tmp_duplicated_reads$END_TRF[i]) }
+                                    # then calculate joined coverage and overlaps
+                                    join_coverage = unlist(overlaps); overlaps = join_coverage[duplicated(join_coverage)]
+                                    # calculate cumulative coverage (20 is the estimated padding)
+                                    cum_coverage = (length(join_coverage) + 20 - length(overlaps)) / tmp_duplicated_reads$LENGTH_SEQUENCE[1]
+                                    # check if there was a gain in doing this in terms of cumulative coverage compared to the original coverages
+                                    if (max(cum_coverage, tmp_duplicated_reads$PERC_SEQ_COVERED_TR) == cum_coverage){
+                                        # if there is a gain, probably we're dealing with a true variable motif
+                                        merged_motif = paste(tmp_duplicated_reads$UNIFORM_MOTIF, collapse = '/'); motifs$CONSENSUS_MOTIF = merged_motif
+                                        motifs$CONSENSUS_COPY_NUMBER = tmp_duplicated_reads$LENGTH_SEQUENCE[1]/nchar(motifs$UNIFORM_MOTIF[1]); motifs$CONSENSUS_MOTIF_COMPLEX = 'nested_motif'; motifs$ADDITIONAL_MOTIFS = paste(tmp$UNIFORM_MOTIF, collapse = ',')
+                                    } else {
+                                        # if there is no gain, probably we're dealing with a probable alternative motif
+                                        motifs$CONSENSUS_MOTIF = NA
+                                        motifs$CONSENSUS_COPY_NUMBER = NA; motifs$CONSENSUS_MOTIF_COMPLEX = 'motif_low_coverage'; motifs$ADDITIONAL_MOTIFS = paste(tmp$UNIFORM_MOTIF, collapse = ',')
+                                    }
+                                }
                             } else {
                                 motifs$CONSENSUS_MOTIF = NA
                                 motifs$CONSENSUS_COPY_NUMBER = NA; motifs$CONSENSUS_MOTIF_COMPLEX = 'motif_low_coverage'; motifs$ADDITIONAL_MOTIFS = paste(tmp$UNIFORM_MOTIF, collapse = ',')
