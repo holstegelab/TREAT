@@ -492,9 +492,9 @@
             motifs$ADDITIONAL_MOTIFS = NA
         } else {
             # calculate frequencies of each motif
-            motifs_frq = data.frame(table(motifs$UNIFORM_MOTIF)); motifs_frq$Perc = motifs_frq$Freq / nrow(motifs)
+            motifs_frq = data.frame(table(motifs$UNIFORM_MOTIF)); motifs_frq$Perc = motifs_frq$Freq / nrow(motifs); motifs_frq$motif_length = nchar(as.character(motifs_frq$Var1))
             # keep motifs with highest frequency
-            motifs_frq = motifs_frq[order(-motifs_frq$Perc),]
+            motifs_frq = motifs_frq[order(-motifs_frq$Perc, -motifs_frq$motif_length),]
             consensus_motif = as.character(motifs_frq$Var1[1])
             # raise a flag when the frequency of most common motif is <0.8
             if (motifs_frq$Perc[1] < 0.8){ 
@@ -505,9 +505,12 @@
                     # if there are many duplicates, there are 2 options: either there are multiple motifs that combine together (nested repeats), or there are two alternative motifs that can be estimated
                     # to distinguish the two cases, we can look at the percentage of coverage
                     tmp = motifs; tmp$coverage = (tmp$END_TRF - tmp$START_TRF + 20) / tmp$LENGTH_SEQUENCE
+                    # calculate also difference wrt 1
+                    tmp$difference = abs(1 - tmp$coverage)
                     # if the coverage is very high, that means we are dealing with alternative motifs for the same TR: take the motif with highest coverage
                     if (TRUE %in% (tmp$coverage >0.90)){
-                        consensus_motif = unique(tmp$UNIFORM_MOTIF[which(tmp$coverage == max(tmp$coverage))])[1]
+                        #consensus_motif = unique(tmp$UNIFORM_MOTIF[which(tmp$coverage == max(tmp$coverage))])[1]
+                        consensus_motif = unique(tmp$UNIFORM_MOTIF[which(tmp$coverage == min(tmp$coverage))])[1]
                         motifs$CONSENSUS_MOTIF = consensus_motif
                         motifs$CONSENSUS_COPY_NUMBER = NA; motifs$CONSENSUS_COPY_NUMBER[which(motifs$UNIFORM_MOTIF == consensus_motif)] = motifs$COPIES_TRF[which(motifs$UNIFORM_MOTIF == consensus_motif)]
                         motifs$CONSENSUS_COPY_NUMBER[is.na(motifs$CONSENSUS_COPY_NUMBER)] = median(motifs$CONSENSUS_COPY_NUMBER[which(motifs$UNIFORM_MOTIF == consensus_motif)])
@@ -892,7 +895,7 @@
                 # get data of the sample and the region of interest
                 tmp_data = asm[which(asm$SAMPLE_NAME == s & asm$REGION == r),]
                 if (nrow(tmp_data) >0){
-                    reads_df = tmp_data[, c('COPIES_TRF', 'HAPLOTYPE', 'UNIFORM_MOTIF', 'REGION', 'PASSES', 'READ_QUALITY', 'LENGTH_SEQUENCE', 'READ_NAME', 'START_TRF', 'END_TRF', 'PC_MATCH_TRF', 'PC_INDEL_TRF', 'SEQUENCE_WITH_WINDOW')]
+                    reads_df = tmp_data[, c('COPIES_TRF', 'HAPLOTYPE', 'UNIFORM_MOTIF', 'REGION', 'PASSES', 'READ_QUALITY', 'LENGTH_SEQUENCE', 'READ_NAME', 'START_TRF', 'END_TRF', 'TRF_PERC_MATCH', 'TRF_PERC_INDEL')]
                     phased_data = assemblyBased_size(reads_df, sample_name = s, region = r, 0.05)
                     polished_data = polishHaplo_afterPhasing_size(phased_data, 0.05)
                     polished_data$DATA_TYPE = 'assembly'

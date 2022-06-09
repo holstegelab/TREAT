@@ -390,35 +390,13 @@ elif anal_type == 'complete':
     pool = multiprocessing.Pool(processes=number_threads)
     trf_fun = partial(trf_MP, out_dir = trf_out_dir, motif = motif, polished = 'False', distances = distances)
     trf_results = pool.map(trf_fun, all_bams)
+    # combine df from different samples together
+    df_trf = pd.concat(trf_results)
     print('**** done running TRF                                     ')
 
     # 8. combine these results and make output
-    trf_info = {k:v for element in trf_results for k,v in element.items()}
-    if polishing == 'True':
-        outf = open(trf_out_dir + '/measures_spanning_reads_and_trf_polished.txt', 'w')
-        outf.write('REGION\tSAMPLE_NAME\tREAD_NAME\tPASSES\tREAD_QUALITY\tMAPPING_CONSENSUS\tSEQUENCE_WITH_WINDOW\tLENGTH_SEQUENCE\tPADDING_SIZE\tPOLISHED_SEQUENCE\tLENGTH_POLISHED\tDIFF_WITH_ORIGINAL\tSTART_TRF\tEND_TRF\tLENGTH_MOTIF_TRF\tCOPIES_TRF\tPC_MATCH_TRF\tPC_INDEL_TRF\tMOTIF_TRF\tPADDING_BEFORE\tSEQUENCE_TRF\tPADDING_AFTER\tMATCH_TYPE\n')
-    else:
-        outf = open(trf_out_dir + '/measures_spanning_reads_and_trf.txt', 'w')
-        outf.write('REGION\tSAMPLE_NAME\tREAD_NAME\tPASSES\tREAD_QUALITY\tMAPPING_CONSENSUS\tSEQUENCE_WITH_WINDOW\tLENGTH_SEQUENCE\tPADDING_SIZE\tSTART_TRF\tEND_TRF\tLENGTH_MOTIF_TRF\tCOPIES_TRF\tPC_MATCH_TRF\tPC_INDEL_TRF\tMOTIF_TRF\tPADDING_BEFORE\tSEQUENCE_TRF\tPADDING_AFTER\tMATCH_TYPE\n')
-    for x in trf_info.keys():
-        for read in trf_info[x]:
-            trf_res = read[8::] if polishing != 'True' else read[10::]
-            for trf_match in trf_res:
-                if isinstance(trf_match, list):
-                    if trf_match[0] == 'No matches':
-                        start_rep, end_rep, mot_len, cp, cons_size, pc_match, pc_indel, aln_score, pc_a, pc_c, pc_g, pc_t, entropy, motif, sequence_trf, padding_before, padding_after, match_type = ['NA']*17 + ['No matches']
-                    else:
-                        start_rep, end_rep, mot_len, cp, cons_size, pc_match, pc_indel, aln_score, pc_a, pc_c, pc_g, pc_t, entropy, motif, sequence_trf, padding_before, padding_after, match_type = trf_match[0].split(' ') + [trf_match[1]]
-                    if polishing == 'True':
-                        outf.write('%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' %(read[0], x, read[1], read[2], read[3], read[4], read[5], read[6], read[7], read[8], len(read[8]), read[9], start_rep, end_rep, mot_len, cp, pc_match, pc_indel, motif, padding_before, sequence_trf, padding_after, match_type))
-                    else:
-                        outf.write('%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' %(read[0], x, read[1], read[2], read[3], read[4], read[5], read[6], read[7], start_rep, end_rep, mot_len, cp, pc_match, pc_indel, motif, padding_before, sequence_trf, padding_after, match_type))
-                else:
-                    if polishing == 'True':
-                        outf.write('%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' %(read[0], x, read[1], read[2], read[3], read[4], read[5], read[6], read[7], read[8], len(read[8]), read[9], 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA'))
-                    else:
-                        outf.write('%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' %(read[0], x, read[1], read[2], read[3], read[4], read[5], read[6], read[7], 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA'))
-    outf.close()
+    outf = output_directory + '/trf_reads/measures_spanning_reads_and_trf.txt'
+    df_trf.to_csv(outf, sep = "\t", index=False)
 
     # 9. phasing and haplotagging -- multiprocessing
     if snp_dir == 'False':
@@ -491,35 +469,12 @@ elif anal_type == 'complete':
     pool = multiprocessing.Pool(processes=number_threads)
     trf_fun = partial(trf_MP, out_dir = '%s/trf_assembly' %(output_directory), motif = motif, polished = 'False', distances = distances)
     trf_results = pool.map(trf_fun, all_bams)
+    df_trf = pd.concat(trf_results)
     print('**** done running TRF on assemblies                                     ')
 
-    # 17. combine these results and make output
-    trf_info = {k:v for element in trf_results for k,v in element.items()}
-    if polishing == 'True':
-        outf = open('%s/trf_assembly/measures_spanning_reads_and_trf_polished.txt' %(output_directory), 'w')
-        outf.write('REGION\tSAMPLE_NAME\tREAD_NAME\tPASSES\tREAD_QUALITY\tMAPPING_CONSENSUS\tSEQUENCE_WITH_WINDOW\tLENGTH_SEQUENCE\tPADDING_SIZE\tPOLISHED_SEQUENCE\tLENGTH_POLISHED\tDIFF_WITH_ORIGINAL\tSTART_TRF\tEND_TRF\tLENGTH_MOTIF_TRF\tCOPIES_TRF\tPC_MATCH_TRF\tPC_INDEL_TRF\tMOTIF_TRF\tPADDING_BEFORE\tSEQUENCE_TRF\tPADDING_AFTER\tMATCH_TYPE\n')
-    else:
-        outf = open('%s/trf_assembly/measures_spanning_reads_and_trf.txt' %(output_directory), 'w')
-        outf.write('REGION\tSAMPLE_NAME\tREAD_NAME\tPASSES\tREAD_QUALITY\tMAPPING_CONSENSUS\tSEQUENCE_WITH_WINDOW\tLENGTH_SEQUENCE\tPADDING_SIZE\tSTART_TRF\tEND_TRF\tLENGTH_MOTIF_TRF\tCOPIES_TRF\tPC_MATCH_TRF\tPC_INDEL_TRF\tMOTIF_TRF\tPADDING_BEFORE\tSEQUENCE_TRF\tPADDING_AFTER\tMATCH_TYPE\n')
-    for x in trf_info.keys():
-        for read in trf_info[x]:
-            trf_res = read[8::] if polishing != 'True' else read[10::]
-            for trf_match in trf_res:
-                if isinstance(trf_match, list):
-                    if trf_match[0] == 'No matches':
-                        start_rep, end_rep, mot_len, cp, cons_size, pc_match, pc_indel, aln_score, pc_a, pc_c, pc_g, pc_t, entropy, motif, sequence_trf, padding_before, padding_after, match_type = ['NA']*17 + ['No matches']
-                    else:
-                        start_rep, end_rep, mot_len, cp, cons_size, pc_match, pc_indel, aln_score, pc_a, pc_c, pc_g, pc_t, entropy, motif, sequence_trf, padding_before, padding_after, match_type = trf_match[0].split(' ') + [trf_match[1]]
-                    if polishing == 'True':
-                        outf.write('%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' %(read[0], x, read[1], read[2], read[3], read[4], read[5], read[6], read[7], read[8], len(read[8]), read[9], start_rep, end_rep, mot_len, cp, pc_match, pc_indel, motif, padding_before, sequence_trf, padding_after, match_type))
-                    else:
-                        outf.write('%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' %(read[0], x, read[1], read[2], read[3], read[4], read[5], read[6], read[7], start_rep, end_rep, mot_len, cp, pc_match, pc_indel, motif, padding_before, sequence_trf, padding_after, match_type))
-                else:
-                    if polishing == 'True':
-                        outf.write('%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' %(read[0], x, read[1], read[2], read[3], read[4], read[5], read[6], read[7], read[8], len(read[8]), read[9], 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA'))
-                    else:
-                        outf.write('%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' %(read[0], x, read[1], read[2], read[3], read[4], read[5], read[6], read[7], 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA'))
-    outf.close()
+    # 17. make output
+    outf = output_directory + '/trf_assembly/measures_spanning_reads_and_trf.txt'
+    df_trf.to_csv(outf, sep = "\t", index=False)
 
     # 18. coverage profile
     print("** 10. generating coverage profile")
@@ -540,10 +495,12 @@ elif anal_type == 'complete':
 
     # 20. haplotyping
     print("** 11. haplotype calling and reads-spanning vs. assembly comparison")
+    file_path = os.path.realpath(__file__)
+    file_path = '/'.join(file_path.split('/')[:-1])
     if snp_dir == 'False':
-        os.system("Rscript %s/call_haplotypes.R --reads_spanning %s/trf_reads/measures_spanning_reads_and_trf.txt --asm %s/trf_assembly/measures_spanning_reads_and_trf.txt --out %s/haplotyping" %('/'.join(abspath(getsourcefile(lambda:0)).split('/')[:-1]), output_directory, output_directory, output_directory, output_directory))
+        os.system("Rscript %s/call_haplotypes.R --reads_spanning %s/trf_reads/measures_spanning_reads_and_trf.txt --asm %s/trf_assembly/measures_spanning_reads_and_trf.txt --out %s/haplotyping" %(file_path, output_directory, output_directory, output_directory, output_directory))
     else:
-        os.system("Rscript %s/call_haplotypes.R --reads_spanning %s/trf_reads/measures_spanning_reads_and_trf.txt --phase %s/phasing/haplotags_reads.txt --asm %s/trf_assembly/measures_spanning_reads_and_trf.txt --out %s/haplotyping" %('/'.join(abspath(getsourcefile(lambda:0)).split('/')[:-1]), output_directory, output_directory, output_directory, output_directory))
+        os.system("Rscript %s/call_haplotypes.R --reads_spanning %s/trf_reads/measures_spanning_reads_and_trf.txt --phase %s/phasing/haplotags_reads.txt --asm %s/trf_assembly/measures_spanning_reads_and_trf.txt --out %s/haplotyping" %(file_path, output_directory, output_directory, output_directory, output_directory))
 elif anal_type == 'realign':
     filestorealign = getFilesToRealign(fasta_dir)
     print("** aligning fasta files")
