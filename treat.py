@@ -11,7 +11,7 @@ from inspect import getsourcefile
 from os.path import abspath
 import sys
 import pathlib
-from functions_trht import *
+from functions_treat import *
 import argparse
 import os.path
 import pysam
