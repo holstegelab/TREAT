@@ -775,6 +775,7 @@
             # load trf datasets
             data = fread(inp_trf[i], h=T, stringsAsFactors = F)
             data$BATCH_TRF = i
+            data$DATA_TYPE = 'reads-spanning'
             all_trf[[(length(all_trf) + 1)]] = data
         }
         all_trf = rbindlist(all_trf)
@@ -785,6 +786,7 @@
             # load trf datasets
             data = fread(inp_asm[i], h=T, stringsAsFactors = F)
             data$BATCH_TRF = i
+            data$DATA_TYPE = 'assembly'
             all_trf[[(length(all_trf) + 1)]] = data
         }
         all_trf = rbindlist(all_trf)
@@ -833,7 +835,7 @@
   
     # 4. Let's adjust the motifs -- generate a consensus -- essentially merging the same motifs together -- this for both analyses
     cat('****** Merging similar motifs together\n')
-    all_motifs = data.frame(motif = unique(trf_pha$MOTIF_TRF), stringsAsFactors = F); all_motifs$main_motif = NA
+    all_motifs = data.frame(motif = unique(trf_pha$TRF_MOTIF), stringsAsFactors = F); all_motifs$main_motif = NA
     all_motifs = all_motifs[!is.na(all_motifs$motif),]
     trf_pha$UNIFORM_MOTIF = NA
     # manage the reference
@@ -843,18 +845,18 @@
             all_perm = permutMotif(as.character(all_motifs$motif[i]))
             all_motifs$main_motif[i] = all_motifs$motif[i]
             all_motifs$main_motif[which(all_motifs$motif %in% all_perm)] = all_motifs$motif[i]
-            trf_pha$UNIFORM_MOTIF[which(trf_pha$MOTIF_TRF %in% all_perm)] = all_motifs$motif[i]
+            trf_pha$UNIFORM_MOTIF[which(trf_pha$TRF_MOTIF %in% all_perm)] = all_motifs$motif[i]
         }
     }
     # to make sure there are no conflicts, change the read name
-    trf_pha$READ_NAME = paste(trf_pha$READ_NAME, trf_pha$SAMPLE_NAME, sep = "__")
+    trf_pha$UNIQUE_NAME = paste(trf_pha$READ_NAME, trf_pha$SAMPLE_NAME, trf_pha$REGION, sep = "___")
 
     # 5. add the TR size by substracting 20 (10*2 padding) to LENGTH_SEQUENCE
     trf_pha$TR_LENGHT = trf_pha$LENGTH_SEQUENCE - 20
 
     # 6. good to exclude duplicated reads otherwise results would be biased towards sequences with more complex motifs (where TRF finds multiple matches)
-    trf_pha = trf_pha[which(trf_pha$SEQUENCE_WITH_WINDOW != ''),]
-    trf_pha_nodup = trf_pha[!duplicated(trf_pha$READ_NAME),]; dups = trf_pha[duplicated(trf_pha$READ_NAME),]
+    #trf_pha = trf_pha[which(trf_pha$SEQUENCE_WITH_WINDOW != ''),]
+    trf_pha_nodup = trf_pha[!duplicated(trf_pha$UNIQUE_NAME),]; dups = trf_pha[duplicated(trf_pha$UNIQUE_NAME),]
 
     # 7. we do genotyping on the sizes
     cat('****** Genotyping TRs\n')
@@ -872,7 +874,7 @@
                 # get data of the sample and the region of interest
                 tmp_data = reads_span[which(reads_span$SAMPLE_NAME == s & reads_span$REGION == r),]
                 if (nrow(tmp_data) >0){
-                    reads_df = tmp_data[, c('COPIES_TRF', 'HAPLOTYPE', 'UNIFORM_MOTIF', 'REGION', 'PASSES', 'READ_QUALITY', 'LENGTH_SEQUENCE', 'READ_NAME', 'START_TRF', 'END_TRF', 'PC_MATCH_TRF', 'PC_INDEL_TRF', 'SEQUENCE_WITH_WINDOW')]
+                    reads_df = tmp_data[, c('COPIES_TRF', 'HAPLOTYPE', 'UNIFORM_MOTIF', 'REGION', 'PASSES', 'READ_QUALITY', 'LENGTH_SEQUENCE', 'READ_NAME', 'START_TRF', 'END_TRF', 'TRF_PERC_MATCH', 'TRF_PERC_INDEL')]
                     phased_data = PhasingBased_haplotyping_size(reads_df, sample_name = s, thr_mad = 0.05)
                     polished_data = polishHaplo_afterPhasing_size(phased_data, 0.10)
                     polished_data$DATA_TYPE = 'reads-spanning'
@@ -902,19 +904,22 @@
     # Merge all results together
     all_res = data.table::rbindlist(all_res, fill=T)
     options(warn = defaultW)
+    # re-assign the unique identifier after haplotype calling
+    all_res$UNIQUE_NAME = paste(all_res$READ_NAME, all_res$sample, all_res$REGION, sep = "___")
 
     # 8. now let's bring the duplicates in again and assign the correct haplotype based on the other duplicate
-    dups_name = unique(dups$READ_NAME)
+    dups_name = unique(dups$UNIQUE_NAME)
     for (d in dups_name){
-        tmp_dup_haplo = all_res[which(all_res$READ_NAME == d),]; tmp_dup_noinfo = dups[which(dups$READ_NAME == d),]
+        # gather data with haplo information and duplicates
+        tmp_haplo = all_res[which(all_res$UNIQUE_NAME == d), ]; tmp_dup = dups[which(dups$UNIQUE_NAME == d), ]
         # then create as many rows as the number of dups row with same columns as tmp_dup_haplo with values from tmp_dup_noinfo
-        n_dups = nrow(tmp_dup_noinfo)
-        tmp_df = data.frame(COPIES_TRF = tmp_dup_noinfo$COPIES_TRF, HAPLOTYPE = rep(tmp_dup_haplo$HAPLOTYPE, n_dups), UNIFORM_MOTIF = tmp_dup_noinfo$UNIFORM_MOTIF, REGION = tmp_dup_noinfo$REGION, 
-                            PASSES = tmp_dup_noinfo$PASSES, READ_QUALITY = tmp_dup_noinfo$READ_QUALITY, LENGTH_SEQUENCE = tmp_dup_noinfo$LENGTH_SEQUENCE, READ_NAME = rep(d, n_dups), 
-                            START_TRF = tmp_dup_noinfo$START_TRF, END_TRF = tmp_dup_noinfo$END_TRF, PC_MATCH_TRF = tmp_dup_noinfo$PC_MATCH_TRF, PC_INDEL_TRF = tmp_dup_noinfo$PC_INDEL_TRF, 
-                            SEQUENCE_WITH_WINDOW = tmp_dup_noinfo$SEQUENCE_WITH_WINDOW, type = rep(tmp_dup_haplo$type, n_dups), sample = rep(tmp_dup_haplo$sample, n_dups), 
-                            haplo_value = rep(tmp_dup_haplo$haplo_value, n_dups), polished_reads = rep(tmp_dup_haplo$polished_reads, n_dups), polished_haplo_values = rep(tmp_dup_haplo$polished_haplo_values, n_dups),
-                            DATA_TYPE = tmp_dup_haplo$DATA_TYPE)
+        n_dups = nrow(tmp_dup)
+        tmp_df = data.frame(COPIES_TRF = tmp_dup$COPIES_TRF, HAPLOTYPE = rep(tmp_haplo$HAPLOTYPE, n_dups), UNIFORM_MOTIF = tmp_dup$UNIFORM_MOTIF, REGION = tmp_dup$REGION, 
+                    PASSES = tmp_dup$PASSES, READ_QUALITY = tmp_dup$READ_QUALITY, LENGTH_SEQUENCE = tmp_dup$LENGTH_SEQUENCE, READ_NAME = tmp_dup$READ_NAME, 
+                    START_TRF = tmp_dup$START_TRF, END_TRF = tmp_dup$END_TRF, TRF_PERC_MATCH = tmp_dup$TRF_PERC_MATCH, TRF_PERC_INDEL = tmp_dup$TRF_PERC_INDEL, 
+                    type = rep(tmp_haplo$type, n_dups), sample = rep(tmp_haplo$sample, n_dups), haplo_value = rep(tmp_haplo$haplo_value, n_dups), 
+                    polished_reads = rep(tmp_haplo$polished_reads, n_dups), polished_haplo_values = rep(tmp_haplo$polished_haplo_values, n_dups), DATA_TYPE = rep(tmp_haplo$DATA_TYPE, n_dups),
+                    UNIQUE_NAME = rep(tmp_haplo$UNIQUE_NAME, n_dups))
         # finally add this df to the main dataset
         all_res = rbind(all_res, tmp_df)
     }

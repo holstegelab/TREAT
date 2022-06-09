@@ -177,6 +177,7 @@ def extractReads(all_bams, bed, out_dir, window):
 # Extract reads mapping the the location of interest
 def extractReads_MP(bam, bed, out_dir, window, all_bams):
     fasta_seqs = {}
+    read_ids_list = []
     outname = out_dir + '/' + bam.split('/')[-1][:-4] + '__rawReads.bam'
     outname_fasta = out_dir + '/' + bam.split('/')[-1][:-4] + '__rawReads.fasta'
     inBam = pysam.AlignmentFile(bam, 'rb', check_sq=False)
@@ -185,10 +186,12 @@ def extractReads_MP(bam, bed, out_dir, window, all_bams):
         for region in bed[chrom]:
             start, end = int(region[0]) - window, int(region[1]) + window
             for read in inBam.fetch(chrom, start, end):
-                outBam.write(read)                              # write to new bam file
-                sequence_interest = str(read.query_sequence)    # save fasta sequences
                 read_name = read.query_name
-                fasta_seqs[read_name] = sequence_interest
+                if read_name not in read_ids_list:
+                    read_ids_list.append(read_name)
+                    sequence_interest = str(read.query_sequence)    # save fasta sequences
+                    fasta_seqs[read_name] = sequence_interest
+                    outBam.write(read)                              # write to new bam file
     outBam.close()
     inBam.close()
     outf = open(outname_fasta, 'w')
@@ -497,8 +500,8 @@ def trf(distances, out_dir, motif, polished):
     #os.system('rm %s/measures_spanning_reads.txt' %(out_dir))
     return trf_info
 
-# Run TRF given a sequence
-def trf_MP(bam, out_dir, motif, polished, distances):
+# Run TRF given a sequence -- MP without adjustments
+def trf_MP_old(bam, out_dir, motif, polished, distances):
     trf_info = {}
     for read in distances[bam]:                 # then loop on each read, that is, every read on every region
         seq = read[-2] if polished == 'True' else read[-3]
@@ -584,6 +587,76 @@ def trf_MP(bam, out_dir, motif, polished, distances):
         os.system('rm ' + tmp_name)
     print('**** done TRF on %s                                       ' %(bam), end = '\r')        
     return trf_info
+
+# Run TRF given a sequence
+def trf_MP(bam, out_dir, motif, polished, distances):
+    # create a fasta file containing all sequences to be submitted to TRF search
+    tmp_name = out_dir + '/tmp_trf_' + str(random()).replace('.', '') + '.fasta'            # create fasta file for running trf
+    tmp_out = open(tmp_name, 'w')
+    for read in distances[bam]:                 # then loop on each read, that is, every read on every region
+        seq = read[-2] if polished == 'True' else read[-3]
+        if bam == 'reference' and polished == 'True':
+            seq = read[-5]
+        elif bam == 'reference' and polished != 'True':
+            seq = read[-3]
+        region, read_id, passes, qual, cons, seq_size = read[0], read[1], read[2], read[3], read[4], read[-2]
+        motif_type = motif[region]              # get the correspondin motif
+        tmp_out.write('>%s;%s;%s;%s;%s;%s\n%s\n' %(read_id, region, passes, qual, cons, seq_size, seq))
+    tmp_out.close()
+    # then run tandem repeat finder
+    cmd = 'trf4.10.0-rc.2.linux64.exe ' + tmp_name + ' 2 7 7 80 10 50 200 -ngs -h'
+    #cmd = 'trf4.10.0-rc.2.linux64.exe ' + out_dir + '/tmp.fasta 2 7 7 80 10 50 200 -ngs -h'
+    trf = [x for x in os.popen(cmd).read().split('\n') if x != '']
+    # loop on trf results and save them into a list of lists
+    x = 0; trf_matches = []
+    while x < len(trf):
+        if trf[x].startswith('@'):
+            read_id, region, passes, qual, cons, seq_size = trf[x].split(';')
+            x += 1
+            while x < len(trf) and not trf[x].startswith('@'):
+                motif_type = motif[region]              # get the correspondin motif
+                tmp_trf_match = [bam, read_id, region, passes, qual, cons, motif_type, seq_size] + trf[x].split()
+                trf_matches.append(tmp_trf_match)
+                x += 1
+    # loop on results agains and check the motif
+    for i in range(len(trf_matches)):
+        if len(trf_matches[i]) > 1:
+            exp_motif, exp_length = trf_matches[i][6], len(trf_matches[i][6])
+            trf_motif = trf_matches[i][21]
+            if len(trf_motif) == exp_length:
+                motif_len = 'same_length'
+                exact_motifs = exp_motif.split(',') if ',' in exp_motif else [exp_motif]         # find motif and all permutations of that
+                perm_motifs, rev_motifs, rev_perm_motifs = [], [], []       
+                for m in exact_motifs:
+                    tmp_perm = [m[x:] + m[:x] for x in range(len(m))]
+                    tmp_perm.remove(m)
+                    reverse = str(Seq(m).reverse_complement())
+                    perm_reverse = [reverse[x:] + reverse[:x] for x in range(len(reverse))]
+                    perm_reverse.remove(reverse)
+                    perm_motifs, rev_motifs, rev_perm_motifs = perm_motifs + tmp_perm, rev_motifs + [reverse], rev_perm_motifs + perm_reverse
+                # then check what kind of motif trf matched
+                if trf_motif in exact_motifs:
+                    motif_match = "exact_motif"
+                elif trf_motif in perm_motifs:
+                    motif_match = "perm_motif"
+                elif trf_motif in rev_motifs:
+                    motif_match = "rev_motif"
+                elif trf_motif in rev_perm_motifs:
+                    motif_match = "perm_rev_motif"
+                else:
+                    motif_match = "different_motif"
+            else:
+                motif_len = 'different_length'; motif_match = 'different_motif'
+        else:
+            motif_len, motif_match = 'no_matches', 'no_matches'
+        trf_matches[i].append(motif_len); trf_matches[i].append(motif_match)
+    # finally remove temporary file
+    os.system('rm ' + tmp_name)
+    print('**** done TRF on %s                                       ' %(bam), end = '\r') 
+    # finally create pandas df and assign column names
+    df = pd.DataFrame(trf_matches)
+    df.columns = ['SAMPLE_NAME', 'READ_NAME', 'REGION', 'PASSES', 'READ_QUALITY', 'MAPPING_CONSENSUS', 'EXPECTED_MOTIF', 'LENGTH_SEQUENCE', 'START_TRF', 'END_TRF', 'LENGTH_MOTIF_TRF', 'COPIES_TRF', 'TRF_CONSENSUS_SIZE', 'TRF_PERC_MATCH', 'TRF_PERC_INDEL', 'TRF_SCORE', 'TRF_A_PERC', 'TRF_C_PERC', 'TRF_G_PERC', 'TRF_T_PERC', 'TRF_ENTROPY', 'TRF_MOTIF', 'TRF_REPEAT_SEQUENCE', 'TRF_PADDING_BEFORE', 'TRF_PADDING_AFTER', 'MATCH_LENGTH', 'MATCH_MOTIF']
+    return df
 
 # Read strategy file for assembly
 def AsmStrategy(ass_type, reads_fasta, out_dir):
