@@ -227,7 +227,6 @@ elif anal_type == 'trf':
     # 8. make output
     outf = output_directory + '/measures_spanning_reads_and_trf.txt'
     df_trf.to_csv(outf, sep = "\t", index=False)
-    
 elif anal_type == 'assembly':
     # 1. read bed regions
     print("**** reading bed file")
@@ -553,11 +552,11 @@ elif anal_type == 'haplotyping':
     print('** haplotyping')
     file_path = os.path.realpath(__file__)
     file_path = '/'.join(file_path.split('/')[:-1])
-    #os.system('/usr/bin/Rscript %s/call_haplotypes.R --trf %s --phase %s --trf_type %s --out %s' %(file_path, trf_file, phase_file, trf_type, output_directory))
-    if snp_dir == 'False':
-        os.system("Rscript %s/call_haplotypes.R --reads_spanning %s --asm %s --out %s" %(file_path, trf_file, asm_file, output_directory))
-    else:
-        os.system("Rscript %s/call_haplotypes.R --reads_spanning %s --phase %s --asm %s --out %s" %(file_path, trf_file, phase_file, asm_file, output_directory))
+    os.system('Rscript %s/call_haplotypes.R --reads_spanning %s --phase %s --asm %s --out %s' %(file_path, trf_file, phase_file, asm_file, output_directory))
+    #if snp_dir == 'False':
+    #    os.system("Rscript %s/call_haplotypes.R --reads_spanning %s --asm %s --out %s" %(file_path, trf_file, asm_file, output_directory))
+    #else:
+    #    os.system("Rscript %s/call_haplotypes.R --reads_spanning %s --phase %s --asm %s --out %s" %(file_path, trf_file, phase_file, asm_file, output_directory))
 
 if (store_temporary == 'False' and anal_type not in ['haplotyping', 'extract_reads', 'coverage_profile', 'complete']):
     print(cleanTemp(output_directory, anal_type))
