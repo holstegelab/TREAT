@@ -8,12 +8,13 @@
 #########################################
 
 # Libraries
-    list.of.packages <- c("plyr", "data.table", "argparse", "stringr")
+    list.of.packages <- c("plyr", "data.table", "argparse", "stringr", "parallel")
     new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[, "Package"])]
     if(length(new.packages)) install.packages(new.packages)
     library(plyr)
     library(data.table)
     library(argparse)
+    library(parallel)
     library(stringr)
 
 # Functions
@@ -730,6 +731,263 @@
         return(all_haplo_annotated)
     }
 
+    # Function to merge motifs based on multiple processing
+    mergeMotif_mp = function(motif){
+        all_perm = permutMotif(as.character(motif))
+        all_perm = all_perm[order(all_perm)]
+        return(all_perm[1])
+    }
+
+    # Function to do haplotyping based on multiple processing
+    haplotyping_mp = function(s, all_regions, type){
+        print(paste0('** processing sample --> ', s))
+        for (r in all_regions){
+            # get data of the sample and the region of interest -- depending on type (reads_spanning or asm)
+            if (type == 'reads_spanning'){
+                tmp_data = reads_span[which(reads_span$SAMPLE_NAME == s & reads_span$REGION == r),]
+            } else {
+                tmp_data = asm[which(asm$SAMPLE_NAME == s & asm$REGION == r),]
+            }
+            if (nrow(tmp_data) >0){
+                reads_df = tmp_data[, c('COPIES_TRF', 'HAPLOTYPE', 'UNIFORM_MOTIF', 'REGION', 'PASSES', 'READ_QUALITY', 'LENGTH_SEQUENCE', 'READ_NAME', 'START_TRF', 'END_TRF', 'TRF_PERC_MATCH', 'TRF_PERC_INDEL')]
+                if (type == 'reads_spanning'){
+                    phased_data = PhasingBased_haplotyping_size(reads_df, sample_name = s, thr_mad = 0.10)
+                } else {
+                    phased_data = assemblyBased_size(reads_df, sample_name = s, region = r, 0.10)
+                }
+                polished_data = polishHaplo_afterPhasing_size(phased_data, 0.10)
+                if (r == all_regions[1]){
+                    tmp_res = polished_data
+                } else {
+                    tmp_res = rbind.fill(tmp_res, polished_data)
+                }
+            }
+        }
+        return(tmp_res)
+    }
+
+    # Function to generate consensus motif for each sample and region based on multiple processing
+    generateConsens_mp = function(s, all_regions, all_res){
+        motif_res = list()
+        for (r in all_regions){
+            # take all reads
+            tmp = all_res[which(all_res$sample == s & all_res$REGION == r),]
+            # check number of haplotypes
+            n_haplo = unique(tmp$HAPLOTYPE)
+            # treat haplotypes independently from each other
+            if (1 %in% tmp$HAPLOTYPE & 2 %in% tmp$HAPLOTYPE){
+                h1 = tmp[which(tmp$HAPLOTYPE == 1),]; h2 = tmp[which(tmp$HAPLOTYPE == 2),]
+                # calculate consensus motif
+                h1_consensus_motif = consensusMotif_conscious(h1); h2_consensus_motif = consensusMotif_conscious(h2)
+                tmp_res = rbind(h1_consensus_motif, h2_consensus_motif)
+            } else if (1 %in% tmp$HAPLOTYPE){
+                h1 = tmp[which(tmp$HAPLOTYPE == 1),]
+                # calculate consensus motif
+                tmp_res = consensusMotif_conscious(h1)
+            } else if (2 %in% tmp$HAPLOTYPE){
+                h2 = tmp[which(tmp$HAPLOTYPE == 2),]
+                # calculate consensus motif
+                tmp_res = consensusMotif_conscious(h2)
+            } else {
+                # in this case the clustering did not work, can be because the number of reads/contigs is too low
+                tmp_res = tmp; tmp_res$CONSENSUS_MOTIF = NA; tmp_res$CONSENSUS_COPY_NUMBER = NA; tmp_res$CONSENSUS_MOTIF_COMPLEX = NA; tmp_res$ADDITIONAL_MOTIFS = NA
+            }
+            # add to results list
+            motif_res[[(length(motif_res) + 1)]] = tmp_res
+        }
+        motif_res = rbindlist(motif_res)
+        print(paste0('** done with ', s))
+        return(motif_res)
+    }
+
+    # Function to call haplotypes and combine information
+    callHaplo_mp <- function(s, all_regions, data){
+        all_haplo = list()
+        for (r in all_regions){
+            # gather all data together, excluded reads and good reads
+            tmp = data[which(data$sample == s & data$REGION == r),]
+            excl = tmp[which(tmp$polished_reads == 'exclude'),]; tmp = tmp[which(tmp$polished_reads != 'exclude'),]
+            # first we managed to identify the haplotypes
+            if (nrow(tmp) >0){
+                if (!(NA %in% tmp$HAPLOTYPE) & nrow(tmp) >0){
+                    # if we have both haplotypes assigned, get the relative info: copies, motif, coef. of variation, length, info
+                    if (1 %in% tmp$HAPLOTYPE & 2 %in% tmp$HAPLOTYPE){
+                        h1_info = median(tmp$CONSENSUS_COPY_NUMBER[which(tmp$HAPLOTYPE == 1)])
+                        h1_motif = paste(unique(tmp$CONSENSUS_MOTIF[which(tmp$HAPLOTYPE == 1)]), collapse = ',')
+                        h1_var = sd(tmp$CONSENSUS_COPY_NUMBER[which(tmp$HAPLOTYPE == 1)]) / mean(tmp$CONSENSUS_COPY_NUMBER[which(tmp$HAPLOTYPE == 1)])
+                        h1_len = paste(unique(tmp$LENGTH_SEQUENCE[which(tmp$HAPLOTYPE == 1)]), collapse = ',')
+                        h1_motif_info = unique(tmp$CONSENSUS_MOTIF_COMPLEX[which(tmp$HAPLOTYPE == 1)])
+                        h1_add_motifs = unique(tmp$ADDITIONAL_MOTIFS[which(tmp$HAPLOTYPE == 1)])
+                        h2_info = median(tmp$CONSENSUS_COPY_NUMBER[which(tmp$HAPLOTYPE == 2)])
+                        h2_motif = paste(unique(tmp$CONSENSUS_MOTIF[which(tmp$HAPLOTYPE == 2)]), collapse = ',')
+                        h2_var = sd(tmp$CONSENSUS_COPY_NUMBER[which(tmp$HAPLOTYPE == 2)]) / mean(tmp$CONSENSUS_COPY_NUMBER[which(tmp$HAPLOTYPE == 2)])
+                        h2_len = paste(unique(tmp$LENGTH_SEQUENCE[which(tmp$HAPLOTYPE == 2)]), collapse = ',')
+                        h2_motif_info = unique(tmp$CONSENSUS_MOTIF_COMPLEX[which(tmp$HAPLOTYPE == 2)])
+                        h2_add_motifs = unique(tmp$ADDITIONAL_MOTIFS[which(tmp$HAPLOTYPE == 2)])
+                        data_type = unique(tmp$DATA_TYPE)
+                    # otherwise if only h1 is present, only gather h1 info
+                    } else if (1 %in% tmp$HAPLOTYPE){
+                        h1_info = median(tmp$CONSENSUS_COPY_NUMBER[which(tmp$HAPLOTYPE == 1)])
+                        h1_motif = paste(unique(tmp$CONSENSUS_MOTIF[which(tmp$HAPLOTYPE == 1)]), collapse = ',')
+                        h1_var = sd(tmp$CONSENSUS_COPY_NUMBER[which(tmp$HAPLOTYPE == 1)]) / mean(tmp$CONSENSUS_COPY_NUMBER[which(tmp$HAPLOTYPE == 1)])
+                        h1_len = paste(unique(tmp$LENGTH_SEQUENCE[which(tmp$HAPLOTYPE == 1)]), collapse = ',')
+                        h1_motif_info = unique(tmp$CONSENSUS_MOTIF_COMPLEX[which(tmp$HAPLOTYPE == 1)])
+                        h1_add_motifs = unique(tmp$ADDITIONAL_MOTIFS[which(tmp$HAPLOTYPE == 1)])
+                        h2_info = NA; h2_motif = NA; h2_var = NA; h2_len = NA; h2_motif_info = NA; h2_add_motifs = NA
+                        data_type = unique(tmp$DATA_TYPE)
+                    # otherwise gather only h2 info
+                    } else {
+                        h2_info = median(tmp$CONSENSUS_COPY_NUMBER[which(tmp$HAPLOTYPE == 2)])
+                        h2_motif = paste(unique(tmp$CONSENSUS_MOTIF[which(tmp$HAPLOTYPE == 2)]), collapse = ',')
+                        h2_var = sd(tmp$CONSENSUS_COPY_NUMBER[which(tmp$HAPLOTYPE == 2)]) / mean(tmp$CONSENSUS_COPY_NUMBER[which(tmp$HAPLOTYPE == 2)])
+                        h2_len = paste(unique(tmp$LENGTH_SEQUENCE[which(tmp$HAPLOTYPE == 2)]), collapse = ',')
+                        h2_motif_info = unique(tmp$CONSENSUS_MOTIF_COMPLEX[which(tmp$HAPLOTYPE == 2)])
+                        h2_add_motifs = unique(tmp$ADDITIONAL_MOTIFS[which(tmp$HAPLOTYPE == 2)])
+                        h1_info = NA; h1_motif = NA; h1_var = NA; h1_len = NA; h1_motif_info = NA; h1_add_motifs = NA
+                        data_type = unique(tmp$DATA_TYPE)
+                    }
+                    # then check excluded reads
+                    if (nrow(excl) >0){ 
+                        excl_info = paste(paste0(excl$CONSENSUS_MOTIF, '(', excl$CONSENSUS_COPY_NUMBER, ')'), collapse = '_')
+                        excl_len = paste(excl$LENGTH_SEQUENCE, collapse = ',')
+                    } else { 
+                        excl_info = NA; excl_len = NA
+                    }
+                    # finally save a df with all info regarding TR
+                    tmp_df = data.frame(SAMPLE = unique(tmp$sample), REGION = unique(tmp$REGION), H1 = h1_info, H2 = h2_info, 
+                        H1_MOTIF = h1_motif, H2_MOTIF = h2_motif, H1_LENGTH = h1_len, H2_LENGTH = h2_len, COEF_VAR_H1 = h1_var, COEF_VAR_H2 = h2_var,
+                        H1_MOTIF_TYPE = h1_motif_info, H2_MOTIF_TYPE = h2_motif_info, H1_ADDITIONAL_MOTIF = h1_add_motifs, H2_ADDITIONAL_MOTIF = h2_add_motifs,
+                        EXCLUDED = excl_info, EXCLUDED_LEN = excl_len, DATA_TYPE = data_type)
+                    # and add to the growing list
+                    all_haplo[[(length(all_haplo) + 1)]] = tmp_df
+                # if haplotypes were not identified (i.e they are NAs)
+                } else {
+                    excl_info = paste(paste0(excl$CONSENSUS_MOTIF, '(', excl$CONSENSUS_COPY_NUMBER, ')'), collapse = '_')
+                    excl_len = paste(excl$LENGTH_SEQUENCE, collapse = ',')
+                    # create the same df with NA values and add to growing list
+                    tmp_df = data.frame(SAMPLE = unique(excl$sample), REGION = unique(excl$REGION), H1 = NA, H2 = NA, 
+                        H1_MOTIF = NA, H2_MOTIF = NA, H1_LENGTH = NA, H2_LENGTH = NA, COEF_VAR_H1 = NA, COEF_VAR_H2 = NA,
+                        H1_MOTIF_TYPE = NA, H2_MOTIF_TYPE = NA, H1_ADDITIONAL_MOTIF = NA, H2_ADDITIONAL_MOTIF = NA,
+                        EXCLUDED = excl_info, EXCLUDED_LEN = excl_len, DATA_TYPE = data_type)
+                    all_haplo[[(length(all_haplo) + 1)]] = tmp_df
+                }
+            }
+        }
+        all_haplo = rbindlist(all_haplo)
+        print(paste0('** done with ', s))
+        return(all_haplo)
+    }
+    
+    # Function to compare reads-spanning and assembly-based approached based on multiple processing
+    compareReadsSpanning_Asm_mp = function(s, all_regions, all_haplo, deviation){
+        comparison = list()
+        for (r in all_regions){
+            tmp = all_haplo[which(all_haplo$SAME_NAME == s & all_haplo$REGION == r),]
+            # split assembly and reads-spanning
+            asm = tmp[which(tmp$DATA_TYPE == 'assembly'),]; spa = tmp[which(tmp$DATA_TYPE == 'reads-spanning'),]
+            # for the assembly, keep the haplotype-aware contigs if there are multiple entries
+            if (nrow(asm) >1){ asm = asm[grep('Assembly_haps', asm$SAMPLE),] }
+            # first check if we have asm and reads-spanning
+            if (nrow(asm) >0 & nrow(spa)){
+                # pairwise comparison of haplotypes. first extract data for asm and spa for h1 and h2
+                asm_h1 = asm[, c('H1', 'H1_MOTIF', 'H1_LENGTH')]; spa_h1 = spa[, c('H1', 'H1_MOTIF', 'H1_LENGTH')]
+                asm_h2 = asm[, c('H2', 'H2_MOTIF', 'H2_LENGTH')]; spa_h2 = spa[, c('H2', 'H2_MOTIF', 'H2_LENGTH')]
+                # then check for NAs
+                if (NA %in% c(asm_h1$H1, asm_h2$H2, spa_h1$H1, spa_h2$H2)){
+                    # find the NA(s)
+                    na_index = which(is.na(c(asm_h1$H1, asm_h2$H2, spa_h1$H1, spa_h2$H2)))
+                    if (length(na_index) == 4){
+                        colnames(asm) = paste0(colnames(asm), '_ASM'); asm$COMPARISON = 'missing_all_alleles'
+                        colnames(spa) = paste0(colnames(spa), '_READS_SPANNING'); spa$H1_DIFF = NA; spa$H2_DIFF = NA
+                    } else if (length(na_index) == 3){
+                        good_one = which(!seq(1, 4) %in% na_index)
+                        colnames(asm) = paste0(colnames(asm), '_ASM')
+                        colnames(spa) = paste0(colnames(spa), '_READS_SPANNING'); spa$H1_DIFF = diff_tmp; spa$H2_DIFF = NA
+                        if (good_one %in% c(1, 2)){ asm$COMPARISON = 'only_1_allele_from_assembly' } else { asm$COMPARISON = 'only_1_allele_from_reads_spanning' }
+                    } else if (length(na_index) == 2){
+                        if (na_index[1] %in% c(1, 2) & na_index[2] %in% c(1, 2)){
+                            # in this case we are missing both asm alleles
+                            colnames(asm) = paste0(colnames(asm), '_ASM'); asm$COMPARISON = 'missing_both_assembly_alleles'
+                            colnames(spa) = paste0(colnames(spa), '_READS_SPANNING'); spa$H1_DIFF = NA; spa$H2_DIFF = NA
+                        } else if (na_index[1] %in% c(3, 4) & na_index[2] %in% c(3, 4)){
+                            # in this case we are missing both reads-spanning alleles
+                            colnames(spa) = paste0(colnames(spa), '_READS_SPANNING')
+                            colnames(asm) = paste0(colnames(asm), '_ASM'); asm$COMPARISON = 'missing_both_reads_spanning_alleles'
+                            spa$H1_DIFF = NA; spa$H2_DIFF = NA                             
+                        } else {
+                            # in this case there's one NA in both asm and reads-spanning -- we need to check the other allele
+                            # manage asm
+                            if (1 %in% na_index){ nonmissing_asm = asm_h2 } else if (2 %in% na_index){ nonmissing_asm = asm_h1 }
+                            # manage spanning
+                            if (3 %in% na_index){ nonmissing_spa = spa_h2 } else if (4 %in% na_index){ nonmissing_spa = spa_h1 }
+                            # check nonmissing allele
+                            diff_tmp = abs(as.numeric(nonmissing_asm[, 1]) - as.numeric(nonmissing_spa[, 1]))
+                            if (diff_tmp <= max(1.5, as.numeric(nonmissing_asm[, 1])*deviation)){ check = 'both_miss_1_allele_other_ok' } else { check = 'both_miss_1_allele_other_different' }
+                            colnames(asm) = paste0(colnames(asm), '_ASM'); asm$COMPARISON = check
+                            colnames(spa) = paste0(colnames(spa), '_READS_SPANNING'); spa$H1_DIFF = diff_tmp; spa$H2_DIFF = NA
+                        }
+                    } else {
+                        if (na_index %in% c(1, 2)){
+                            if (na_index == 1){ nonmissing = asm_h2 } else { nonmissing = asm_h1 }
+                            # calculate distance between alleles based on copy number
+                            diff_alleles = abs(c(as.numeric(nonmissing[, 1]) - spa_h1$H1, as.numeric(nonmissing[, 1]) - spa_h2$H2))
+                            if (length(unique(diff_alleles)) == 1){
+                                colnames(asm) = paste0(colnames(asm), '_ASM'); asm$COMPARISON = 'assembly_miss_1_but_homozygous'
+                                colnames(spa) = paste0(colnames(spa), '_READS_SPANNING'); spa$H1_DIFF = diff_alleles[1]; spa$H2_DIFF = NA
+                            } else {
+                                closest = which(diff_alleles == min(diff_alleles)); if (closest == 1){ closest_all = spa_h1 } else { closest_all = spa_h2 }
+                                if (diff_alleles[closest] <= max(1.5, as.numeric(closest_all[,1])*deviation)){
+                                    colnames(asm) = paste0(colnames(asm), '_ASM'); asm$COMPARISON = 'assembly_miss_1_allele_other_ok'
+                                    colnames(spa) = paste0(colnames(spa), '_READS_SPANNING'); spa$H1_DIFF = diff_alleles[closest]; spa$H2_DIFF = NA
+                                } else {
+                                    colnames(asm) = paste0(colnames(asm), '_ASM'); asm$COMPARISON = 'assembly_miss_1_allele_other_different'
+                                    colnames(spa) = paste0(colnames(spa), '_READS_SPANNING'); spa$H1_DIFF = diff_alleles[closest]; spa$H2_DIFF = NA
+                                }
+                            }
+                        } else {
+                            if (na_index == 3){ nonmissing = spa_h2 } else { nonmissing = spa_h1 }
+                            # calculate distance between alleles based on copy number
+                            diff_alleles = abs(c(as.numeric(nonmissing[, 1]) - asm_h1$H1, as.numeric(nonmissing[, 1]) - asm_h2$H2))
+                            if (length(unique(diff_alleles)) == 1){
+                                    colnames(asm) = paste0(colnames(asm), '_ASM'); asm$COMPARISON = 'assembly_miss_1_but_homozygous'
+                                    colnames(spa) = paste0(colnames(spa), '_READS_SPANNING'); spa$H1_DIFF = diff_alleles[1]; spa$H2_DIFF = NA
+                            } else {
+                                closest = which(diff_alleles == min(diff_alleles)); if (closest == 1){ closest_all = asm_h1 } else { closest_all = asm_h2 }
+                                if (diff_alleles[closest] <= max(1.5, as.numeric(closest_all[,1])*deviation)){
+                                    colnames(asm) = paste0(colnames(asm), '_ASM'); asm$COMPARISON = 'reads_spanning_miss_1_allele_other_ok'
+                                    colnames(spa) = paste0(colnames(spa), '_READS_SPANNING'); spa$H1_DIFF = diff_alleles[closest]; spa$H2_DIFF = NA
+                                } else {
+                                    colnames(asm) = paste0(colnames(asm), '_ASM'); asm$COMPARISON = 'reads_spanning_miss_1_allele_other_different'
+                                    colnames(spa) = paste0(colnames(spa), '_READS_SPANNING'); spa$H1_DIFF = diff_alleles[closest]; spa$H2_DIFF = NA
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    # calculate distance between alleles: h1
+                    diff_h1 = abs(c(asm_h1$H1 - spa_h1$H1, asm_h1$H1 - spa_h2$H2))
+                    closest_h1 = which(diff_h1 == min(diff_h1))[1]; if (closest_h1 == 1){ closest_all = spa_h1 } else { closest_all = spa_h2 }
+                    if (diff_h1[closest_h1] <= max(1.5, as.numeric(closest_all[,1])*deviation)){ check_h1 = 'same' } else { check_h1 = 'different' }
+                    # then h2, exclude the h1 allele
+                    if (colnames(closest_all)[1] == 'H2'){ diff_h2 = abs(asm_h2$H2 - spa_h1$H1) } else { diff_h2 = abs(asm_h2$H2 - spa_h2$H2) }
+                    closest_h2 = abs(closest_h1 - 1); if (closest_h2 == 1){ closest_all = spa_h1 } else { closest_all = spa_h2 }
+                    if (diff_h2 <= max(1.5, as.numeric(closest_all[,1])*deviation)){ check_h2 = 'same' } else { check_h2 = 'different' }
+                    if (check_h1 == 'same' & check_h2 == 'same'){ check = 'same_alleles' } else { check = 'alleles_do_not_overlap' }
+                    colnames(asm) = paste0(colnames(asm), '_ASM'); asm$COMPARISON = check; colnames(spa) = paste0(colnames(spa), '_READS_SPANNING'); spa$H1_DIFF = diff_h1[closest_h1]; spa$H2_DIFF = diff_h2
+                }
+            } else if (nrow(asm) >0){
+                colnames(asm) = paste0(colnames(asm), '_ASM'); asm$COMPARISON = 'missing_reads_spanning'                   
+                colnames(spa) = paste0(colnames(spa), '_READS_SPANNING'); spa$H1_DIFF = NA; spa$H2_DIFF = NA
+            } else if (nrow(spa) >0){
+                colnames(spa) = paste0(colnames(spa), '_READS_SPANNING'); spa$COMPARISON = 'missing_assembly'
+                colnames(asm) = paste0(colnames(asm), '_ASM'); spa$H1_DIFF = NA; spa$H2_DIFF = NA
+            } 
+            tmp_combined_res = cbind(asm, spa)
+            if (nrow(tmp_combined_res) >0){ comparison[[(length(comparison) + 1)]] = tmp_combined_res }
+        }
+        comparison = rbindlist(comparison, use.names = T)
+    }
+
 # Manage arguments
     parser <- ArgumentParser()
     # add arguments: --reads_spannning is the trf output of the reads-spanning analysis
@@ -740,12 +998,15 @@
     parser$add_argument("--phase", default = 'None', help = "Output file(s) of PHASING analysis. Multiple files should be comman-separated.")
     # add arguments: --out
     parser$add_argument("--out", default = 'None', help = "Output directory where output will be placed.")
+    # add arguments: --cpu
+    parser$add_argument("--cpu", default = 2, help = "Number of CPU to use for parallel computation")
     # read arguments
     args <- parser$parse_args()
     inp_trf = args$reads_spanning; inp_trf = unlist(strsplit(inp_trf, ','))
     inp_asm = args$asm; inp_asm = unlist(strsplit(inp_asm, ','))
     inp_pha = args$phase; inp_pha = unlist(strsplit(inp_pha, ','))
     out_dir = args$out
+    n_cpu = as.numeric(args$cpu)
     # check inputs and print summary
     if ((inp_trf[1] == 'None' & inp_asm[1] == 'None') | out_dir == 'None'){ RUN = FALSE } else { RUN = TRUE }
     if (RUN == FALSE){
@@ -838,19 +1099,15 @@
   
     # 4. Let's adjust the motifs -- generate a consensus -- essentially merging the same motifs together -- this for both analyses
     cat('****** Merging similar motifs together\n')
-    all_motifs = data.frame(motif = unique(trf_pha$TRF_MOTIF), stringsAsFactors = F); all_motifs$main_motif = NA
+    all_motifs = data.frame(motif = unique(trf_pha$TRF_MOTIF), stringsAsFactors = F)
     all_motifs = all_motifs[!is.na(all_motifs$motif),]
-    trf_pha$UNIFORM_MOTIF = NA
     # manage the reference
     trf_pha$READ_NAME[is.na(trf_pha$READ_NAME)] <- 'reference'
-    for (i in 1:nrow(all_motifs)){
-        if (is.na(all_motifs$main_motif[i])){
-            all_perm = permutMotif(as.character(all_motifs$motif[i]))
-            all_motifs$main_motif[i] = all_motifs$motif[i]
-            all_motifs$main_motif[which(all_motifs$motif %in% all_perm)] = all_motifs$motif[i]
-            trf_pha$UNIFORM_MOTIF[which(trf_pha$TRF_MOTIF %in% all_perm)] = all_motifs$motif[i]
-        }
-    }
+    # alternative way using multiprocessing
+    main_motifs = unlist(mclapply(all_motifs, mergeMotif_mp, mc.cores = n_cpu))
+    all_motifs = data.frame(motif = all_motifs, UNIFORM_MOTIF = main_motifs)
+    trf_pha = merge(trf_pha, all_motifs, by.x = 'TRF_MOTIF', by.y = 'motif')
+
     # to make sure there are no conflicts, change the read name
     trf_pha$UNIQUE_NAME = paste(trf_pha$READ_NAME, trf_pha$SAMPLE_NAME, trf_pha$REGION, sep = "___")
 
@@ -867,102 +1124,46 @@
     defaultW <- getOption("warn"); options(warn = -1)
     # split reads-spanning and assembly-based
     reads_span = trf_pha_nodup[which(trf_pha_nodup$DATA_TYPE == 'reads-spanning'),]; asm = trf_pha_nodup[which(trf_pha_nodup$DATA_TYPE == 'assembly'),]
-    all_res = list()
+    # haplotyping is done with multiple processors (1 for each sample)
     if (anal_type %in% c('reads-spanning', 'reads-spanning + assembly + comparison')){
         cat(paste0('******** Processing reads-spanning data\n'))
         all_samples = unique(reads_span$SAMPLE_NAME); all_regions = unique(reads_span$REGION)
-        for (s in all_samples){
-            #print(paste0('** processing sample --> ', s))
-            for (r in all_regions){
-                # get data of the sample and the region of interest
-                tmp_data = reads_span[which(reads_span$SAMPLE_NAME == s & reads_span$REGION == r),]
-                if (nrow(tmp_data) >0){
-                    reads_df = tmp_data[, c('COPIES_TRF', 'HAPLOTYPE', 'UNIFORM_MOTIF', 'REGION', 'PASSES', 'READ_QUALITY', 'LENGTH_SEQUENCE', 'READ_NAME', 'START_TRF', 'END_TRF', 'TRF_PERC_MATCH', 'TRF_PERC_INDEL')]
-                    phased_data = PhasingBased_haplotyping_size(reads_df, sample_name = s, thr_mad = 0.05)
-                    polished_data = polishHaplo_afterPhasing_size(phased_data, 0.10)
-                    polished_data$DATA_TYPE = 'reads-spanning'
-                    all_res[[(length(all_res) + 1)]] = polished_data
-                }
-            }
-        }
+        res_reads_spanning = rbindlist(mclapply(all_samples, haplotyping_mp, all_regions = all_regions, type = 'reads_spanning', mc.cores = n_cpu))
+        res_reads_spanning$DATA_TYPE = 'reads-spanning'
     }
     if (anal_type %in% c('assembly', 'reads-spanning + assembly + comparison')){
         cat(paste0('******** Processing assembly-based data\n'))
         all_samples = unique(asm$SAMPLE_NAME); all_regions = unique(asm$REGION)
-        for (s in all_samples){
-            #print(paste0('** processing sample --> ', s))
-            for (r in all_regions){
-                # get data of the sample and the region of interest
-                tmp_data = asm[which(asm$SAMPLE_NAME == s & asm$REGION == r),]
-                if (nrow(tmp_data) >0){
-                    reads_df = tmp_data[, c('COPIES_TRF', 'HAPLOTYPE', 'UNIFORM_MOTIF', 'REGION', 'PASSES', 'READ_QUALITY', 'LENGTH_SEQUENCE', 'READ_NAME', 'START_TRF', 'END_TRF', 'TRF_PERC_MATCH', 'TRF_PERC_INDEL')]
-                    phased_data = assemblyBased_size(reads_df, sample_name = s, region = r, 0.05)
-                    polished_data = polishHaplo_afterPhasing_size(phased_data, 0.05)
-                    polished_data$DATA_TYPE = 'assembly'
-                    all_res[[(length(all_res) + 1)]] = polished_data
-                }
-            }
-        }
+        res_asm = rbindlist(mclapply(all_samples, haplotyping_mp, all_regions = all_regions, type = 'asm', mc.cores = n_cpu))
+        res_asm$DATA_TYPE = 'assembly'
     }
     # Merge all results together
-    all_res = data.table::rbindlist(all_res, fill=T)
+    if (anal_type == 'reads-spanning + assembly + comparison'){ all_res = rbind(res_reads_spanning, res_asm) } else if (anal_type == 'reads-spanning'){ all_res = res_reads_spanning } else if (anal_type == 'assembly'){ all_res = res_asm }
     options(warn = defaultW)
     # re-assign the unique identifier after haplotype calling
     all_res$UNIQUE_NAME = paste(all_res$READ_NAME, all_res$sample, all_res$REGION, sep = "___")
 
     # 8. now let's bring the duplicates in again and assign the correct haplotype based on the other duplicate
+    # this is also now done using multiple processors
     dups_name = unique(dups$UNIQUE_NAME)
-    for (d in dups_name){
-        # gather data with haplo information and duplicates
-        tmp_haplo = all_res[which(all_res$UNIQUE_NAME == d), ]; tmp_dup = dups[which(dups$UNIQUE_NAME == d), ]
-        # then create as many rows as the number of dups row with same columns as tmp_dup_haplo with values from tmp_dup_noinfo
-        n_dups = nrow(tmp_dup)
-        tmp_df = data.frame(COPIES_TRF = tmp_dup$COPIES_TRF, HAPLOTYPE = rep(tmp_haplo$HAPLOTYPE, n_dups), UNIFORM_MOTIF = tmp_dup$UNIFORM_MOTIF, REGION = tmp_dup$REGION, 
-                    PASSES = tmp_dup$PASSES, READ_QUALITY = tmp_dup$READ_QUALITY, LENGTH_SEQUENCE = tmp_dup$LENGTH_SEQUENCE, READ_NAME = tmp_dup$READ_NAME, 
-                    START_TRF = tmp_dup$START_TRF, END_TRF = tmp_dup$END_TRF, TRF_PERC_MATCH = tmp_dup$TRF_PERC_MATCH, TRF_PERC_INDEL = tmp_dup$TRF_PERC_INDEL, 
-                    type = rep(tmp_haplo$type, n_dups), sample = rep(tmp_haplo$sample, n_dups), haplo_value = rep(tmp_haplo$haplo_value, n_dups), 
-                    polished_reads = rep(tmp_haplo$polished_reads, n_dups), polished_haplo_values = rep(tmp_haplo$polished_haplo_values, n_dups), DATA_TYPE = rep(tmp_haplo$DATA_TYPE, n_dups),
-                    UNIQUE_NAME = rep(tmp_haplo$UNIQUE_NAME, n_dups))
-        # finally add this df to the main dataset
-        all_res = rbind(all_res, tmp_df)
-    }
+    tmp_df_dups = data.frame(COPIES_TRF = dups$COPIES_TRF, UNIFORM_MOTIF = dups$UNIFORM_MOTIF, REGION = dups$REGION, PASSES = dups$PASSES, READ_QUALITY = dups$READ_QUALITY,
+        LENGTH_SEQUENCE = dups$LENGTH_SEQUENCE, READ_NAME = dups$READ_NAME, START_TRF = dups$START_TRF, END_TRF = dups$END_TRF, TRF_PERC_MATCH = dups$TRF_PERC_MATCH, TRF_PERC_INDEL = dups$TRF_PERC_INDEL,
+        DATA_TYPE = dups$DATA_TYPE, UNIQUE_NAME = dups$UNIQUE_NAME)
+    # add information about type, sample, haplo_value, polished_reads and polished_haplo_values
+    tmp_info = all_res[, c('UNIQUE_NAME', 'type', 'sample', 'haplo_value', 'polished_reads', 'polished_haplo_values', 'HAPLOTYPE')]
+    tmp_df_dups = merge(tmp_df_dups, tmp_info, by = 'UNIQUE_NAME')
+    # finally combine the duplicate information with the unique information
+    all_res_combined = rbind(all_res, tmp_df_dups)
 
-    # 9. now we should look at the motifs
+    # 9. now we should look at the motifs -- implemented parallel computing
     cat('****** Generating consensus motifs\n')
     all_samples = unique(all_res$sample); all_regions = unique(all_res$REGION); motif_res = list()
-    for (s in all_samples){
-        for (r in all_regions){
-            # take all reads
-            tmp = all_res[which(all_res$sample == s & all_res$REGION == r),]
-            # check number of haplotypes
-            n_haplo = unique(tmp$HAPLOTYPE)
-            # treat haplotypes independently from each other
-            if (1 %in% tmp$HAPLOTYPE & 2 %in% tmp$HAPLOTYPE){
-                h1 = tmp[which(tmp$HAPLOTYPE == 1),]; h2 = tmp[which(tmp$HAPLOTYPE == 2),]
-                # calculate consensus motif
-                h1_consensus_motif = consensusMotif_conscious(h1); h2_consensus_motif = consensusMotif_conscious(h2)
-                tmp_res = rbind(h1_consensus_motif, h2_consensus_motif)
-            } else if (1 %in% tmp$HAPLOTYPE){
-                h1 = tmp[which(tmp$HAPLOTYPE == 1),]
-                # calculate consensus motif
-                tmp_res = consensusMotif_conscious(h1)
-            } else if (2 %in% tmp$HAPLOTYPE){
-                h2 = tmp[which(tmp$HAPLOTYPE == 2),]
-                # calculate consensus motif
-                tmp_res = consensusMotif_conscious(h2)
-            } else {
-                # in this case the clustering did not work, can be because the number of reads/contigs is too low
-                tmp_res = tmp; tmp_res$CONSENSUS_MOTIF = NA; tmp_res$CONSENSUS_COPY_NUMBER = NA; tmp_res$CONSENSUS_MOTIF_COMPLEX = NA; tmp_res$ADDITIONAL_MOTIFS = NA
-            }
-            # add to results list
-            motif_res[[(length(motif_res) + 1)]] = tmp_res
-        }
-    }
-    motif_res = rbindlist(motif_res)
+    motif_res = rbindlist(mclapply(all_samples, generateConsens_mp, all_regions = all_regions, all_res = all_res_combined, mc.cores = n_cpu))
 
-    # 10. finally call haplotypes
+    # 10. finally call haplotypes -- implemented parallel computing
     cat('****** Haplotype calling\n')
-    all_haplo = callHaplo_size(data = motif_res)
+    all_samples = unique(motif_res$sample); all_regions = unique(motif_res$REGION)
+    all_haplo = rbindlist(mclapply(all_samples, callHaplo_mp, all_regions = all_regions, data = motif_res, mc.cores = n_cpu))
 
     # 11. if analysis type was different from the combined, we are done here: save output tables
     cat('****** Generating tables\n')
@@ -974,13 +1175,16 @@
     # this will assume the names are the same. Will split with '.' and take the name before that.
     if (anal_type == 'reads-spanning + assembly + comparison'){
         cat('****** Comparing reads-spanning with assembly\n')
-        # first label asm and reads-spanning based approaches
-        all_haplo_annotated = compareReadsSpanning_Asm(all_haplo, 0.10)
+        # add a unique identifier to match samples reads-spanning and assembly results
+        all_haplo$SAME_NAME = str_split_fixed(all_haplo$SAMPLE, '__', 2)[, 1]
+        # exclude reference
+        reference = all_haplo[which(all_haplo$SAME_NAME == 'reference'),]; all_haplo = all_haplo[which(all_haplo$SAME_NAME != 'reference'),]
+        # run multiprocessing for each sample independently
+        all_samples = unique(all_haplo$SAME_NAME); all_regions = unique(all_haplo$REGION)
+        all_haplo_annotated = rbindlist(mclapply(all_samples, compareReadsSpanning_Asm_mp, all_regions = all_regions, all_haplo = all_haplo, deviation = 0.10, mc.cores = n_cpu))
         # then make a final decision
         decisions = makeDecision(all_haplo_annotated)
         # finally also save this dataset
         write.table(decisions, paste0(out_dir, '/haplotyping_reads_spanning_VS_assembly.txt'), quote=F, row.names = F, sep = '\t')
     }
-
     cat('**** Analysis done!!\n')
-
