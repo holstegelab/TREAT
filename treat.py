@@ -498,9 +498,9 @@ elif anal_type == 'complete':
     file_path = os.path.realpath(__file__)
     file_path = '/'.join(file_path.split('/')[:-1])
     if snp_dir == 'False':
-        os.system("Rscript %s/call_haplotypes.R --reads_spanning %s/trf_reads/measures_spanning_reads_and_trf.txt --asm %s/trf_assembly/measures_spanning_reads_and_trf.txt --out %s/haplotyping" %(file_path, output_directory, output_directory, output_directory, output_directory))
+        os.system("Rscript %s/call_haplotypes.R --reads_spanning %s/trf_reads/measures_spanning_reads_and_trf.txt --asm %s/trf_assembly/measures_spanning_reads_and_trf.txt --out %s/haplotyping --cpu %s" %(file_path, output_directory, output_directory, output_directory, output_directory, number_threads))
     else:
-        os.system("Rscript %s/call_haplotypes.R --reads_spanning %s/trf_reads/measures_spanning_reads_and_trf.txt --phase %s/phasing/haplotags_reads.txt --asm %s/trf_assembly/measures_spanning_reads_and_trf.txt --out %s/haplotyping" %(file_path, output_directory, output_directory, output_directory, output_directory))
+        os.system("Rscript %s/call_haplotypes.R --reads_spanning %s/trf_reads/measures_spanning_reads_and_trf.txt --phase %s/phasing/haplotags_reads.txt --asm %s/trf_assembly/measures_spanning_reads_and_trf.txt --out %s/haplotyping --cpu %s" %(file_path, output_directory, output_directory, output_directory, output_directory, number_threads))
 elif anal_type == 'realign':
     filestorealign = getFilesToRealign(fasta_dir)
     print("** aligning fasta files")
