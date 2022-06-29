@@ -340,7 +340,18 @@ elif anal_type == 'coverage_profile':
     print("** checking bam files")
     all_bams = checkBAM(bam_directory)
     print("** generating coverage profile")
-    coverage_profile = generateCoverageProfile(bed, all_bams, window_size, step, output_directory)   
+    pool = multiprocessing.Pool(processes=number_threads)
+    coverage_fun = partial(generateCoverageProfile_MP, bed = bed, all_bams = all_bams, window_size = window_size, step = step, output_directory = output_directory)
+    coverage_results = pool.map(coverage_fun, all_bams)
+    print('**** done with coverage profiles                                     ')
+    # combine results and output files
+    coverage_info = {k:v for element in coverage_results for k,v in element.items()}
+    outname = open('%s/coverage_profiles.bed' %(output_directory), 'w')
+    outname.write('CHROM\tSTART_POS\tEND_POS\tSAMPLE\tCOVERAGE\tREGION_ID\n')
+    for s in coverage_info.keys():
+        for x in coverage_info[s]:
+            outname.write('%s\t%s\t%s\t%s\t%s\t%s\n' %(x[0], x[1], x[2], x[3], x[4], x[5]))
+    outname.close()
 elif anal_type == 'extract_raw_reads':
     print("** checking bam files")
     all_bams = checkBAM(bam_directory)
