@@ -781,7 +781,7 @@ def extractSNPs(bed, window):
         print('**** finding snps in chromosome --> %s' %(chrom))
         for region in bed[chrom]:
             start_pos, end_pos, region_id = int(region[0]), int(region[1]), region[-1]
-            plink_file = '/project/holstegelab/Share/gwas_array/TOPMED/PASS.Variants%s.BRAVO_TOPMed_Freeze_8.tab.gz' %(chrom)
+            plink_file = '/project/holstegelab/Share/gwas_array/TOPMED_BRAVO/PASS.Variants%s.BRAVO_TOPMed_Freeze_8.tab.gz' %(chrom)
             with gzip.open(plink_file) as finp:
                 for line in finp:
                     if line.startswith(b'#CHROM'):
