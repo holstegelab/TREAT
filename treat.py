@@ -295,6 +295,8 @@ elif anal_type == 'phase_reads':
     print('**** done with phasing                                     ')
 
     # 6. combine results and output files if phasing was selected
+    # first remove empty values
+    phasing_results = [x for x in phasing_results if x != []]
     phasing_info = {k:v for element in phasing_results for k,v in element.items()}
     fout = open('%s/haplotags_reads.txt' %(output_directory), 'w')
     header = 'SAMPLE\tREAD_ID\tHAPLOTYPE\n'

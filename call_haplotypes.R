@@ -8,7 +8,7 @@
 #########################################
 
 # Libraries
-    list.of.packages <- c("plyr", "data.table", "argparse", "stringr", "parallel")
+    list.of.packages <- c("plyr", "data.table", "argparse", "stringr", "parallel", "spgs")
     new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[, "Package"])]
     if(length(new.packages)) install.packages(new.packages)
     library(plyr)
@@ -16,6 +16,7 @@
     library(argparse)
     library(parallel)
     library(stringr)
+    library(spgs)
 
 # Functions
     # Function to make permutations of letters given a word, used to check motifs
@@ -66,9 +67,9 @@
                     reads_h1 = unlist(strsplit(as.character(res_polished$reads_h1), ',')); reads_h2 = unlist(strsplit(as.character(res_polished$reads_h2), ','))
                     reads_df$type = NA
                     # make the final df with reads and haplotypes (depending on how many alleles were found)
-                    if (reads_h2 == 'homozygous' && !is.na(reads_h2)){
+                    if (reads_h2 == 'homozygous' && unique(!is.na(reads_h2))){
                         reads_df$type[which(reads_df$LENGTH_SEQUENCE %in% reads_h1)] = 'Assigned'; reads_df$HAPLOTYPE[which(reads_df$LENGTH_SEQUENCE %in% reads_h1)] = 1
-                    } else if (!is.na(reads_h2)){
+                    } else if (unique(!is.na(reads_h2))){
                         reads_df$type[which(reads_df$LENGTH_SEQUENCE %in% c(reads_h1, reads_h2))] = 'Assigned'
                         reads_df$HAPLOTYPE[which(reads_df$LENGTH_SEQUENCE %in% reads_h1)] = 1; reads_df$HAPLOTYPE[which(reads_df$LENGTH_SEQUENCE %in% reads_h2)] = 2
                     }
