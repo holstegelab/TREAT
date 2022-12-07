@@ -315,7 +315,7 @@ elif anal_type == 'extract_snps':
     snps_topmed = extractSNPs(bed, args.window)
     writeSNPs(args.out_dir, snps_topmed)
 elif anal_type == 'annotate_snps':
-    input_variants = readSNPs(args.variant_file)
+    input_variants, variant_info = readSNPs(args.variant_file)
     print('** input variants correctly read')
     snps_topmed_coding = annotateSNPs(input_variants, args.out_dir, args.analysis_type)
     writeSNPsAnnotation(args.out_dir, snps_topmed_coding)
