@@ -888,7 +888,7 @@ def extractSNPsFromBam(input_variants, bam_files, variant_info):
                 for j in range(len(info)):
                     pos, ref, coverage, a_count, c_count, t_count, g_count  = info[j][1], info[j][2], info[j][3], info[j][13], info[j][15], info[j][17], info[j][19]
                     if int(pos) in all_snps_chrom:
-                        snp_type = chunks_info[i][counter_info]
+                        snp_type = list(filter(lambda x:pos in x, all_snps_info))[0]
                         snp_id = '%s:%s' %(chrom, pos)
                         snp_info = [snp_id, ref, coverage, 'A:%s' %(a_count), 'C:%s' %(c_count), 'G:%s' %(g_count), 'T:%s' %(t_count), snp_type]
                         counter_info += 1
