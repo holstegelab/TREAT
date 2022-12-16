@@ -88,7 +88,6 @@ print("** bed file --> %s" %(args.bed_dir))
 if args.analysis_type == 'realign_assembly':
     print("** fasta file(s) --> %s" %(args.fasta_dir))
     print("** output folder is the same as input fasta file(s)")
-    print("** reference for alignment --> %s" %(args.reference))
 else:
     print("** bam file(s) --> %s" %(args.bam_dir))
     print("** output folder --> %s" %(args.out_dir))
