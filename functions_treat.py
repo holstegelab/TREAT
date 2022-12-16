@@ -1061,9 +1061,8 @@ def phase_reads(reads_bam, snps_to_keep, output_directory, SNPs_data_directory, 
     return(phasing_info)
 
 # Function that uses whatshap to assign a haplotype to reads given a vcf file to take snps -- this uses whatshap haplotag
-def phase_reads_MP(f, reads_bam, snps_to_keep, output_directory, SNPs_data_directory, snp_data_ids):
+def phase_reads_MP(f, reads_bam, snps_to_keep, output_directory, SNPs_data_directory, snp_data_ids, ref_path):
     map_ids = pd.read_csv(snp_data_ids, sep = " |\t", engine = 'python') if snp_data_ids != 'False' else False
-    ref_path = '/project/holstegelab/Software/resources/GRCh38_full_analysis_set_plus_decoy_hla.fa'
     phasing_info = {}
     fname = f.split('/')[-1].replace('__rawReads.bam', '.bam')
     id_gwas = list(map_ids['ID_GWAS'][map_ids['ID_PACBIO'] == fname]) if isinstance(map_ids, pd.DataFrame) == True else [f.split('/')[-1].split('_')[0]]          # find gwas id for the corresponding sample

@@ -300,7 +300,7 @@ elif anal_type == 'phase_reads':
     snps_for_phasing, snps_to_keep, SNPs_data_path = findSNPs_gwas(snp_dir, bed_regions, window_size)
     print('**** start phasing                                  ', end = '\r')
     pool = multiprocessing.Pool(processes=number_threads)
-    phasing_fun = partial(phase_reads_MP, reads_bam = reads_bam, snps_to_keep = snps_to_keep, output_directory = output_directory, SNPs_data_directory = SNPs_data_path, snp_data_ids = snp_data_ids)
+    phasing_fun = partial(phase_reads_MP, reads_bam = reads_bam, snps_to_keep = snps_to_keep, output_directory = output_directory, SNPs_data_directory = SNPs_data_path, snp_data_ids = snp_data_ids, ref_path = ref_fasta)
     phasing_results = pool.map(phasing_fun, reads_bam)
     print('**** done with phasing                                     ')
 
