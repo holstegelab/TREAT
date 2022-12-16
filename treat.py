@@ -167,7 +167,7 @@ elif anal_type == 'measure':
     measure_fun = partial(measureDistance_MP, bed = bed_regions, window = 10)
     extract_results = pool.map(measure_fun, reads_bam)
     print('**** done measuring reference                                     ', end = '\r')
-    dist_reference = measureDistance_reference(bed_regions, 10, ref); print('**** read measurement done!                                         ')
+    dist_reference = measureDistance_reference(bed_regions, 10, ref_fasta); print('**** read measurement done!                                         ')
     extract_results.append(dist_reference)
     # combine results
     distances = {k:v for element in extract_results for k,v in element.items()}
