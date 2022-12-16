@@ -104,12 +104,17 @@ if args.analysis_type in ['coverage_profile', 'complete']:
 if args.analysis_type == 'extract_raw_reads':
     print('** read IDs to extract --> %s' %(args.target_reads))
 print("** intermediate files --> %s" %(args.store_temp))
+if args.analysis_type in ['measure']:
+    print('** reference genome --> %s' %(args.ref))
 print('** variant file --> %s' %(args.variant_file))
 print('** number of cpus --> %s' %(args.thread))
 print("** window used --> %s\n********************\n" %(args.window))
 
 # Store arguments
-bed_file, anal_type, var_file, bam_directory, output_directory, store_temporary, window_size, assembly_type, assembly_ploidy, number_threads, polishing, snp_dir, snp_data_ids, step, target_reads, reference, fasta_dir, trf_file, phase_file, asm_file = args.bed_dir, args.analysis_type, args.variant_file, args.bam_dir, args.out_dir, args.store_temp, args.window, args.ass_type, args.ass_ploidy, args.thread, args.polish, args.snp_dir, args.snp_data_ids, args.step, args.target_reads, args.reference, args.fasta_dir, args.trf_file, args.phase_file, args.asm_file
+bed_file, anal_type, var_file, bam_directory, output_directory, store_temporary = args.bed_dir, args.analysis_type, args.variant_file, args.bam_dir, args.out_dir, args.store_temp
+window_size, assembly_type, assembly_ploidy, number_threads, polishing, snp_dir = args.window, args.ass_type, args.ass_ploidy, args.thread, args.polish, args.snp_dir
+snp_data_ids, step, target_reads, reference, fasta_dir, trf_file, phase_file = args.snp_data_ids, args.step, args.target_reads, args.reference, args.fasta_dir, args.trf_file, args.phase_file
+asm_file, ref_fasta = args.asm_file, args.ref
 # Store arguments (for debugging only)
 #bed_file, anal_type, var_file, bam_directory, output_directory, store_temporary, window_size, assembly_type, assembly_ploidy, number_threads, polishing, snp_dir, snp_data_ids, step, target_reads = '/project/holstegelab/Share/nicco/workspaces/20211013_target_approach/automatic_pipeline/DMPK/dmpk.bed', '', '', '/project/holstegelab/Share/nicco/workspaces/20211013_target_approach/automatic_pipeline/DMPK/extract_reads/case/DNA15-20132_2.haplotagged_step1_hifi.bam', '/project/holstegelab/Share/nicco/workspaces/20211013_target_approach/automatic_pipeline/DMPK/phase_reads/case', 'True', 100000, '', 2, 4, 'True', '/project/holstegelab/Share/pacbio/radbound_rfc1_cases/DNA15-20132-DMPK/Analyzed/GRCh38_20220408/SNVCalling_20220411_deepvariant//DNA15-20132_2.phased.pvar', '/project/holstegelab/Share/nicco/workspaces/20211013_target_approach/automatic_pipeline/DMPK/phase_reads/case/map.txt', 500, '/project/holstegelab/Share/nicco/workspaces/20211013_target_approach/automatic_pipeline/RFC1/subreads/c7_all_reads.txt'
 
@@ -162,7 +167,7 @@ elif anal_type == 'measure':
     measure_fun = partial(measureDistance_MP, bed = bed_regions, window = 10)
     extract_results = pool.map(measure_fun, reads_bam)
     print('**** done measuring reference                                     ', end = '\r')
-    dist_reference = measureDistance_reference(bed_regions, 10); print('**** read measurement done!                                         ')
+    dist_reference = measureDistance_reference(bed_regions, 10, ref); print('**** read measurement done!                                         ')
     extract_results.append(dist_reference)
     # combine results
     distances = {k:v for element in extract_results for k,v in element.items()}

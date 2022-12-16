@@ -369,13 +369,13 @@ def measureDistance_MP(reads_bam, bed, window):
     return distances
 
 # Measure the distance in the reference genome
-def measureDistance_reference(bed, window):
+def measureDistance_reference(bed, window, ref):
     distances = {}
     for chrom in bed.keys():
         for region in bed[chrom]:
             region_id = chrom + ':' + region[0] + '-' + region[1]
             start, end = int(region[0]) - window, int(region[1]) + window
-            sequence_in_reference = [x.rstrip() for x in list(os.popen('samtools faidx /project/holstegelab/Software/resources/GRCh38_full_analysis_set_plus_decoy_hla.fa %s:%s-%s' %(chrom, start, end)))]
+            sequence_in_reference = [x.rstrip() for x in list(os.popen('samtools faidx %s %s:%s-%s' %(ref, chrom, start, end)))]
             seq_merged = ''.join(sequence_in_reference[1:])
             if 'reference' in distances.keys():
                 distances['reference'].append([region_id, 'NA', 'NA', 'NA', 'NA', seq_merged, len(seq_merged), window])
