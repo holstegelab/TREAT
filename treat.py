@@ -270,6 +270,8 @@ elif anal_type == 'assembly':
     # 13. alignment
     print('** 4. align contigs')
     threads_per_aln = 4; parallel_alignment = int(number_threads / threads_per_aln)
+    if parallel_alignment == 0:
+        parallel_alignment = 1
     pool = multiprocessing.Pool(processes=parallel_alignment)
     align_fun = partial(alignAssembly_MP, outname_list = assembly_results, thread = threads_per_aln, reference = ref_fasta)
     align_results = pool.map(align_fun, assembly_results)
