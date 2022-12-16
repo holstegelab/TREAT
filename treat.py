@@ -73,8 +73,10 @@ if (args.analysis_type == 'extract_raw_reads' and args.target_reads == 'False'):
 if (args.analysis_type == 'haplotyping' and args.trf_file == 'None' and args.asm_file == 'None'):
     parser.error('!! You should provide at least one TRF-output of single-reads or assembly (or both) when the analysis type is haplotyping.')
 # Seven, throw error when measure is specified but no reference data is provided
-if (args.analysis_type in ['measure', 'trf', 'assembly', 'realign'] and args.ref == 'None'):
+if (args.analysis_type in ['measure', 'trf', 'assembly', 'realign', 'phase_reads'] and args.ref == 'None'):
     parser.error('!! You should provide the path to the reference genome when the analysis type is measure.')
+if (args.analysis_type in ['phase_reads'] and args.snp_dir == 'None'):
+    parser.error('!! You should provide the path to the SNP data when the analysis type is phase_reads.')
 
 # Print arguments
 print("\n** Tandem REpeat Annotation Toolkit (TREAT) **\n")
