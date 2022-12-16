@@ -256,8 +256,9 @@ elif anal_type == 'assembly':
     strategy = AsmStrategy(assembly_type, reads_fasta, output_directory)
     # decide how many assembly in parallel to run (keep 2 cores per assembly, then depends on the total number of cores available)
     threads_per_asm = 2; parallel_assemblies = int(number_threads / threads_per_asm); all_samples = list(strategy.keys())
+    if parallel_assemblies == 0:
+        parallel_assemblies = 1
     pool = multiprocessing.Pool(processes=parallel_assemblies)
-    print(threads_per_asm)
     assembly_fun = partial(localAssembly_MP, strategy = strategy, out_dir = output_directory, ploidy = assembly_ploidy, thread = threads_per_asm)
     assembly_results = pool.map(assembly_fun, all_samples)
     print('**** done with assembly                                     ')
