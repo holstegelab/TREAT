@@ -33,7 +33,7 @@ parser = argparse.ArgumentParser(description = 'Find information about a specifi
 parser.add_argument('--bed', dest = 'bed_dir', type = str, help = '.bed file containing the region(s) to look. Header is not required but if present, it must starts with #.', required = False, default = 'None')
 parser.add_argument('--analysis-type', dest = 'analysis_type', type = str, help = 'Type of analysis to perform [extract_reads / measure / trf / assembly / extract_snps / annotate_snps / extract_annotate / genotype_snps_pacbio / phase_reads / coverage_profile / extract_raw_reads / realign / complete / haplotyping]. See docs for further information.', required = True)
 parser.add_argument('--variant-file', dest = 'variant_file', type = str, help = 'If the analysis_type is annotate_snps or genotype_snps_pacbio, please provide here the path to the file including the SNPs to annotate/extract.', required = False, default = 'None')
-parser.add_argument('--ref', dest = 'ref', type = str, help = 'Path to reference genome data is aligned to.', required = False, default = 'None')
+parser.add_argument('--ref', dest = 'ref', type = str, help = 'Path to reference genome data.', required = False, default = 'None')
 parser.add_argument('--bam-dir', dest = 'bam_dir', type = str, help = 'Directory of bam file(s). If a directory is provided, will use all .bam in the directory. If a single .bam file is provided, will use that file.', required = False, default = 'None')
 parser.add_argument('--fasta-dir', dest = 'fasta_dir', type = str, help = 'Directory of fasta file(s). If a directory is provided, will use all .fasta/fa in the directory. If a single .fasta file is provided, will use that file.', required = False, default = 'None')
 parser.add_argument('--out-dir', dest = 'out_dir', type = str, help = 'Directory where to place output files. If the directory exists, will place files in, otherwise will create the folder and place results in.', required = False, default = 'None')
@@ -47,7 +47,7 @@ parser.add_argument('--snp-data', dest = 'snp_dir', type = str, help = 'If phasi
 parser.add_argument('--snp-data-ids', dest = 'snp_data_ids', type = str, help = 'Please submit here a 2-column file with GWAS ID and ID in sequencing data. If not provided, will assume the IDs are the same.', required = False, default = 'False')
 parser.add_argument('--coverage-step', dest = 'step', type = int, help = 'Number of nt based on which the region(s) of interest will be split to calculate coverage.', required = False, default = 500)
 parser.add_argument('--reads-ids', dest = 'target_reads', type = str, help = 'If analysis type was extract_raw_reads, please provide here a tab-separated file with two columns: the first column should contain the .bam file to extract reads from, the second column should contain the reads ID to extract, one read ID per line.', required = False, default = 'False')
-parser.add_argument('--reference-genome', dest = 'reference', type = str, help = 'If analysis type was assembly, use this parameter to decide whether assembled contigs should be aligned to hg38 or chm13. choises are [hg38 / chm13]. Default is hg38.', required = False, default = 'hg38')
+#parser.add_argument('--reference-genome', dest = 'reference', type = str, help = 'If analysis type was assembly, use this parameter to decide whether assembled contigs should be aligned to hg38 or chm13. choises are [hg38 / chm13]. Default is hg38.', required = False, default = 'hg38')
 parser.add_argument('--trf', dest = 'trf_file', type = str, help = 'If analysis type was haplotyping, please input here the path to the TRF output file.', required = False, default = 'None')
 parser.add_argument('--phase', dest = 'phase_file', type = str, help = 'If analysis type was haplotyping, please input here the path to the PHASING output file.', required = False, default = 'None')
 parser.add_argument('--asm', dest = 'asm_file', type = str, help = 'If analysis type was haplotyping, please input here the path to the TRF output of assembly.', required = False, default = 'None')
@@ -73,7 +73,7 @@ if (args.analysis_type == 'extract_raw_reads' and args.target_reads == 'False'):
 if (args.analysis_type == 'haplotyping' and args.trf_file == 'None' and args.asm_file == 'None'):
     parser.error('!! You should provide at least one TRF-output of single-reads or assembly (or both) when the analysis type is haplotyping.')
 # Seven, throw error when measure is specified but no reference data is provided
-if (args.analysis_type in ['measure', 'trf'] and args.ref == 'None'):
+if (args.analysis_type in ['measure', 'trf', 'assembly', 'realign'] and args.ref == 'None'):
     parser.error('!! You should provide the path to the reference genome when the analysis type is measure.')
 
 # Print arguments
@@ -272,7 +272,7 @@ elif anal_type == 'assembly':
     print('** 4. align contigs')
     threads_per_aln = 4; parallel_alignment = int(number_threads / threads_per_aln)
     pool = multiprocessing.Pool(processes=parallel_alignment)
-    align_fun = partial(alignAssembly_MP, outname_list = assembly_results, thread = threads_per_aln, reference = reference)
+    align_fun = partial(alignAssembly_MP, outname_list = assembly_results, thread = threads_per_aln, reference = ref_fasta)
     align_results = pool.map(align_fun, assembly_results)
     print('**** done with contig alignment                                     ')
 elif anal_type == 'phase_reads':

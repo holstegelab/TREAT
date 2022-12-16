@@ -741,14 +741,17 @@ def alignAssembly(outname_list, thread, reference):
 
 # Align assembly
 def alignAssembly_MP(asm, outname_list, thread, reference):
-    if reference == 'chm13':
-        ref_hifi = '/project/holstegelab/Share/asalazar/data/chm13/assembly/v2_0/chm13v2.0_hifi.mmi'
-        outname_prefix = '_haps_chm13.bam'
-        outname_primary_prefix = '_p_ctg_chm13.bam'
-    else:
-        ref_hifi = '/project/holstegelab/Share/pacbio/resources/h38_ccs.mmi'
-        outname_prefix = '_haps_hg38.bam'
-        outname_primary_prefix = '_p_ctg_hg38.bam'
+    #if reference == 'chm13':
+    #    ref_hifi = '/project/holstegelab/Share/asalazar/data/chm13/assembly/v2_0/chm13v2.0_hifi.mmi'
+    #    outname_prefix = '_haps_chm13.bam'
+    #    outname_primary_prefix = '_p_ctg_chm13.bam'
+    #else:
+    #    ref_hifi = '/project/holstegelab/Share/pacbio/resources/h38_ccs.mmi'
+    #    outname_prefix = '_haps_hg38.bam'
+    #    outname_primary_prefix = '_p_ctg_hg38.bam'
+    ref_hifi = reference
+    outname_prefix = '_haps_aln.bam'
+    outname_primary_prefix = '_p_ctg_aln.bam'
     # haplotype-aware fastas
     asm_name = asm + '_haps.fasta'
     outname = asm + outname_prefix
