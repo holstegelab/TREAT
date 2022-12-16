@@ -75,7 +75,7 @@ if (args.analysis_type == 'haplotyping' and args.trf_file == 'None' and args.asm
 # Seven, throw error when measure is specified but no reference data is provided
 if (args.analysis_type in ['measure', 'trf', 'assembly', 'realign', 'phase_reads'] and args.ref == 'None'):
     parser.error('!! You should provide the path to the reference genome when the analysis type is measure.')
-if (args.analysis_type in ['phase_reads'] and args.snp_dir == 'None'):
+if (args.analysis_type in ['phase_reads'] and args.snp_dir == 'False'):
     parser.error('!! You should provide the path to the SNP data when the analysis type is phase_reads.')
 
 # Print arguments
