@@ -33,6 +33,7 @@ parser = argparse.ArgumentParser(description = 'Find information about a specifi
 parser.add_argument('--bed', dest = 'bed_dir', type = str, help = '.bed file containing the region(s) to look. Header is not required but if present, it must starts with #.', required = False, default = 'None')
 parser.add_argument('--analysis-type', dest = 'analysis_type', type = str, help = 'Type of analysis to perform [extract_reads / measure / trf / assembly / extract_snps / annotate_snps / extract_annotate / genotype_snps_pacbio / phase_reads / coverage_profile / extract_raw_reads / realign / complete / haplotyping]. See docs for further information.', required = True)
 parser.add_argument('--variant-file', dest = 'variant_file', type = str, help = 'If the analysis_type is annotate_snps or genotype_snps_pacbio, please provide here the path to the file including the SNPs to annotate/extract.', required = False, default = 'None')
+parser.add_argument('--ref', dest = 'ref', type = str, help = 'Path to reference genome data is aligned to.', required = False, default = 'None')
 parser.add_argument('--bam-dir', dest = 'bam_dir', type = str, help = 'Directory of bam file(s). If a directory is provided, will use all .bam in the directory. If a single .bam file is provided, will use that file.', required = False, default = 'None')
 parser.add_argument('--fasta-dir', dest = 'fasta_dir', type = str, help = 'Directory of fasta file(s). If a directory is provided, will use all .fasta/fa in the directory. If a single .fasta file is provided, will use that file.', required = False, default = 'None')
 parser.add_argument('--out-dir', dest = 'out_dir', type = str, help = 'Directory where to place output files. If the directory exists, will place files in, otherwise will create the folder and place results in.', required = False, default = 'None')
@@ -67,10 +68,13 @@ elif (args.analysis_type not in ['haplotyping', 'genotype_snps_pacbio', 'annotat
     parser.error('!! You should provide at least a .bed file if analysis_type is --> %s' %(args.analysis_type))
 # Five, throw error when target_reads is not specified and analysis type is extract_raw_reads
 if (args.analysis_type == 'extract_raw_reads' and args.target_reads == 'False'):
-    parser.error('!! Your should provide either a text file containing the IDs of interest or a comma-separated list of IDs')
+    parser.error('!! You should provide either a text file containing the IDs of interest or a comma-separated list of IDs')
 # Six, throw error when trf_file is not specified and analysis type is haplotyping
 if (args.analysis_type == 'haplotyping' and args.trf_file == 'None' and args.asm_file == 'None'):
-    parser.error('!! Your should provide at least one TRF-output of single-reads or assembly (or both) when the analysis type is haplotyping.')
+    parser.error('!! You should provide at least one TRF-output of single-reads or assembly (or both) when the analysis type is haplotyping.')
+# Seven, throw error when measure is specified but no reference data is provided
+if (args.analysis_type in ['measure'] and args.ref == 'None'):
+    parser.error('!! You should provide the path to the reference genome when the analysis type is measure.')
 
 # Print arguments
 print("\n** Tandem Repeat Haplotyping Toolkit (TRHT) **\n")
