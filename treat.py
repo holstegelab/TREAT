@@ -77,7 +77,7 @@ if (args.analysis_type in ['measure', 'trf', 'assembly', 'realign'] and args.ref
     parser.error('!! You should provide the path to the reference genome when the analysis type is measure.')
 
 # Print arguments
-print("\n** Tandem Repeat Haplotyping Toolkit (TRHT) **\n")
+print("\n** Tandem REpeat Annotation Toolkit (TREAT) **\n")
 print("********************\n** Your settings:")
 print("** analysis type --> %s" %(args.analysis_type))
 if args.analysis_type == 'haplotyping':
@@ -255,8 +255,9 @@ elif anal_type == 'assembly':
     print('** 2. assembly')
     strategy = AsmStrategy(assembly_type, reads_fasta, output_directory)
     # decide how many assembly in parallel to run (keep 2 cores per assembly, then depends on the total number of cores available)
-    threads_per_asm = 4; parallel_assemblies = int(number_threads / threads_per_asm); all_samples = list(strategy.keys())
+    threads_per_asm = 2; parallel_assemblies = int(number_threads / threads_per_asm); all_samples = list(strategy.keys())
     pool = multiprocessing.Pool(processes=parallel_assemblies)
+    print(threads_per_asm)
     assembly_fun = partial(localAssembly_MP, strategy = strategy, out_dir = output_directory, ploidy = assembly_ploidy, thread = threads_per_asm)
     assembly_results = pool.map(assembly_fun, all_samples)
     print('**** done with assembly                                     ')
