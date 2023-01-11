@@ -11,7 +11,7 @@ dependencies:
   - blosc=1.21.1=h83bc5f7_2
   - bzip2=1.0.8=h7f98852_4
   - c-ares=1.18.1=h7f98852_0
-  - ca-certificates=2021.10.8=ha878542_0
+  - ca-certificates=2022.12.7=ha878542_0
   - certifi=2021.5.30=py36h5fab9bb_0
   - dataclasses=0.8=pyh787bdff_2
   - decorator=5.1.1=pyhd8ed1ab_0
@@ -50,7 +50,7 @@ dependencies:
   - numexpr=2.7.3=py36h0cdc3f0_0
   - numpy=1.19.5=py36hfc0c790_2
   - openblas=0.3.20=pthreads_h320a7e8_0
-  - openssl=1.1.1o=h166bdaf_0
+  - openssl=1.1.1s=h0b41bf4_1
   - pandas=1.1.5=py36h284efc9_0
   - pbmm2=1.9.0=h9ee0642_0
   - pbzip2=1.1.13=0
@@ -60,7 +60,6 @@ dependencies:
   - plink=1.90b6.21=hec16e2b_2
   - plink2=2.00a2.3=hb2a7ceb_2
   - pyfaidx=0.6.4=pyh5e36f6f_0
-  - pysam=0.19.0=py36hea1697a_0
   - pysamstats=1.1.2=py36h84994c4_2
   - pytables=3.6.1=py36he0b5dfd_4
   - python=3.6.15=hb7a2778_0_cpython
@@ -84,3 +83,6 @@ dependencies:
   - xz=5.2.5=h516909a_1
   - zlib=1.2.11=h166bdaf_1014
   - zstd=1.5.2=ha95c52a_0
+  - pip:
+    - pysam==0.15.4
+prefix: /home/holstegelab-ntesi/.conda/envs/treat
