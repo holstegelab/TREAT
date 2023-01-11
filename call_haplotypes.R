@@ -754,7 +754,7 @@
                 if (type == 'reads_spanning'){
                     phased_data = PhasingBased_haplotyping_size(reads_df, sample_name = s, thr_mad)
                 } else {
-                    phased_data = assemblyBased_size(reads_df, sample_name = s, region = r, 0.10)
+                    phased_data = assemblyBased_size(reads_df, sample_name = s, region = r, thr_mad)
                 }
                 polished_data = polishHaplo_afterPhasing_size(phased_data, thr_mad)
                 if (r == all_regions[1]){
@@ -1185,7 +1185,7 @@
         reference = all_haplo[which(all_haplo$SAME_NAME == 'reference'),]; all_haplo = all_haplo[which(all_haplo$SAME_NAME != 'reference'),]
         # run multiprocessing for each sample independently
         all_samples = unique(all_haplo$SAME_NAME); all_regions = unique(all_haplo$REGION)
-        all_haplo_annotated = rbindlist(mclapply(all_samples, compareReadsSpanning_Asm_mp, all_regions = all_regions, all_haplo = all_haplo, deviation = 0.10, mc.cores = n_cpu))
+        all_haplo_annotated = rbindlist(mclapply(all_samples, compareReadsSpanning_Asm_mp, all_regions = all_regions, all_haplo = all_haplo, deviation = thr_mad, mc.cores = n_cpu))
         # then make a final decision
         decisions = makeDecision(all_haplo_annotated)
         # finally also save this dataset
