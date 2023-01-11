@@ -740,7 +740,7 @@
     }
 
     # Function to do haplotyping based on multiple processing
-    haplotyping_mp = function(s, all_regions, type){
+    haplotyping_mp = function(s, all_regions, type, thr_mad){
         print(paste0('** processing sample --> ', s))
         for (r in all_regions){
             # get data of the sample and the region of interest -- depending on type (reads_spanning or asm)
@@ -752,11 +752,11 @@
             if (nrow(tmp_data) >0){
                 reads_df = tmp_data[, c('COPIES_TRF', 'HAPLOTYPE', 'UNIFORM_MOTIF', 'REGION', 'PASSES', 'READ_QUALITY', 'LENGTH_SEQUENCE', 'READ_NAME', 'START_TRF', 'END_TRF', 'TRF_PERC_MATCH', 'TRF_PERC_INDEL')]
                 if (type == 'reads_spanning'){
-                    phased_data = PhasingBased_haplotyping_size(reads_df, sample_name = s, thr_mad = 0.10)
+                    phased_data = PhasingBased_haplotyping_size(reads_df, sample_name = s, thr_mad)
                 } else {
                     phased_data = assemblyBased_size(reads_df, sample_name = s, region = r, 0.10)
                 }
-                polished_data = polishHaplo_afterPhasing_size(phased_data, 0.10)
+                polished_data = polishHaplo_afterPhasing_size(phased_data, thr_mad)
                 if (r == all_regions[1]){
                     tmp_res = polished_data
                 } else {
@@ -1000,7 +1000,9 @@
     # add arguments: --out
     parser$add_argument("--out", default = 'None', help = "Output directory where output will be placed.")
     # add arguments: --cpu
-    parser$add_argument("--cpu", default = 2, help = "Number of CPU to use for parallel computation")
+    parser$add_argument("--cpu", default = 2, help = "Number of CPU to use for parallel computation.")
+    # add arguments: --deviation
+    parser$add_argument("--deviation", default = 0.10, help = "Median absolute deviation to assign reads to the same allele.")
     # read arguments
     args <- parser$parse_args()
     inp_trf = args$reads_spanning; inp_trf = unlist(strsplit(inp_trf, ','))
@@ -1008,10 +1010,11 @@
     inp_pha = args$phase; inp_pha = unlist(strsplit(inp_pha, ','))
     out_dir = args$out
     n_cpu = as.numeric(args$cpu)
+    thr_mad = args$deviation
     # check inputs and print summary
     if ((inp_trf[1] == 'None' & inp_asm[1] == 'None') | out_dir == 'None'){ RUN = FALSE } else { RUN = TRUE }
     if (RUN == FALSE){
-        stop("Input error: Missing input TRF file or output directory detected!")
+        stop("Input error: Missing input file(s) or output directory detected!")
     } else {
         # decide analysis to perform based on the provided input(s) files
         if (inp_trf[1] == 'None' & inp_asm[1] != 'None'){

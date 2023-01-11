@@ -51,6 +51,7 @@ parser.add_argument('--reads-ids', dest = 'target_reads', type = str, help = 'If
 parser.add_argument('--trf', dest = 'trf_file', type = str, help = 'If analysis type was haplotyping, please input here the path to the TRF output file.', required = False, default = 'None')
 parser.add_argument('--phase', dest = 'phase_file', type = str, help = 'If analysis type was haplotyping, please input here the path to the PHASING output file.', required = False, default = 'None')
 parser.add_argument('--asm', dest = 'asm_file', type = str, help = 'If analysis type was haplotyping, please input here the path to the TRF output of assembly.', required = False, default = 'None')
+parser.add_argument('--haplotyping-deviation', dest = 'thr_mad', type = float, help = 'During haplotying analysis, median absolute deviation to assign reads to the same allele.', required = False, default = 0.10)
 
 args = parser.parse_args()
 # Check arguments
@@ -86,6 +87,7 @@ if args.analysis_type == 'haplotyping':
     print("** trf file --> %s" %(args.trf_file))
     print("** asm file --> %s" %(args.asm_file))
     print("** phasing file --> %s" %(args.phase_file))
+    print("** median absolute deviation --> %s" %(args.thr_mad))
 print("** bed file --> %s" %(args.bed_dir))
 if args.analysis_type == 'realign_assembly':
     print("** fasta file(s) --> %s" %(args.fasta_dir))
@@ -113,7 +115,8 @@ print("** window used --> %s\n********************\n" %(args.window))
 bed_file, anal_type, var_file, bam_directory, output_directory, store_temporary = args.bed_dir, args.analysis_type, args.variant_file, args.bam_dir, args.out_dir, args.store_temp
 window_size, assembly_type, assembly_ploidy, number_threads, polishing, snp_dir = args.window, args.ass_type, args.ass_ploidy, args.thread, args.polish, args.snp_dir
 snp_data_ids, step, target_reads, fasta_dir, trf_file, phase_file = args.snp_data_ids, args.step, args.target_reads, args.fasta_dir, args.trf_file, args.phase_file
-asm_file, ref_fasta = args.asm_file, args.ref
+asm_file, ref_fasta, thr_mad = args.asm_file, args.ref, args.thr_mad
+
 # Store arguments (for debugging only)
 #bed_file, anal_type, var_file, bam_directory, output_directory, store_temporary, window_size, assembly_type, assembly_ploidy, number_threads, polishing, snp_dir, snp_data_ids, step, target_reads = '/project/holstegelab/Share/nicco/workspaces/20211013_target_approach/automatic_pipeline/DMPK/dmpk.bed', '', '', '/project/holstegelab/Share/nicco/workspaces/20211013_target_approach/automatic_pipeline/DMPK/extract_reads/case/DNA15-20132_2.haplotagged_step1_hifi.bam', '/project/holstegelab/Share/nicco/workspaces/20211013_target_approach/automatic_pipeline/DMPK/phase_reads/case', 'True', 100000, '', 2, 4, 'True', '/project/holstegelab/Share/pacbio/radbound_rfc1_cases/DNA15-20132-DMPK/Analyzed/GRCh38_20220408/SNVCalling_20220411_deepvariant//DNA15-20132_2.phased.pvar', '/project/holstegelab/Share/nicco/workspaces/20211013_target_approach/automatic_pipeline/DMPK/phase_reads/case/map.txt', 500, '/project/holstegelab/Share/nicco/workspaces/20211013_target_approach/automatic_pipeline/RFC1/subreads/c7_all_reads.txt'
 
@@ -534,7 +537,7 @@ elif anal_type == 'haplotyping':
     print('** haplotyping')
     file_path = os.path.realpath(__file__)
     file_path = '/'.join(file_path.split('/')[:-1])
-    os.system('Rscript %s/call_haplotypes.R --reads_spanning %s --phase %s --asm %s --out %s' %(file_path, trf_file, phase_file, asm_file, output_directory))
+    os.system('Rscript %s/call_haplotypes.R --reads_spanning %s --phase %s --asm %s --out %s --deviation %s' %(file_path, trf_file, phase_file, asm_file, output_directory, thr_mad))
     #if snp_dir == 'False':
     #    os.system("Rscript %s/call_haplotypes.R --reads_spanning %s --asm %s --out %s" %(file_path, trf_file, asm_file, output_directory))
     #else:

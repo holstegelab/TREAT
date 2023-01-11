@@ -35,9 +35,9 @@ Outputs: phased `.VCF` file of the sample(s) of interest and text file (`haplota
 Outputs: `.bed` file without header containing chromosome, start position of bin, end position of bin, sample name and number of reads mapping aligned to the bin.
 
 7. `haplotyping`: this analysis attempts to generalize the output of tandem repeat finder by calling haplotypes for each sample in each specific region. As such, it will display the copy number of each tandem repeat in each sample and each haplotype. This analysis can be run using:
-- only trf output of reads-spanning the intervals (`--reads_spanning fname_trf.txt`) 
-- trf output + phasing output (`--reads_spanning fname_trf.txt --phase fname_phase.txt`)
-- trf output + phasing + trf output from assembly (`--reads_spanning fname_trf.txt --phase fname_phase.txt --asm fname_trf_asm.txt`).
+- only trf output of reads-spanning the intervals (`--trf fname_trf.txt`) 
+- trf output + phasing output (`--trf fname_trf.txt --phase fname_phase.txt`)
+- trf output + phasing + trf output from assembly (`--trf fname_trf.txt --phase fname_phase.txt --asm fname_trf_asm.txt`).
 The output, independently from the analysis type, are two files reporting haplotype information at the single-read level as well as at the sample level.
 
 8. `complete`: given a `.bed` file and one or multiple `.bam` file(s), this analysis will perform all previous analyses in a unique workflow. As such, this analysis will:
