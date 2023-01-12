@@ -740,7 +740,7 @@
     }
 
     # Function to do haplotyping based on multiple processing
-    haplotyping_mp = function(s, all_regions, type, thr_mad){
+    haplotyping_mp = function(s, reads_span, all_regions, type, thr_mad){
         print(paste0('** processing sample --> ', s))
         for (r in all_regions){
             # get data of the sample and the region of interest -- depending on type (reads_spanning or asm)
@@ -1010,7 +1010,7 @@
     inp_pha = args$phase; inp_pha = unlist(strsplit(inp_pha, ','))
     out_dir = args$out
     n_cpu = as.numeric(args$cpu)
-    thr_mad = args$deviation
+    thr_mad = as.numeric(args$deviation)
     # check inputs and print summary
     if ((inp_trf[1] == 'None' & inp_asm[1] == 'None') | out_dir == 'None'){ RUN = FALSE } else { RUN = TRUE }
     if (RUN == FALSE){
@@ -1132,7 +1132,7 @@
     if (anal_type %in% c('reads-spanning', 'reads-spanning + assembly + comparison')){
         cat(paste0('******** Processing reads-spanning data\n'))
         all_samples = unique(reads_span$SAMPLE_NAME); all_regions = unique(reads_span$REGION)
-        res_reads_spanning = rbindlist(mclapply(all_samples, haplotyping_mp, all_regions = all_regions, type = 'reads_spanning', thr_mad = thr_mad, mc.cores = n_cpu), fill = T)
+        res_reads_spanning = rbindlist(mclapply(all_samples, haplotyping_mp, reads_span = reads_span, all_regions = all_regions, type = 'reads_spanning', thr_mad = thr_mad, mc.cores = n_cpu), fill = T)
         res_reads_spanning$DATA_TYPE = 'reads-spanning'
     }
     if (anal_type %in% c('assembly', 'reads-spanning + assembly + comparison')){
