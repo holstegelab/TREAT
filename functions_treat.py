@@ -1216,7 +1216,7 @@ def addLogRun(bed_file, anal_type, var_file, bam_directory, output_directory, st
                 fasta_dir = fasta_dir[:-1]
         else:
             output_directory = '/'.join(fasta_dir.split('/')[:-1])
-    logfile = open('%s/TRHT_run_info.log' %(output_directory), 'w')
+    logfile = open('%s/treat_run_info.log' %(output_directory), 'w')
     logfile.write('**  Tandem Repeat Haplotyping Toolkit  **\n\n')
     logfile.write('Please find here belo your run parameters:\n')
     logfile.write('**** GENERAL OPTIONS\n')
