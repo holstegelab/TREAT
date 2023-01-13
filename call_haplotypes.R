@@ -471,7 +471,7 @@
     }
 
     # Function to check consensus motif given a list of motifs -- more conscious approach
-    consensusMotif_conscious = function(motifs){
+    consensusMotif_conscious_v2 = function(motifs){
         # first thing is to check whether we only have 1 single motif --> easy case
         if (length(na.omit(unique(motifs$UNIFORM_MOTIF))) == 1){
             # before assigning, let's check for NA, and if there are too many, exclude the call
@@ -499,7 +499,7 @@
             motifs_frq = motifs_frq[order(-motifs_frq$Perc, -motifs_frq$motif_length),]
             consensus_motif = as.character(motifs_frq$Var1[1])
             # raise a flag when the frequency of most common motif is <0.8
-            if (motifs_frq$Perc[1] < 0.8){ 
+            if (motifs_frq$Perc[1] < 0.70){ 
                 # in this case: either the motif is really variable across reads, or there is a clear pattern, such as each read has two motifs that suggests these should be combined
                 # then it depends on the number of duplicated reads, if this approximate 50%, we should further look, otherwise not
                 dups = unique(motifs$READ_NAME[duplicated(motifs$READ_NAME)])
@@ -515,25 +515,29 @@
                         consensus_motif = unique(tmp$UNIFORM_MOTIF[which(tmp$coverage == min(tmp$coverage))])[1]
                         motifs$CONSENSUS_MOTIF = consensus_motif
                         motifs$CONSENSUS_COPY_NUMBER = NA; motifs$CONSENSUS_COPY_NUMBER[which(motifs$UNIFORM_MOTIF == consensus_motif)] = motifs$COPIES_TRF[which(motifs$UNIFORM_MOTIF == consensus_motif)]
+                        motifs$ADDITIONAL_MOTIFS = NA
+                        motifs$ADDITIONAL_MOTIFS[is.na(motifs$CONSENSUS_COPY_NUMBER)] = motifs$UNIFORM_MOTIF[is.na(motifs$CONSENSUS_COPY_NUMBER)]
                         motifs$CONSENSUS_COPY_NUMBER[is.na(motifs$CONSENSUS_COPY_NUMBER)] = median(motifs$CONSENSUS_COPY_NUMBER[which(motifs$UNIFORM_MOTIF == consensus_motif)])
-                        motifs$CONSENSUS_MOTIF_COMPLEX = 'alternative'; motifs$ADDITIONAL_MOTIFS = paste(unique(motifs$UNIFORM_MOTIF[which(motifs$UNIFORM_MOTIF != consensus_motif)]), collapse = ',')
-                        motifs = motifs[!duplicated(motifs$READ_NAME),]
+                        motifs$CONSENSUS_MOTIF_COMPLEX = 'alternative'; motifs = motifs[!duplicated(motifs$READ_NAME),]
                     } else {
                         # what to do in these cases? there are multiple TRF matches, with similar percentage not above 0.9 coverage. This suggests they should be merged
                         # first check to do is whether the START_TRF is <10 --> then the match would start in the padding region which should not happen
-                        tmp = tmp[which(tmp$START_TRF > 8),]
+                        tmp = tmp[which(tmp$START_TRF >= 7),]
                         # then check how many matches are left: if it is only 1, then we're done, otherwise probably we need to merge the motifs
                         if (nrow(tmp) == 1){
                             consensus_motif = unique(tmp$UNIFORM_MOTIF)
                             motifs$CONSENSUS_MOTIF = consensus_motif
                             motifs$CONSENSUS_COPY_NUMBER = NA; motifs$CONSENSUS_COPY_NUMBER[which(motifs$UNIFORM_MOTIF == consensus_motif)] = motifs$COPIES_TRF[which(motifs$UNIFORM_MOTIF == consensus_motif)]
+                            motifs$ADDITIONAL_MOTIFS = NA
+                            motifs$ADDITIONAL_MOTIFS[is.na(motifs$CONSENSUS_COPY_NUMBER)] = motifs$UNIFORM_MOTIF[is.na(motifs$CONSENSUS_COPY_NUMBER)]
                             motifs$CONSENSUS_COPY_NUMBER[is.na(motifs$CONSENSUS_COPY_NUMBER)] = median(motifs$CONSENSUS_COPY_NUMBER[which(motifs$UNIFORM_MOTIF == consensus_motif)])
-                            motifs$CONSENSUS_MOTIF_COMPLEX = 'simple'; motifs$ADDITIONAL_MOTIFS = NA
+                            motifs$CONSENSUS_MOTIF_COMPLEX = 'simple';
                             motifs = motifs[!duplicated(motifs$READ_NAME),]                            
                         } else {
                             # these cases can be multiple motifs that need to be merged together, or a missing call
                             # check whether if summing the motifs coverage we reach a high value
                             if (sum(tmp$coverage) > 0.8){
+                                motifs$CONSENSUS_MOTIF = NA; motifs$CONSENSUS_COPY_NUMBER = NA; motifs$CONSENSUS_MOTIF_COMPLEX = NA; motifs$ADDITIONAL_MOTIFS = NA
                                 # in this case it suggests that we should merge the motifs together. loop on each unique read
                                 for (read in unique(tmp$READ_NAME)){
                                     tmp_duplicated_reads = tmp[which(tmp$READ_NAME == read),]
@@ -544,14 +548,17 @@
                                     # calculate cumulative coverage (20 is the estimated padding)
                                     cum_coverage = (length(join_coverage) + 20 - length(overlaps)) / tmp_duplicated_reads$LENGTH_SEQUENCE[1]
                                     # check if there was a gain in doing this in terms of cumulative coverage compared to the original coverages
-                                    if (max(cum_coverage, tmp_duplicated_reads$PERC_SEQ_COVERED_TR) == cum_coverage){
-                                        # if there is a gain, probably we're dealing with a true variable motif
-                                        merged_motif = paste(tmp_duplicated_reads$UNIFORM_MOTIF, collapse = '/'); motifs$CONSENSUS_MOTIF = merged_motif
-                                        motifs$CONSENSUS_COPY_NUMBER = tmp_duplicated_reads$LENGTH_SEQUENCE[1]/nchar(motifs$UNIFORM_MOTIF[1]); motifs$CONSENSUS_MOTIF_COMPLEX = 'nested_motif'; motifs$ADDITIONAL_MOTIFS = paste(tmp$UNIFORM_MOTIF, collapse = ',')
+                                    if (max(cum_coverage, tmp_duplicated_reads$coverage) == cum_coverage){
+                                        merged_motif = paste(tmp_duplicated_reads$UNIFORM_MOTIF, collapse = '/')
+                                        consensus_copy_n = tmp_duplicated_reads$LENGTH_SEQUENCE[1]/sum(nchar(tmp_duplicated_reads$UNIFORM_MOTIF))
+                                        motifs$CONSENSUS_MOTIF[which(motifs$READ_NAME == read)] = merged_motif
+                                        motifs$CONSENSUS_COPY_NUMBER[which(motifs$READ_NAME == read)] = consensus_copy_n
+                                        motifs$CONSENSUS_MOTIF_COMPLEX[which(motifs$READ_NAME == read)] = 'nested_motif'
+                                        motifs$ADDITIONAL_MOTIFS[which(motifs$READ_NAME == read)] = paste(tmp$UNIFORM_MOTIF[which(motifs$READ_NAME == read)], collapse = ',')
                                     } else {
                                         # if there is no gain, probably we're dealing with a probable alternative motif
-                                        motifs$CONSENSUS_MOTIF = NA
-                                        motifs$CONSENSUS_COPY_NUMBER = NA; motifs$CONSENSUS_MOTIF_COMPLEX = 'motif_low_coverage'; motifs$ADDITIONAL_MOTIFS = paste(tmp$UNIFORM_MOTIF, collapse = ',')
+                                        motifs$CONSENSUS_MOTIF[which(motifs$READ_NAME == read)] = NA
+                                        motifs$CONSENSUS_COPY_NUMBER[which(motifs$READ_NAME == read)] = NA; motifs$CONSENSUS_MOTIF_COMPLEX[which(motifs$READ_NAME == read)] = 'motif_low_coverage'; motifs$ADDITIONAL_MOTIFS[which(motifs$READ_NAME == read)] = paste(tmp$UNIFORM_MOTIF, collapse = ',')
                                     }
                                 }
                             } else {
@@ -571,8 +578,10 @@
                     # at the end we need to re-estimate copy-number when the motif is different and the read with the wrong motif has no duplicated with the consensus motif
                     motifs$CONSENSUS_MOTIF = consensus_motif
                     motifs$CONSENSUS_COPY_NUMBER = NA; motifs$CONSENSUS_COPY_NUMBER[which(motifs$UNIFORM_MOTIF == consensus_motif)] = motifs$COPIES_TRF[which(motifs$UNIFORM_MOTIF == consensus_motif)]
+                    motifs$ADDITIONAL_MOTIFS = NA
+                    motifs$ADDITIONAL_MOTIFS[is.na(motifs$CONSENSUS_COPY_NUMBER)] = motifs$UNIFORM_MOTIF[is.na(motifs$CONSENSUS_COPY_NUMBER)]
                     motifs$CONSENSUS_COPY_NUMBER[is.na(motifs$CONSENSUS_COPY_NUMBER)] = median(motifs$CONSENSUS_COPY_NUMBER[which(motifs$UNIFORM_MOTIF == consensus_motif)])
-                    motifs$CONSENSUS_MOTIF_COMPLEX = 'variable'; motifs$ADDITIONAL_MOTIFS = paste(unique(motifs$UNIFORM_MOTIF[which(motifs$UNIFORM_MOTIF != consensus_motif)]), collapse = ',')
+                    motifs$CONSENSUS_MOTIF_COMPLEX = 'variable';
                 }
             } else {
                 # most times TRF finds two motifs for the same read, one of which is the consensus and the other is not
@@ -801,6 +810,40 @@
         return(motif_res)
     }
 
+    # Function to generate consensus motif for each sample and region based on multiple processing -- corrected compared to previous version
+    generateConsens_mp = function(s, all_regions, all_res){
+        motif_res = list()
+        for (r in all_regions){
+            # take all reads
+            tmp = all_res[which(all_res$sample == s & all_res$REGION == r),]
+            # check number of haplotypes
+            n_haplo = unique(tmp$HAPLOTYPE)
+            # treat haplotypes independently from each other
+            if (1 %in% tmp$HAPLOTYPE & 2 %in% tmp$HAPLOTYPE){
+                h1 = tmp[which(tmp$HAPLOTYPE == 1),]; h2 = tmp[which(tmp$HAPLOTYPE == 2),]
+                # calculate consensus motif
+                h1_consensus_motif = consensusMotif_conscious_v2(h1); h2_consensus_motif = consensusMotif_conscious_v2(h2)
+                tmp_res = rbind(h1_consensus_motif, h2_consensus_motif)
+            } else if (1 %in% tmp$HAPLOTYPE){
+                h1 = tmp[which(tmp$HAPLOTYPE == 1),]
+                # calculate consensus motif
+                tmp_res = consensusMotif_conscious(h1)
+            } else if (2 %in% tmp$HAPLOTYPE){
+                h2 = tmp[which(tmp$HAPLOTYPE == 2),]
+                # calculate consensus motif
+                tmp_res = consensusMotif_conscious(h2)
+            } else {
+                # in this case the clustering did not work, can be because the number of reads/contigs is too low
+                tmp_res = tmp; tmp_res$CONSENSUS_MOTIF = NA; tmp_res$CONSENSUS_COPY_NUMBER = NA; tmp_res$CONSENSUS_MOTIF_COMPLEX = NA; tmp_res$ADDITIONAL_MOTIFS = NA
+            }
+            # add to results list
+            motif_res[[(length(motif_res) + 1)]] = tmp_res
+        }
+        motif_res = rbindlist(motif_res)
+        print(paste0('** done with ', s))
+        return(motif_res)
+    }
+
     # Function to call haplotypes and combine information
     callHaplo_mp <- function(s, all_regions, data){
         all_haplo = list()
@@ -816,15 +859,15 @@
                         h1_info = median(tmp$CONSENSUS_COPY_NUMBER[which(tmp$HAPLOTYPE == 1)])
                         h1_motif = paste(unique(tmp$CONSENSUS_MOTIF[which(tmp$HAPLOTYPE == 1)]), collapse = ',')
                         h1_var = sd(tmp$CONSENSUS_COPY_NUMBER[which(tmp$HAPLOTYPE == 1)]) / mean(tmp$CONSENSUS_COPY_NUMBER[which(tmp$HAPLOTYPE == 1)])
-                        h1_len = paste(unique(tmp$LENGTH_SEQUENCE[which(tmp$HAPLOTYPE == 1)]), collapse = ',')
+                        h1_len = paste(tmp$LENGTH_SEQUENCE[which(tmp$HAPLOTYPE == 1)], collapse = ',')
                         h1_motif_info = unique(tmp$CONSENSUS_MOTIF_COMPLEX[which(tmp$HAPLOTYPE == 1)])
-                        h1_add_motifs = unique(tmp$ADDITIONAL_MOTIFS[which(tmp$HAPLOTYPE == 1)])
+                        h1_add_motifs = paste0(unique(tmp$ADDITIONAL_MOTIFS[which(tmp$HAPLOTYPE == 1)]), collapse = ',')
                         h2_info = median(tmp$CONSENSUS_COPY_NUMBER[which(tmp$HAPLOTYPE == 2)])
                         h2_motif = paste(unique(tmp$CONSENSUS_MOTIF[which(tmp$HAPLOTYPE == 2)]), collapse = ',')
                         h2_var = sd(tmp$CONSENSUS_COPY_NUMBER[which(tmp$HAPLOTYPE == 2)]) / mean(tmp$CONSENSUS_COPY_NUMBER[which(tmp$HAPLOTYPE == 2)])
-                        h2_len = paste(unique(tmp$LENGTH_SEQUENCE[which(tmp$HAPLOTYPE == 2)]), collapse = ',')
+                        h2_len = paste(tmp$LENGTH_SEQUENCE[which(tmp$HAPLOTYPE == 2)], collapse = ',')
                         h2_motif_info = unique(tmp$CONSENSUS_MOTIF_COMPLEX[which(tmp$HAPLOTYPE == 2)])
-                        h2_add_motifs = unique(tmp$ADDITIONAL_MOTIFS[which(tmp$HAPLOTYPE == 2)])
+                        h2_add_motifs = paste0(unique(tmp$ADDITIONAL_MOTIFS[which(tmp$HAPLOTYPE == 2)]), collapse = ',')
                         data_type = unique(tmp$DATA_TYPE)
                     # otherwise if only h1 is present, only gather h1 info
                     } else if (1 %in% tmp$HAPLOTYPE){
@@ -1162,17 +1205,23 @@
     # 9. now we should look at the motifs -- implemented parallel computing
     cat('****** Generating consensus motifs\n')
     all_samples = unique(all_res$sample); all_regions = unique(all_res$REGION); motif_res = list()
+
+
     motif_res = rbindlist(mclapply(all_samples, generateConsens_mp, all_regions = all_regions, all_res = all_res_combined, mc.cores = n_cpu))
+    # at this point, motif_res contains per-read information about motifs, copy numbers and type.
+    # however, for the haplotype calling, we need 1 representative for each read, otherwise things are biased
+    motif_res_representative = motif_res[!duplicated(motif_res$UNIQUE_NAME),]
 
     # 10. finally call haplotypes -- implemented parallel computing
     cat('****** Haplotype calling\n')
     all_samples = unique(motif_res$sample); all_regions = unique(motif_res$REGION)
-    all_haplo = rbindlist(mclapply(all_samples, callHaplo_mp, all_regions = all_regions, data = motif_res, mc.cores = n_cpu))
+    all_haplo = rbindlist(mclapply(all_samples, callHaplo_mp, all_regions = all_regions, data = motif_res_representative, mc.cores = n_cpu))
 
     # 11. if analysis type was different from the combined, we are done here: save output tables
     cat('****** Generating tables\n')
     out_dir = str_replace_all(out_dir, '/$', ''); if (!dir.exists(out_dir)){ system(paste0('mkdir ', out_dir)) }
     write.table(motif_res, paste0(out_dir, '/haplotyping_single_reads.txt'), quote=F, row.names = F, sep = '\t')
+    write.table(motif_res_representative, paste0(out_dir, '/haplotyping_representative_reads.txt'), quote=F, row.names=F, sep="\t")
     write.table(all_haplo, paste0(out_dir, '/haplotyping_single_samples.txt'), quote=F, row.names = F, sep = '\t')
 
     # 12. if both reads-spanning and assembly were submitted, we should compare them and make a unified call
