@@ -166,10 +166,10 @@ elif anal_type == 'measure':
     # 6. calculate size of the regions of interest -- multiprocessing
     print('** 2. calculate size of the regions of interest')
     pool = multiprocessing.Pool(processes=number_threads)
-    measure_fun = partial(measureDistance_MP, bed = bed_regions, window = 10)
+    measure_fun = partial(measureDistance_MP, bed = bed_regions, window = 1)
     extract_results = pool.map(measure_fun, reads_bam)
     print('**** done measuring reference                                     ', end = '\r')
-    dist_reference = measureDistance_reference(bed_regions, 10, ref_fasta); print('**** read measurement done!                                         ')
+    dist_reference = measureDistance_reference(bed_regions, 1, ref_fasta); print('**** read measurement done!                                         ')
     extract_results.append(dist_reference)
     # combine results
     distances = {k:v for element in extract_results for k,v in element.items()}
@@ -210,10 +210,10 @@ elif anal_type == 'trf':
     # 6. calculate size of the regions of interest -- multiprocessing
     print('** 2. calculate size of the regions of interest')
     pool = multiprocessing.Pool(processes=number_threads)
-    measure_fun = partial(measureDistance_MP, bed = bed_regions, window = 10)
+    measure_fun = partial(measureDistance_MP, bed = bed_regions, window = 1)
     extract_results = pool.map(measure_fun, reads_bam)
     print('**** done measuring reference                                     ', end = '\r')
-    dist_reference = measureDistance_reference(bed_regions, 10, ref_fasta); print('**** read measurement done!                                         ')
+    dist_reference = measureDistance_reference(bed_regions, 1, ref_fasta); print('**** read measurement done!                                         ')
     extract_results.append(dist_reference)
     # combine results
     distances = {k:v for element in extract_results for k,v in element.items()}
@@ -404,10 +404,10 @@ elif anal_type == 'complete':
     # 6. calculate size of the regions of interest -- multiprocessing
     print('** 2. calculate size of the regions of interest')
     pool = multiprocessing.Pool(processes=number_threads)
-    measure_fun = partial(measureDistance_MP, bed = bed_regions, window = 10)
+    measure_fun = partial(measureDistance_MP, bed = bed_regions, window = 1)
     extract_results = pool.map(measure_fun, reads_bam)
     print('**** done measuring reference                                     ', end = '\r')
-    dist_reference = measureDistance_reference(bed_regions, 10, ref_fasta); print('**** read measurement done!                                         ')
+    dist_reference = measureDistance_reference(bed_regions, 1, ref_fasta); print('**** read measurement done!                                         ')
     extract_results.append(dist_reference)
     # combine results
     distances = {k:v for element in extract_results for k,v in element.items()}
@@ -483,7 +483,7 @@ elif anal_type == 'complete':
     # list all files that should be processed
     haps_to_process = ['%s_haps_hg38.bam' %(x) for x in assembly_results]; prim_to_process = ['%s_p_ctg_hg38.bam' %(x) for x in assembly_results]; files_to_process = haps_to_process + prim_to_process
     pool = multiprocessing.Pool(processes=number_threads)
-    measure_fun = partial(measureDistance_MP, bed = bed_regions, window = 10)
+    measure_fun = partial(measureDistance_MP, bed = bed_regions, window = 1)
     extract_results = pool.map(measure_fun, files_to_process)
     print('**** read measurement done!                                         ')
     
