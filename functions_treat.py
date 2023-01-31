@@ -60,7 +60,11 @@ def readMotif(bed_dir):
                 pass
             else:
                 line = line.rstrip().split()
-                chrom, start, end, motif_type = line[0:4]
+                if len(line) == 4:
+                    chrom, start, end, motif_type = line[0:4]
+                else:
+                    chrom, start, end = line[0:3]
+                    motif_type = "NA"
                 region_id = chrom + ':' + start + '-' + end
                 motif[region_id] = motif_type
     return motif
