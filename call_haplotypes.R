@@ -60,15 +60,17 @@
                 # if so, check if all reads are not phased
                 if (nrow(phased) == 0){
                     # if so, we run the kmeans-based haplotyping
-                    res = KMeansBased_haplotyping(reads = nonPhased$LENGTH_SEQUENCE, thr = 2, min_support = 1, thr_mad_orig = thr_mad, type = 'single_sample')
+                    res = KMeansBased_haplotyping(reads = nonPhased$LENGTH_SEQUENCE, thr = 2, min_support = 2, thr_mad_orig = thr_mad, type = 'single_sample')
                     # then polish with the polisher without phasing
                     res_polished = polishHaplo_noPhasing(res, thr_mad)
                     # extract polished reads
                     reads_h1 = unlist(strsplit(as.character(res_polished$reads_h1), ',')); reads_h2 = unlist(strsplit(as.character(res_polished$reads_h2), ','))
                     reads_df$type = NA
+                    reads_df$HAPLOTYPE = as.character(reads_df$HAPLOTYPE)
                     # make the final df with reads and haplotypes (depending on how many alleles were found)
                     if (reads_h2 == 'homozygous' && unique(!is.na(reads_h2))){
-                        reads_df$type[which(reads_df$LENGTH_SEQUENCE %in% reads_h1)] = 'Assigned'; reads_df$HAPLOTYPE[which(reads_df$LENGTH_SEQUENCE %in% reads_h1)] = 1
+                        reads_df$type[which(reads_df$LENGTH_SEQUENCE %in% reads_h1)] = 'Assigned'
+                        reads_df$HAPLOTYPE[which(reads_df$LENGTH_SEQUENCE %in% reads_h1)] = 1
                     } else if (unique(!is.na(reads_h2))){
                         reads_df$type[which(reads_df$LENGTH_SEQUENCE %in% c(reads_h1, reads_h2))] = 'Assigned'
                         reads_df$HAPLOTYPE[which(reads_df$LENGTH_SEQUENCE %in% reads_h1)] = 1; reads_df$HAPLOTYPE[which(reads_df$LENGTH_SEQUENCE %in% reads_h2)] = 2
@@ -494,7 +496,7 @@
             motifs$ADDITIONAL_MOTIFS = NA
         } else {
             # calculate frequencies of each motif
-            motifs_frq = data.frame(table(motifs$UNIFORM_MOTIF)); motifs_frq$Perc = motifs_frq$Freq / nrow(motifs); motifs_frq$motif_length = nchar(as.character(motifs_frq$Var1))
+            motifs_frq = data.frame(table(as.character(motifs$UNIFORM_MOTIF))); motifs_frq$Perc = motifs_frq$Freq / nrow(motifs); motifs_frq$motif_length = nchar(as.character(motifs_frq$Var1))
             # keep motifs with highest frequency
             motifs_frq = motifs_frq[order(-motifs_frq$Perc, -motifs_frq$motif_length),]
             consensus_motif = as.character(motifs_frq$Var1[1])
@@ -506,7 +508,7 @@
                 if (length(dups)/nrow(motifs) >= 0.4){
                     # if there are many duplicates, there are 2 options: either there are multiple motifs that combine together (nested repeats), or there are two alternative motifs that can be estimated
                     # to distinguish the two cases, we can look at the percentage of coverage
-                    tmp = motifs; tmp$coverage = (tmp$END_TRF - tmp$START_TRF + 20) / tmp$LENGTH_SEQUENCE
+                    tmp = motifs; tmp$coverage = (tmp$END_TRF - tmp$START_TRF) / tmp$LENGTH_SEQUENCE
                     # calculate also difference wrt 1
                     tmp$difference = abs(1 - tmp$coverage)
                     # if the coverage is very high, that means we are dealing with alternative motifs for the same TR: take the motif with highest coverage
@@ -520,9 +522,7 @@
                         motifs = motifs[!duplicated(motifs$READ_NAME),]
                     } else {
                         # what to do in these cases? there are multiple TRF matches, with similar percentage not above 0.9 coverage. This suggests they should be merged
-                        # first check to do is whether the START_TRF is <10 --> then the match would start in the padding region which should not happen
-                        tmp = tmp[which(tmp$START_TRF > 8),]
-                        # then check how many matches are left: if it is only 1, then we're done, otherwise probably we need to merge the motifs
+                        # check how many matches are left: if it is only 1, then we're done, otherwise probably we need to merge the motifs
                         if (nrow(tmp) == 1){
                             consensus_motif = unique(tmp$UNIFORM_MOTIF)
                             motifs$CONSENSUS_MOTIF = consensus_motif
@@ -542,12 +542,12 @@
                                     # then calculate joined coverage and overlaps
                                     join_coverage = unlist(overlaps); overlaps = join_coverage[duplicated(join_coverage)]
                                     # calculate cumulative coverage (20 is the estimated padding)
-                                    cum_coverage = (length(join_coverage) + 20 - length(overlaps)) / tmp_duplicated_reads$LENGTH_SEQUENCE[1]
+                                    cum_coverage = (length(join_coverage) - length(overlaps)) / tmp_duplicated_reads$LENGTH_SEQUENCE[1]
                                     # check if there was a gain in doing this in terms of cumulative coverage compared to the original coverages
                                     if (max(cum_coverage, tmp_duplicated_reads$PERC_SEQ_COVERED_TR) == cum_coverage){
                                         # if there is a gain, probably we're dealing with a true variable motif
-                                        merged_motif = paste(tmp_duplicated_reads$UNIFORM_MOTIF, collapse = '/'); motifs$CONSENSUS_MOTIF = merged_motif
-                                        motifs$CONSENSUS_COPY_NUMBER = tmp_duplicated_reads$LENGTH_SEQUENCE[1]/nchar(motifs$UNIFORM_MOTIF[1]); motifs$CONSENSUS_MOTIF_COMPLEX = 'nested_motif'; motifs$ADDITIONAL_MOTIFS = paste(tmp$UNIFORM_MOTIF, collapse = ',')
+                                        merged_motif = paste(tmp_duplicated_reads$UNIFORM_MOTIF, collapse = '/'); motifs$CONSENSUS_MOTIF[which(motifs$READ_NAME == read)] = merged_motif
+                                        motifs$CONSENSUS_COPY_NUMBER[which(motifs$READ_NAME == read)] = tmp_duplicated_reads$LENGTH_SEQUENCE[1]/(nchar(merged_motif)-1); motifs$CONSENSUS_MOTIF_COMPLEX = 'nested_motif'; motifs$ADDITIONAL_MOTIFS = paste(tmp$UNIFORM_MOTIF, collapse = ',')
                                     } else {
                                         # if there is no gain, probably we're dealing with a probable alternative motif
                                         motifs$CONSENSUS_MOTIF = NA
@@ -767,8 +767,104 @@
         return(tmp_res)
     }
 
+    # Function to generate consensus motif using the majority rule consensus
+    motif_generalization = function(h1){
+        # idea is to calculate a consensus motif, then iterate on the reads and generate the consensus representation
+        # to generate the consensus motif, list all possible motifs
+        all_motifs = as.character(unique(h1$UNIFORM_MOTIF))
+        motifs_to_use = c()
+        # in general there can be two scenarios: 
+        # 1. different trf matches cover different part of the sequence --> motifs should be combined
+        # 2. different trf matches cover the same sequence --> motifs are variable and we should report 1 motif only
+        # before going to the consensus motif generation, we should identify the scenario we are in
+        # to do that, first, calculate the fraction of sequence covered by each read
+        h1$COVERAGE_TR = (h1$END_TRF - h1$START_TRF + 1) / h1$polished_haplo_values
+        # next, take the motif that covers the most of the TR
+        best_motif = as.character(h1$UNIFORM_MOTIF[order(-h1$COVERAGE_TR)][1])
+        motifs_to_use = best_motif
+        # define a sequence of indexes representing the coverage of the best motif based on TRF_START and TRF_END
+        best_motif_seq = seq(h1$START_TRF[order(-h1$COVERAGE_TR)][1], h1$END_TRF[order(-h1$COVERAGE_TR)][1])
+        # then see if adding other motifs improves the sequence coverage
+        alt_motifs = h1[which(h1$UNIFORM_MOTIF != best_motif),]
+        if (nrow(alt_motifs) >=1){
+            for (i in 1:nrow(alt_motifs)){
+                # define a sequence of indexes representing the coverage of the best motif based on TRF_START and TRF_END
+                alt_motif_seq = seq(alt_motifs$START_TRF[i], alt_motifs$END_TRF[i])
+                # join the two list of indexes and remove duplicates
+                combined_seq = c(best_motif_seq, alt_motif_seq)
+                combined_seq = combined_seq[!duplicated(combined_seq)]
+                # calculate coverage of this new combined sequence
+                combined_seq_coverage = length(combined_seq) / h1$polished_haplo_values
+                # check if the coverage of the combined sequence is higher than the single sequence
+                if (combined_seq_coverage[i] > max(h1$COVERAGE_TR)){
+                    # if so, this is a motif we want to use
+                    motifs_to_use = c(motifs_to_use, as.character(alt_motifs$UNIFORM_MOTIF[i]))
+                }
+            }
+        }
+        motifs_to_use = unique(motifs_to_use)
+        # then go ahead with merging the motifs only if we have more than 1 motif
+        if (length(motifs_to_use) >1){
+            # for generating the consensus motif, we will use the "majority rule consensus"
+            # first thing is to convert the characters into a list of n elements (as many as the sequence length)
+            all_motifs_chars = lapply(X = motifs_to_use, FUN = function(x){strsplit(x, "")[[1]]})
+            # find the maximum length of all motifs in the sequence
+            max_len_motif <- max(sapply(all_motifs_chars, length))
+            # make sure to have all motifs with the same size by adding "x"
+            all_motifs_chars <- lapply(all_motifs_chars, function(y) { n_x <- max_len_motif - length(y); c(y, rep("x", n_x)) })
+            # initialize the consensus motif variable
+            consensus_motif = c()
+            # iterate on the indexes of the motif
+            for (pos in seq(1, max_len_motif)){
+                # get the values of each motif at a given position
+                pos_values <- unlist(lapply(all_motifs_chars, "[[", pos))
+                # check if the values are all the same
+                pos_value_consensus = ifelse(test = length(unique(pos_values)) == 1, yes = unique(pos_values), no = 'x')
+                # then add to the consensus motif
+                consensus_motif = c(consensus_motif, pos_value_consensus)
+            }
+            # finally, combine motif
+            consensus_motif = paste(consensus_motif, collapse = "")
+            # also combine the different alternative motifs
+            motifs_to_use = motifs_to_use[order(motifs_to_use)]
+            alternative_motifs = paste(motifs_to_use, collapse = ',')
+            
+            # In addition to the consensus motif, we can also find the specific motif
+            # depending on the number of motifs that we find, we can use a clustering approach
+            # for example, if there were 2 motifs found, that means that there are 2 defined TRF matches that (should) start at the same position
+            h1 = h1[order(h1$START_TRF),]
+            # fit k-means using the data sorted by start position of TRF, and the number of motifs is the k-value
+            # of course, if we only have 2 lines, 
+            fit = kmeans(x = h1[, c('START_TRF', 'END_TRF')], centers = length(motifs_to_use), algorithm = 'Lloyd')
+            specific_representation = c()
+            # iterate over the clusters to determine the specific representation
+            for (i in unique(fit$cluster)){
+                # isolate matches on the cluster
+                tmp_reads = h1[which(fit$cluster == i),]
+                # there can be that there are still multiple motifs, but we want to select the most abundant one
+                most_frequent <- names(which.max(table(tmp_reads$UNIFORM_MOTIF)))
+                # the number of copies is the median value
+                copy_n_median = median(tmp_reads$COPIES_TRF)
+                # compose the specific motif
+                specific_representation = paste0(specific_representation, '(', most_frequent, ')', copy_n_median)
+            }
+        } else {
+            # in this case, we only have 1 motif, so we are OK
+            consensus_motif = motifs_to_use
+            alternative_motifs = NA
+            specific_representation = motifs_to_use
+        }
+        # add combined motif to data and estimate number of copies
+        h1$CONSENSUS_MOTIF = consensus_motif
+        h1$CONSENSUS_MOTIF_EST_COPIES = h1$polished_haplo_values / nchar(consensus_motif)
+        h1$CONSENSUS_MOTIF_ALT_MOTIFS = alternative_motifs
+        h1$SPECIFIC_MOTIF = specific_representation
+        # return the same object we used as input with additional columns
+        return(h1)
+    }
+    
     # Function to generate consensus motif for each sample and region based on multiple processing
-    generateConsens_mp = function(s, all_regions, all_res){
+    generateConsens_mp = function(s, all_regions, all_res, motif_res_reference){
         motif_res = list()
         for (r in all_regions){
             # take all reads
@@ -778,86 +874,142 @@
             # treat haplotypes independently from each other
             if (1 %in% tmp$HAPLOTYPE & 2 %in% tmp$HAPLOTYPE){
                 h1 = tmp[which(tmp$HAPLOTYPE == 1),]; h2 = tmp[which(tmp$HAPLOTYPE == 2),]
-                # calculate consensus motif
-                h1_consensus_motif = consensusMotif_conscious(h1); h2_consensus_motif = consensusMotif_conscious(h2)
+                #h1_consensus_motif = consensusMotif_conscious(h1); h2_consensus_motif = consensusMotif_conscious(h2)
+                # calculate consensus motif using the majority rule consensus
+                h1_consensus_motif = motif_generalization(h1); h2_consensus_motif = motif_generalization(h2)
+                # calculate copy number estimation wrt reference genome -- uniform for associations altough not exactly correct
+                reference_motif = unique(motif_res_reference$CONSENSUS_MOTIF[which(motif_res_reference$REGION == r)])
+                h1_consensus_motif$CONSENSUS_MOTIF_REF = reference_motif; h2_consensus_motif$CONSENSUS_MOTIF_REF = reference_motif
+                h1_consensus_motif$CONSENSUS_MOTIF_REF_EST_COPIES = h1_consensus_motif$polished_haplo_values / nchar(reference_motif); h2_consensus_motif$CONSENSUS_MOTIF_REF_EST_COPIES = h2_consensus_motif$polished_haplo_values / nchar(reference_motif)
                 tmp_res = rbind(h1_consensus_motif, h2_consensus_motif)
             } else if (1 %in% tmp$HAPLOTYPE){
                 h1 = tmp[which(tmp$HAPLOTYPE == 1),]
-                # calculate consensus motif
-                tmp_res = consensusMotif_conscious(h1)
+                #tmp_res = consensusMotif_conscious(h1)
+                # calculate consensus motif using the majority rule consensus
+                tmp_res = motif_generalization(h1)
+                # calculate copy number estimation wrt reference genome -- uniform for associations altough not exactly correct
+                if (s == 'reference'){
+                    tmp_res$CONSENSUS_MOTIF_REF = NA
+                    tmp_res$CONSENSUS_MOTIF_REF_EST_COPIES = NA
+                } else {
+                    reference_motif = unique(motif_res_reference$CONSENSUS_MOTIF[which(motif_res_reference$REGION == r)])
+                    tmp_res$CONSENSUS_MOTIF_REF = reference_motif
+                    tmp_res$CONSENSUS_MOTIF_REF_EST_COPIES = tmp_res$polished_haplo_values / nchar(reference_motif)
+                }
             } else if (2 %in% tmp$HAPLOTYPE){
                 h2 = tmp[which(tmp$HAPLOTYPE == 2),]
-                # calculate consensus motif
-                tmp_res = consensusMotif_conscious(h2)
+                #tmp_res = consensusMotif_conscious(h2)
+                # calculate consensus motif using the majority rule consensus
+                tmp_res = motif_generalization(h2)
+                # calculate copy number estimation wrt reference genome -- uniform for associations altough not exactly correct
+                if (s == 'reference'){
+                    tmp_res$CONSENSUS_MOTIF_REF = NA
+                    tmp_res$CONSENSUS_MOTIF_REF_EST_COPIES = NA
+                } else {
+                    reference_motif = unique(motif_res_reference$CONSENSUS_MOTIF[which(motif_res_reference$REGION == r)])
+                    tmp_res$CONSENSUS_MOTIF_REF = reference_motif
+                    tmp_res$CONSENSUS_MOTIF_REF_EST_COPIES = tmp_res$polished_haplo_values / nchar(reference_motif)
+                }
             } else {
                 # in this case the clustering did not work, can be because the number of reads/contigs is too low
-                tmp_res = tmp; tmp_res$CONSENSUS_MOTIF = NA; tmp_res$CONSENSUS_COPY_NUMBER = NA; tmp_res$CONSENSUS_MOTIF_COMPLEX = NA; tmp_res$ADDITIONAL_MOTIFS = NA
+                tmp_res = tmp; tmp_res$COVERAGE_TR = NA; tmp_res$CONSENSUS_MOTIF = NA; tmp_res$CONSENSUS_MOTIF_EST_COPIES = NA; tmp_res$CONSENSUS_MOTIF_ALT_MOTIFS = NA
+                tmp_res$CONSENSUS_MOTIF_REF = NA; tmp_res$CONSENSUS_MOTIF_REF_EST_COPIES = NA; tmp_res$SPECIFIC_MOTIF = NA
             }
             # add to results list
             motif_res[[(length(motif_res) + 1)]] = tmp_res
         }
-        motif_res = rbindlist(motif_res)
+        motif_res = rbindlist(motif_res, use.names = T)
         print(paste0('** done with ', s))
         return(motif_res)
     }
-
+    
     # Function to call haplotypes and combine information
     callHaplo_mp <- function(s, all_regions, data){
         all_haplo = list()
         for (r in all_regions){
             # gather all data together, excluded reads and good reads
             tmp = data[which(data$sample == s & data$REGION == r),]
-            excl = tmp[which(tmp$polished_reads == 'exclude'),]; tmp = tmp[which(tmp$polished_reads != 'exclude'),]
+            excl = tmp[is.na(tmp$HAPLOTYPE),]; tmp = tmp[!is.na(tmp$HAPLOTYPE),]
+            # also take unique reads
+            tmp = tmp[!duplicated(tmp$READ_NAME),]
             # first we managed to identify the haplotypes
             if (nrow(tmp) >0){
                 if (!(NA %in% tmp$HAPLOTYPE) & nrow(tmp) >0){
                     # if we have both haplotypes assigned, get the relative info: copies, motif, coef. of variation, length, info
                     if (1 %in% tmp$HAPLOTYPE & 2 %in% tmp$HAPLOTYPE){
-                        h1_info = median(tmp$CONSENSUS_COPY_NUMBER[which(tmp$HAPLOTYPE == 1)])
+                        # number of copies should be wrt consensus motif and reference motif
+                        # copy number of consensus motif
+                        h1_info = median(tmp$CONSENSUS_MOTIF_EST_COPIES[which(tmp$HAPLOTYPE == 1)])
+                        h2_info = median(tmp$CONSENSUS_MOTIF_EST_COPIES[which(tmp$HAPLOTYPE == 2)])
+                        # consensus motif
                         h1_motif = paste(unique(tmp$CONSENSUS_MOTIF[which(tmp$HAPLOTYPE == 1)]), collapse = ',')
-                        h1_var = sd(tmp$CONSENSUS_COPY_NUMBER[which(tmp$HAPLOTYPE == 1)]) / mean(tmp$CONSENSUS_COPY_NUMBER[which(tmp$HAPLOTYPE == 1)])
-                        h1_len = paste(unique(tmp$LENGTH_SEQUENCE[which(tmp$HAPLOTYPE == 1)]), collapse = ',')
-                        h1_motif_info = unique(tmp$CONSENSUS_MOTIF_COMPLEX[which(tmp$HAPLOTYPE == 1)])
-                        h1_add_motifs = unique(tmp$ADDITIONAL_MOTIFS[which(tmp$HAPLOTYPE == 1)])
-                        h2_info = median(tmp$CONSENSUS_COPY_NUMBER[which(tmp$HAPLOTYPE == 2)])
                         h2_motif = paste(unique(tmp$CONSENSUS_MOTIF[which(tmp$HAPLOTYPE == 2)]), collapse = ',')
-                        h2_var = sd(tmp$CONSENSUS_COPY_NUMBER[which(tmp$HAPLOTYPE == 2)]) / mean(tmp$CONSENSUS_COPY_NUMBER[which(tmp$HAPLOTYPE == 2)])
-                        h2_len = paste(unique(tmp$LENGTH_SEQUENCE[which(tmp$HAPLOTYPE == 2)]), collapse = ',')
-                        h2_motif_info = unique(tmp$CONSENSUS_MOTIF_COMPLEX[which(tmp$HAPLOTYPE == 2)])
-                        h2_add_motifs = unique(tmp$ADDITIONAL_MOTIFS[which(tmp$HAPLOTYPE == 2)])
+                        # size of haplotype
+                        h1_len = paste(unique(tmp$polished_haplo_values[which(tmp$HAPLOTYPE == 1)]), collapse = ',')
+                        h2_len = paste(unique(tmp$polished_haplo_values[which(tmp$HAPLOTYPE == 2)]), collapse = ',')
+                        # specific motif of sample
+                        h1_motif_specific = unique(tmp$SPECIFIC_MOTIF[which(tmp$HAPLOTYPE == 1)])
+                        h2_motif_specific = unique(tmp$SPECIFIC_MOTIF[which(tmp$HAPLOTYPE == 2)])
+                        # additional motifs        
+                        h1_add_motifs = unique(tmp$CONSENSUS_MOTIF_ALT_MOTIFS[which(tmp$HAPLOTYPE == 1)])
+                        h2_add_motifs = unique(tmp$CONSENSUS_MOTIF_ALT_MOTIFS[which(tmp$HAPLOTYPE == 2)])
+                        # motif of reference 
+                        ref_motif = unique(tmp$CONSENSUS_MOTIF_REF)
+                        # copy number of reference motif
+                        h1_ref_motif_cn = unique(tmp$CONSENSUS_MOTIF_REF_EST_COPIES[which(tmp$HAPLOTYPE == 1)])
+                        h2_ref_motif_cn = unique(tmp$CONSENSUS_MOTIF_REF_EST_COPIES[which(tmp$HAPLOTYPE == 2)])
                         data_type = unique(tmp$DATA_TYPE)
                     # otherwise if only h1 is present, only gather h1 info
                     } else if (1 %in% tmp$HAPLOTYPE){
-                        h1_info = median(tmp$CONSENSUS_COPY_NUMBER[which(tmp$HAPLOTYPE == 1)])
+                        # copy number of consensus motif
+                        h1_info = median(tmp$CONSENSUS_MOTIF_EST_COPIES[which(tmp$HAPLOTYPE == 1)])
+                        # consensus motif
                         h1_motif = paste(unique(tmp$CONSENSUS_MOTIF[which(tmp$HAPLOTYPE == 1)]), collapse = ',')
-                        h1_var = sd(tmp$CONSENSUS_COPY_NUMBER[which(tmp$HAPLOTYPE == 1)]) / mean(tmp$CONSENSUS_COPY_NUMBER[which(tmp$HAPLOTYPE == 1)])
-                        h1_len = paste(unique(tmp$LENGTH_SEQUENCE[which(tmp$HAPLOTYPE == 1)]), collapse = ',')
-                        h1_motif_info = unique(tmp$CONSENSUS_MOTIF_COMPLEX[which(tmp$HAPLOTYPE == 1)])
-                        h1_add_motifs = unique(tmp$ADDITIONAL_MOTIFS[which(tmp$HAPLOTYPE == 1)])
-                        h2_info = NA; h2_motif = NA; h2_var = NA; h2_len = NA; h2_motif_info = NA; h2_add_motifs = NA
+                        # size of haplotype
+                        h1_len = paste(unique(tmp$polished_haplo_values[which(tmp$HAPLOTYPE == 1)]), collapse = ',')
+                        # specific motif of sample
+                        h1_motif_specific = unique(tmp$SPECIFIC_MOTIF[which(tmp$HAPLOTYPE == 1)])
+                        # additional motifs        
+                        h1_add_motifs = unique(tmp$CONSENSUS_MOTIF_ALT_MOTIFS[which(tmp$HAPLOTYPE == 1)])
+                        # motif of reference 
+                        ref_motif = unique(tmp$CONSENSUS_MOTIF_REF)
+                        # copy number of reference motif
+                        h1_ref_motif_cn = unique(tmp$CONSENSUS_MOTIF_REF_EST_COPIES)
+                        # fill in information for h1
+                        h2_info = NA; h2_motif = NA; h2_len = NA; h2_motif_specific = NA; h2_add_motifs = NA; h2_ref_motif = NA; h2_ref_motif_cn = NA
                         data_type = unique(tmp$DATA_TYPE)
                     # otherwise gather only h2 info
                     } else {
-                        h2_info = median(tmp$CONSENSUS_COPY_NUMBER[which(tmp$HAPLOTYPE == 2)])
+                        # copy number of consensus motif
+                        h2_info = median(tmp$CONSENSUS_MOTIF_EST_COPIES[which(tmp$HAPLOTYPE == 2)])
+                        # consensus motif
                         h2_motif = paste(unique(tmp$CONSENSUS_MOTIF[which(tmp$HAPLOTYPE == 2)]), collapse = ',')
-                        h2_var = sd(tmp$CONSENSUS_COPY_NUMBER[which(tmp$HAPLOTYPE == 2)]) / mean(tmp$CONSENSUS_COPY_NUMBER[which(tmp$HAPLOTYPE == 2)])
-                        h2_len = paste(unique(tmp$LENGTH_SEQUENCE[which(tmp$HAPLOTYPE == 2)]), collapse = ',')
-                        h2_motif_info = unique(tmp$CONSENSUS_MOTIF_COMPLEX[which(tmp$HAPLOTYPE == 2)])
-                        h2_add_motifs = unique(tmp$ADDITIONAL_MOTIFS[which(tmp$HAPLOTYPE == 2)])
-                        h1_info = NA; h1_motif = NA; h1_var = NA; h1_len = NA; h1_motif_info = NA; h1_add_motifs = NA
+                        # size of haplotype
+                        h2_len = paste(unique(tmp$polished_haplo_values[which(tmp$HAPLOTYPE == 2)]), collapse = ',')
+                        # specific motif of sample
+                        h2_motif_specific = unique(tmp$SPECIFIC_MOTIF[which(tmp$HAPLOTYPE == 2)])
+                        # additional motifs
+                        h2_add_motifs = unique(tmp$CONSENSUS_MOTIF_ALT_MOTIFS[which(tmp$HAPLOTYPE == 2)])
+                        # motif of reference 
+                        ref_motif = unique(tmp$CONSENSUS_MOTIF_REF)
+                        # copy number of reference motif
+                        h2_ref_motif_cn = unique(tmp$CONSENSUS_MOTIF_REF_EST_COPIES)
+                        # fill in information for h1
+                        h1_info = NA; h1_motif = NA; h1_len = NA; h1_motif_specific = NA; h1_add_motifs = NA; h1_ref_motif = NA; h1_ref_motif_cn = NA
                         data_type = unique(tmp$DATA_TYPE)
                     }
                     # then check excluded reads
                     if (nrow(excl) >0){ 
-                        excl_info = paste(paste0(excl$CONSENSUS_MOTIF, '(', excl$CONSENSUS_COPY_NUMBER, ')'), collapse = '_')
+                        excl_info = paste(paste0(excl$CONSENSUS_MOTIF, '(', excl$CONSENSUS_MOTIF_EST_COPIES, ')'), collapse = '_')
                         excl_len = paste(excl$LENGTH_SEQUENCE, collapse = ',')
                     } else { 
                         excl_info = NA; excl_len = NA
                     }
                     # finally save a df with all info regarding TR
-                    tmp_df = data.frame(SAMPLE = unique(tmp$sample), REGION = unique(tmp$REGION), H1 = h1_info, H2 = h2_info, 
-                        H1_MOTIF = h1_motif, H2_MOTIF = h2_motif, H1_LENGTH = h1_len, H2_LENGTH = h2_len, COEF_VAR_H1 = h1_var, COEF_VAR_H2 = h2_var,
-                        H1_MOTIF_TYPE = h1_motif_info, H2_MOTIF_TYPE = h2_motif_info, H1_ADDITIONAL_MOTIF = h1_add_motifs, H2_ADDITIONAL_MOTIF = h2_add_motifs,
+                    tmp_df = data.frame(SAMPLE = unique(tmp$sample), REGION = unique(tmp$REGION), H1_CONSENSUS = h1_info, H2_CONSENSUS = h2_info, 
+                        H1_CONSENSUS_MOTIF = h1_motif, H2_CONSENSUS_MOTIF = h2_motif, H1_HAPLO_SIZE = h1_len, H2_HAPLO_SIZE = h2_len,
+                        H1_SPECIFIC_MOTIF = h1_motif_specific, H2_SPECIFIC_MOTIF = h2_motif_specific, H1_ADDITIONAL_MOTIF = h1_add_motifs, H2_ADDITIONAL_MOTIF = h2_add_motifs,
+                        REFERENCE_MOTIF = ref_motif, H1_REFERENCE_MOTIF_CN = h1_ref_motif_cn, H2_REFERENCE_MOTIF_CN = h2_ref_motif_cn,
                         EXCLUDED = excl_info, EXCLUDED_LEN = excl_len, DATA_TYPE = data_type)
                     # and add to the growing list
                     all_haplo[[(length(all_haplo) + 1)]] = tmp_df
@@ -866,9 +1018,10 @@
                     excl_info = paste(paste0(excl$CONSENSUS_MOTIF, '(', excl$CONSENSUS_COPY_NUMBER, ')'), collapse = '_')
                     excl_len = paste(excl$LENGTH_SEQUENCE, collapse = ',')
                     # create the same df with NA values and add to growing list
-                    tmp_df = data.frame(SAMPLE = unique(excl$sample), REGION = unique(excl$REGION), H1 = NA, H2 = NA, 
-                        H1_MOTIF = NA, H2_MOTIF = NA, H1_LENGTH = NA, H2_LENGTH = NA, COEF_VAR_H1 = NA, COEF_VAR_H2 = NA,
-                        H1_MOTIF_TYPE = NA, H2_MOTIF_TYPE = NA, H1_ADDITIONAL_MOTIF = NA, H2_ADDITIONAL_MOTIF = NA,
+                    tmp_df = data.frame(SAMPLE = unique(excl$sample), REGION = unique(excl$REGION), H1_CONSENSUS = NA, H2_CONSENSUS = NA, 
+                        H1_CONSENSUS_MOTIF = NA, H2_CONSENSUS_MOTIF = NA, H1_HAPLO_SIZE = NA, H2_HAPLO_SIZE = NA,
+                        H1_SPECIFIC_MOTIF = NA, H2_SPECIFIC_MOTIF = NA, H1_ADDITIONAL_MOTIF = NA, H2_ADDITIONAL_MOTIF = NA,
+                        REFERENCE_MOTIF = ref_motif, H1_REFERENCE_MOTIF_CN = NA, H2_REFERENCE_MOTIF_CN = NA,
                         EXCLUDED = excl_info, EXCLUDED_LEN = excl_len, DATA_TYPE = data_type)
                     all_haplo[[(length(all_haplo) + 1)]] = tmp_df
                 }
@@ -1011,6 +1164,7 @@
     out_dir = args$out
     n_cpu = as.numeric(args$cpu)
     thr_mad = as.numeric(args$deviation)
+
     # check inputs and print summary
     if ((inp_trf[1] == 'None' & inp_asm[1] == 'None') | out_dir == 'None'){ RUN = FALSE } else { RUN = TRUE }
     if (RUN == FALSE){
@@ -1116,7 +1270,7 @@
     trf_pha$UNIQUE_NAME = paste(trf_pha$READ_NAME, trf_pha$SAMPLE_NAME, trf_pha$REGION, sep = "___")
 
     # 5. add the TR size by substracting 20 (10*2 padding) to LENGTH_SEQUENCE
-    trf_pha$TR_LENGHT = trf_pha$LENGTH_SEQUENCE - 20
+    trf_pha$TR_LENGHT = trf_pha$LENGTH_SEQUENCE
 
     # 6. good to exclude duplicated reads otherwise results would be biased towards sequences with more complex motifs (where TRF finds multiple matches)
     #trf_pha = trf_pha[which(trf_pha$SEQUENCE_WITH_WINDOW != ''),]
@@ -1162,11 +1316,10 @@
     # 9. now we should look at the motifs -- implemented parallel computing
     cat('****** Generating consensus motifs\n')
     all_samples = unique(all_res$sample); all_regions = unique(all_res$REGION); motif_res = list()
-    motif_res = rbindlist(mclapply(all_samples, generateConsens_mp, all_regions = all_regions, all_res = all_res_combined, mc.cores = n_cpu))
-    ## debug
-    tmp = generateConsens_mp(s = 'c2_blood.merged.hifi.hg38__rawReads.bam', all_regions, all_res = all_res_combined)
-    nested = tmp[which(tmp$CONSENSUS_MOTIF_COMPLEX == 'nested_motif'),]
-
+    # first run on the reference genome
+    motif_res_reference = generateConsens_mp(s = 'reference', all_regions, all_res = all_res_combined, motif_res_reference = NA)
+    motif_res = rbindlist(mclapply(all_samples[which(all_samples != 'reference')], generateConsens_mp, all_regions = all_regions, all_res = all_res_combined, motif_res_reference = motif_res_reference, mc.cores = n_cpu))
+    
     # 10. finally call haplotypes -- implemented parallel computing
     cat('****** Haplotype calling\n')
     all_samples = unique(motif_res$sample); all_regions = unique(motif_res$REGION)
