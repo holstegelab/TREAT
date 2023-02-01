@@ -259,8 +259,8 @@ elif anal_type == 'assembly':
     # 5. assembly
     print('** 2. assembly')
     strategy = AsmStrategy(assembly_type, reads_fasta, output_directory)
-    # decide how many assembly in parallel to run (keep 2 cores per assembly, then depends on the total number of cores available)
-    threads_per_asm = 2; parallel_assemblies = int(number_threads / threads_per_asm); all_samples = list(strategy.keys())
+    # decide how many assembly in parallel to run (keep 4 cores per assembly, then depends on the total number of cores available)
+    threads_per_asm = 4; parallel_assemblies = int(number_threads / threads_per_asm); all_samples = list(strategy.keys())
     if parallel_assemblies == 0:
         parallel_assemblies = 1
     pool = multiprocessing.Pool(processes=parallel_assemblies)
@@ -274,6 +274,7 @@ elif anal_type == 'assembly':
 
     # 13. alignment
     print('** 4. align contigs')
+    # use 4 threads for alingment
     threads_per_aln = 4; parallel_alignment = int(number_threads / threads_per_aln)
     if parallel_alignment == 0:
         parallel_alignment = 1
