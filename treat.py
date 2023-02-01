@@ -42,6 +42,7 @@ parser.add_argument('--window', dest = 'window', type = int, help = 'Integer. Wi
 parser.add_argument('--assembly-type', dest = 'ass_type', type = str, help = 'Type of local assembly to perform. By default, each .bam will result in an assembly. If you prefer to use multiple .bam files for an assembly, please submit a file with no header and 2 columns: the first column should report, for each line, a comma-separated list of .bam files to combine in the assembly. The second column, for each line, should report the output prefix of the final assembly for each group.', required = False, default = 'asm_per_bam')
 parser.add_argument('--assembly-ploidy', dest = 'ass_ploidy', type = int, help = 'Ploidy to be used for the local assembly procedure. Default value is 2 (for diploid organisms).', required = False, default = 2)
 parser.add_argument('--thread', dest = 'thread', type = int, help = 'Number of parallel threads to be used', required = False, default = 1)
+parser.add_argument('--thread-asm-aln', dest = 'thread_asm_aln', type = int, help = 'Number of parallel threads to be used during assembly and alignment', required = False, default = "default")
 parser.add_argument('--polish', dest = 'polish', type = str, help = 'Boolean (True/False). If True, reads containing the region of interest will also be polished.', required = False, default = 'False')
 parser.add_argument('--snp-data', dest = 'snp_dir', type = str, help = 'If phasing is selected, please add here the path to SNP data (in PLINK2 format). This information is necessary for phasing.', required = False, default = 'False')
 parser.add_argument('--snp-data-ids', dest = 'snp_data_ids', type = str, help = 'Please submit here a 2-column file with GWAS ID and ID in sequencing data. If not provided, will assume the IDs are the same.', required = False, default = 'False')
@@ -115,7 +116,7 @@ print("** window used --> %s\n********************\n" %(args.window))
 bed_file, anal_type, var_file, bam_directory, output_directory, store_temporary = args.bed_dir, args.analysis_type, args.variant_file, args.bam_dir, args.out_dir, args.store_temp
 window_size, assembly_type, assembly_ploidy, number_threads, polishing, snp_dir = args.window, args.ass_type, args.ass_ploidy, args.thread, args.polish, args.snp_dir
 snp_data_ids, step, target_reads, fasta_dir, trf_file, phase_file = args.snp_data_ids, args.step, args.target_reads, args.fasta_dir, args.trf_file, args.phase_file
-asm_file, ref_fasta, thr_mad = args.asm_file, args.ref, args.thr_mad
+asm_file, ref_fasta, thr_mad, number_threads_asm_aln = args.asm_file, args.ref, args.thr_mad, args.thread_asm_aln
 
 # Store arguments (for debugging only)
 #bed_file, anal_type, var_file, bam_directory, output_directory, store_temporary, window_size, assembly_type, assembly_ploidy, number_threads, polishing, snp_dir, snp_data_ids, step, target_reads = '/project/holstegelab/Share/nicco/workspaces/20211013_target_approach/automatic_pipeline/DMPK/dmpk.bed', '', '', '/project/holstegelab/Share/nicco/workspaces/20211013_target_approach/automatic_pipeline/DMPK/extract_reads/case/DNA15-20132_2.haplotagged_step1_hifi.bam', '/project/holstegelab/Share/nicco/workspaces/20211013_target_approach/automatic_pipeline/DMPK/phase_reads/case', 'True', 100000, '', 2, 4, 'True', '/project/holstegelab/Share/pacbio/radbound_rfc1_cases/DNA15-20132-DMPK/Analyzed/GRCh38_20220408/SNVCalling_20220411_deepvariant//DNA15-20132_2.phased.pvar', '/project/holstegelab/Share/nicco/workspaces/20211013_target_approach/automatic_pipeline/DMPK/phase_reads/case/map.txt', 500, '/project/holstegelab/Share/nicco/workspaces/20211013_target_approach/automatic_pipeline/RFC1/subreads/c7_all_reads.txt'
@@ -259,12 +260,19 @@ elif anal_type == 'assembly':
     # 5. assembly
     print('** 2. assembly')
     strategy = AsmStrategy(assembly_type, reads_fasta, output_directory)
-    # decide how many assembly in parallel to run (keep 4 cores per assembly, then depends on the total number of cores available)
-    threads_per_asm = 4; parallel_assemblies = int(number_threads / threads_per_asm); all_samples = list(strategy.keys())
-    if parallel_assemblies == 0:
-        parallel_assemblies = 1
+    # decide how many assembly in parallel to run: if there's only 1 genome to do, give all the cpus that were submitted (also true for alignment)
+    if len(reads_fasta) == 1:
+        threads_per_asm_aln = number_threads
+    # otherwise (if there are multiple samples to process), if the user requested a specif number of cpu use that, otherwise use 4 cpus for assembly and alignment
+    else:
+        if number_threads_asm_aln == 'default':
+            threads_per_asm_aln = 4; parallel_assemblies = int(number_threads / threads_per_asm_aln); all_samples = list(strategy.keys())
+        else:
+            threads_per_asm_aln = int(number_threads_asm_aln); parallel_assemblies = int(number_threads / threads_per_asm_aln); all_samples = list(strategy.keys())
+        if parallel_assemblies == 0:
+            parallel_assemblies = 1; parallel_alignment = 1
     pool = multiprocessing.Pool(processes=parallel_assemblies)
-    assembly_fun = partial(localAssembly_MP, strategy = strategy, out_dir = output_directory, ploidy = assembly_ploidy, thread = threads_per_asm)
+    assembly_fun = partial(localAssembly_MP, strategy = strategy, out_dir = output_directory, ploidy = assembly_ploidy, thread = threads_per_asm_aln)
     assembly_results = pool.map(assembly_fun, all_samples)
     print('**** done with assembly                                     ')
 
@@ -275,11 +283,8 @@ elif anal_type == 'assembly':
     # 13. alignment
     print('** 4. align contigs')
     # use 4 threads for alingment
-    threads_per_aln = 4; parallel_alignment = int(number_threads / threads_per_aln)
-    if parallel_alignment == 0:
-        parallel_alignment = 1
     pool = multiprocessing.Pool(processes=parallel_alignment)
-    align_fun = partial(alignAssembly_MP, outname_list = assembly_results, thread = threads_per_aln, reference = ref_fasta)
+    align_fun = partial(alignAssembly_MP, outname_list = assembly_results, thread = threads_per_asm_aln, reference = ref_fasta)
     align_results = pool.map(align_fun, assembly_results)
     print('**** done with contig alignment                                     ')
 elif anal_type == 'phase_reads':
