@@ -262,7 +262,7 @@ elif anal_type == 'assembly':
     strategy = AsmStrategy(assembly_type, reads_fasta, output_directory)
     # decide how many assembly in parallel to run: if there's only 1 genome to do, give all the cpus that were submitted (also true for alignment)
     if len(reads_fasta) == 1:
-        threads_per_asm_aln = number_threads
+        threads_per_asm_aln = number_threads; parallel_assemblies = 1; parallel_alignment = 1
     # otherwise (if there are multiple samples to process), if the user requested a specif number of cpu use that, otherwise use 4 cpus for assembly and alignment
     else:
         if number_threads_asm_aln == 'default':
