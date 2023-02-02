@@ -706,9 +706,9 @@ def localAssembly(strategy, out_dir, ploidy, thread):
 def localAssembly_MP(group_name, strategy, out_dir, ploidy, thread):
     inp_fasta = ' '.join(strategy[group_name])
     outname = '%s/%s__Assembly' %(out_dir, group_name)
-    cmd_assembly = 'hifiasm -o %s -t %s --n-hap %s -n 2 -r 3 -N 200 %s >/dev/null 2>&1' %(outname, thread, ploidy, inp_fasta)
+    #cmd_assembly = 'hifiasm -o %s -t %s --n-hap %s -n 2 -r 3 -N 200 %s >/dev/null 2>&1' %(outname, thread, ploidy, inp_fasta)
     print('**** assembly done with hifiasm using %s threads. Command line is: ' %(thread))    
-    #cmd_assembly = 'hifiasm -o %s -t %s --n-hap %s -n 2 -r 3 -N 200 %s' %(outname, thread, ploidy, inp_fasta)
+    cmd_assembly = 'hifiasm -o %s -t %s --n-hap %s -n 2 -r 3 -N 200 %s' %(outname, thread, ploidy, inp_fasta)
     try:
         os.system(cmd_assembly)
         subprocess.run("gfatools gfa2fa %s.bp.hap1.p_ctg.gfa > %s_haps.fasta" %(outname, outname), shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)          # convert gfa of hap 1 to fasta
