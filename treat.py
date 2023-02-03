@@ -30,95 +30,232 @@ import multiprocessing
 ## Main
 ## Define Arguments
 parser = argparse.ArgumentParser(description = 'Find information about a specific region/tandem repeat')
+
+## Main arguments
+# analysis type
+parser.add_argument('--analysis-type', dest = 'analysis_type', type = str, help = 'Type of analysis to perform [reads_spanning_trf / assembly_trf / measure / trf / assembly / extract_snps / annotate_snps / extract_annotate / genotype_snps_pacbio / phase_reads / coverage_profile / extract_raw_reads / realign / complete / haplotyping]. See docs for further information.', required = True)
+# bed file
 parser.add_argument('--bed', dest = 'bed_dir', type = str, help = '.bed file containing the region(s) to look. Header is not required but if present, it must starts with #.', required = False, default = 'None')
-parser.add_argument('--analysis-type', dest = 'analysis_type', type = str, help = 'Type of analysis to perform [extract_reads / measure / trf / assembly / extract_snps / annotate_snps / extract_annotate / genotype_snps_pacbio / phase_reads / coverage_profile / extract_raw_reads / realign / complete / haplotyping]. See docs for further information.', required = True)
-parser.add_argument('--variant-file', dest = 'variant_file', type = str, help = 'If the analysis_type is annotate_snps or genotype_snps_pacbio, please provide here the path to the file including the SNPs to annotate/extract.', required = False, default = 'None')
-parser.add_argument('--ref', dest = 'ref', type = str, help = 'Path to reference genome data.', required = False, default = 'None')
+# bam file
 parser.add_argument('--bam-dir', dest = 'bam_dir', type = str, help = 'Directory of bam file(s). If a directory is provided, will use all .bam in the directory. If a single .bam file is provided, will use that file.', required = False, default = 'None')
-parser.add_argument('--fasta-dir', dest = 'fasta_dir', type = str, help = 'Directory of fasta file(s). If a directory is provided, will use all .fasta/fa in the directory. If a single .fasta file is provided, will use that file.', required = False, default = 'None')
+# output directory
 parser.add_argument('--out-dir', dest = 'out_dir', type = str, help = 'Directory where to place output files. If the directory exists, will place files in, otherwise will create the folder and place results in.', required = False, default = 'None')
-parser.add_argument('--store-temp', dest = 'store_temp', type = str, help = 'Boolean (True/False). If True, will store all temporary .bam and .fasta files.', required = False, default = 'False')
+# reference genome
+parser.add_argument('--ref', dest = 'ref', type = str, help = 'Path to reference genome data.', required = False, default = 'None')
+# flanking window to use
 parser.add_argument('--window', dest = 'window', type = int, help = 'Integer. Will use this value to take reads surrounding the provided .bed file.', required = False, default = 1000)
-parser.add_argument('--assembly-type', dest = 'ass_type', type = str, help = 'Type of local assembly to perform. By default, each .bam will result in an assembly. If you prefer to use multiple .bam files for an assembly, please submit a file with no header and 2 columns: the first column should report, for each line, a comma-separated list of .bam files to combine in the assembly. The second column, for each line, should report the output prefix of the final assembly for each group.', required = False, default = 'asm_per_bam')
-parser.add_argument('--assembly-ploidy', dest = 'ass_ploidy', type = int, help = 'Ploidy to be used for the local assembly procedure. Default value is 2 (for diploid organisms).', required = False, default = 2)
+# whether to store temporary files (reads aligning to bed file)
+parser.add_argument('--store-temp', dest = 'store_temp', type = str, help = 'Boolean (True/False). If True, will store all temporary .bam and .fasta files.', required = False, default = 'False')
+# number of threads overall
 parser.add_argument('--thread', dest = 'thread', type = int, help = 'Number of parallel threads to be used', required = False, default = 1)
+
+## Assembly arguments
+# numer of threads for assembly and alignment 
 parser.add_argument('--thread-asm-aln', dest = 'thread_asm_aln', type = str, help = 'Number of parallel threads to be used during assembly and alignment', required = False, default = "default")
-parser.add_argument('--polish', dest = 'polish', type = str, help = 'Boolean (True/False). If True, reads containing the region of interest will also be polished.', required = False, default = 'False')
+# ploidy
+parser.add_argument('--assembly-ploidy', dest = 'ass_ploidy', type = int, help = 'Ploidy to be used for the local assembly procedure. Default value is 2 (for diploid organisms).', required = False, default = 2)
+# assembly type
+parser.add_argument('--assembly-type', dest = 'ass_type', type = str, help = 'Type of local assembly to perform. By default, each .bam will result in an assembly. If you prefer to use multiple .bam files for an assembly, please submit a file with no header and 2 columns: the first column should report, for each line, a comma-separated list of .bam files to combine in the assembly. The second column, for each line, should report the output prefix of the final assembly for each group.', required = False, default = 'asm_per_bam')
+
+## Phasing arguments
+# path to snp data
 parser.add_argument('--snp-data', dest = 'snp_dir', type = str, help = 'If phasing is selected, please add here the path to SNP data (in PLINK2 format). This information is necessary for phasing.', required = False, default = 'False')
+# path to mapping file between snp data and read
 parser.add_argument('--snp-data-ids', dest = 'snp_data_ids', type = str, help = 'Please submit here a 2-column file with GWAS ID and ID in sequencing data. If not provided, will assume the IDs are the same.', required = False, default = 'False')
-parser.add_argument('--coverage-step', dest = 'step', type = int, help = 'Number of nt based on which the region(s) of interest will be split to calculate coverage.', required = False, default = 500)
-parser.add_argument('--reads-ids', dest = 'target_reads', type = str, help = 'If analysis type was extract_raw_reads, please provide here a tab-separated file with two columns: the first column should contain the .bam file to extract reads from, the second column should contain the reads ID to extract, one read ID per line.', required = False, default = 'False')
-#parser.add_argument('--reference-genome', dest = 'reference', type = str, help = 'If analysis type was assembly, use this parameter to decide whether assembled contigs should be aligned to hg38 or chm13. choises are [hg38 / chm13]. Default is hg38.', required = False, default = 'hg38')
+
+## Haplotyping analysis
+# path to trf file for haplotyping
 parser.add_argument('--trf', dest = 'trf_file', type = str, help = 'If analysis type was haplotyping, please input here the path to the TRF output file.', required = False, default = 'None')
+# path to phasing file for haplotyping
 parser.add_argument('--phase', dest = 'phase_file', type = str, help = 'If analysis type was haplotyping, please input here the path to the PHASING output file.', required = False, default = 'None')
+# path to assembly file for haplotyping
 parser.add_argument('--asm', dest = 'asm_file', type = str, help = 'If analysis type was haplotyping, please input here the path to the TRF output of assembly.', required = False, default = 'None')
+# deviation value for haplotyping to call haplotypes
 parser.add_argument('--haplotyping-deviation', dest = 'thr_mad', type = float, help = 'During haplotying analysis, median absolute deviation to assign reads to the same allele.', required = False, default = 0.10)
 
+## Other analyses parameters
+# path to file including SNPs with annotate or genotype
+parser.add_argument('--variant-file', dest = 'variant_file', type = str, help = 'If the analysis_type is annotate_snps or genotype_snps_pacbio, please provide here the path to the file including the SNPs to annotate/extract.', required = False, default = 'None')
+# path to directory containing fasta files to be (re)aligned
+parser.add_argument('--fasta-dir', dest = 'fasta_dir', type = str, help = 'Directory of fasta file(s). If a directory is provided, will use all .fasta/fa in the directory. If a single .fasta file is provided, will use that file.', required = False, default = 'None')
+# whether to polish reads or not using Alex algorithm
+parser.add_argument('--polish', dest = 'polish', type = str, help = 'Boolean (True/False). If True, reads containing the region of interest will also be polished.', required = False, default = 'False')
+# coverage step for coverage analysis -- coverage analysis to be changed with the samtools
+parser.add_argument('--coverage-step', dest = 'step', type = int, help = 'Number of nt based on which the region(s) of interest will be split to calculate coverage.', required = False, default = 500)
+# path to file containing read identifiers to extract
+parser.add_argument('--reads-ids', dest = 'target_reads', type = str, help = 'If analysis type was extract_raw_reads, please provide here a tab-separated file with two columns: the first column should contain the .bam file to extract reads from, the second column should contain the reads ID to extract, one read ID per line.', required = False, default = 'False')
+
+## Load arguments
 args = parser.parse_args()
-# Check arguments
-# First, throw error when out_dir is not specified (apart from when analysis type is realign)
+
+## Check arguments and throw errors when some require argument is not provided
+# Throw error when out_dir is not specified (apart from when analysis type is realign)
 if (args.analysis_type != 'realign') and (args.out_dir == 'None'):
     parser.error('!! You should provide the desired output directory if analysis_type is --> %s' %(args.analysis_type))
-# Second, throw error when fasta_dir is not specified and analysis type is realign
-if (args.analysis_type == 'realign') and (args.fasta_dir == 'None'):
-    parser.error('!! You should provide the input fasta file(s) directory if analysis_type is --> %s' %(args.analysis_type))
-# Third, throw error when bam_dir is not specified for a wide range of analyses (except those specified in the list below)
+# Throw error when bam_dir is not specified for a wide range of analyses (except those specified in the list below)
 if (args.analysis_type not in ['haplotyping', 'annotate_snps', 'realign_assembly', 'extract_snps', 'extract_annotate', 'extract_raw_reads', 'realign']) and (args.bam_dir == 'None'):
     parser.error('!! You should provide at least a .bam file if analysis_type is --> %s' %(args.analysis_type))
-# Four, throw error when bed_dir is not specified for a wide range of analyses (except those specified in the list below)
+# Throw error when bed_dir is not specified for a wide range of analyses (except those specified in the list below)
 elif (args.analysis_type not in ['haplotyping', 'genotype_snps_pacbio', 'annotate_snps', 'extract_raw_reads', 'realign']) and (args.bed_dir == 'None'):
     parser.error('!! You should provide at least a .bed file if analysis_type is --> %s' %(args.analysis_type))
-# Five, throw error when target_reads is not specified and analysis type is extract_raw_reads
+# Throw error when fasta_dir is not specified and analysis type is realign
+if (args.analysis_type == 'realign') and (args.fasta_dir == 'None'):
+    parser.error('!! You should provide the input fasta file(s) directory if analysis_type is --> %s' %(args.analysis_type))
+# Throw error when target_reads is not specified and analysis type is extract_raw_reads
 if (args.analysis_type == 'extract_raw_reads' and args.target_reads == 'False'):
     parser.error('!! You should provide either a text file containing the IDs of interest or a comma-separated list of IDs')
-# Six, throw error when trf_file is not specified and analysis type is haplotyping
+# Throw error when neither trf_file nor asm_trf are not specified and analysis type is haplotyping
 if (args.analysis_type == 'haplotyping' and args.trf_file == 'None' and args.asm_file == 'None'):
     parser.error('!! You should provide at least one TRF-output of single-reads or assembly (or both) when the analysis type is haplotyping.')
-# Seven, throw error when measure is specified but no reference data is provided
+# Throw error when measure is specified but no reference data is provided
 if (args.analysis_type in ['measure', 'trf', 'assembly', 'realign', 'phase_reads'] and args.ref == 'None'):
     parser.error('!! You should provide the path to the reference genome when the analysis type is measure.')
+# Throw error when phasing analysis is specific but no SNP data is provided
 if (args.analysis_type in ['phase_reads'] and args.snp_dir == 'False'):
     parser.error('!! You should provide the path to the SNP data when the analysis type is phase_reads.')
 
-# Print arguments
-print("\n** Tandem REpeat Annotation Toolkit (TREAT) **\n")
-print("********************\n** Your settings:")
+## Print arguments
+# Introduction message
+print("\n** Tandem REpeat Annotation Toolkit (Treat) **")
+print('******* put together by Niccolo Tesi *******')
+print("********************\n** Your settings in use:")
+# Main arguments depending on the analysis type
 print("** analysis type --> %s" %(args.analysis_type))
+# Haplotyping analysis
 if args.analysis_type == 'haplotyping':
     print("** trf file --> %s" %(args.trf_file))
     print("** asm file --> %s" %(args.asm_file))
     print("** phasing file --> %s" %(args.phase_file))
     print("** median absolute deviation --> %s" %(args.thr_mad))
-print("** bed file --> %s" %(args.bed_dir))
-if args.analysis_type == 'realign_assembly':
+# Realignment analysis
+elif args.analysis_type == 'realign':
     print("** fasta file(s) --> %s" %(args.fasta_dir))
+    print('** reference genome --> %s' %(args.ref))
     print("** output folder is the same as input fasta file(s)")
-else:
+# Tandem repeat finder analysis
+elif args.analysis_type == 'trf'
     print("** bam file(s) --> %s" %(args.bam_dir))
     print("** output folder --> %s" %(args.out_dir))
-if args.analysis_type in ['phase_reads', 'complete']:
+    print("** bed file --> %s" %(args.bed_dir))
+    print("** intermediate files --> %s" %(args.store_temp))
+    print('** reference genome --> %s' %(args.ref))
+    print('** number of cpus --> %s' %(args.thread))
+    print("** window used --> %s\n********************\n" %(args.window))
+    print('** polishing --> %s' %(args.polish))
+# Assembly analysis
+elif args.analysis_type == 'assembly':
+    print("** bam file(s) --> %s" %(args.bam_dir))
+    print("** output folder --> %s" %(args.out_dir))
+    print("** bed file --> %s" %(args.bed_dir))
+    print("** intermediate files --> %s" %(args.store_temp))
+    print('** reference genome --> %s' %(args.ref))
+    print('** number of cpus --> %s' %(args.thread))
+    print("** window used --> %s\n********************\n" %(args.window))
+    print("** assembly type --> %s" %(args.ass_type))
+    print("** assembly ploidy --> %s" %(args.ass_ploidy))
+    print("** number of cpus for assembly/alignment --> %s" %(args.thread_asm_aln))
+# Phasing analysis
+elif args.analysis_type == 'phase_reads':
+    print("** bam file(s) --> %s" %(args.bam_dir))
+    print("** output folder --> %s" %(args.out_dir))
+    print("** bed file --> %s" %(args.bed_dir))
+    print("** intermediate files --> %s" %(args.store_temp))
+    print('** reference genome --> %s' %(args.ref))
+    print('** number of cpus --> %s' %(args.thread))
+    print("** window used --> %s\n********************\n" %(args.window))
     print("** phasing using SNPs in --> %s" %(args.snp_dir))
     print("** mapping IDs between long-read and SNPs using --> %s" %(args.snp_data_ids))
-print('** polishing --> %s' %(args.polish))
-if args.analysis_type in ['assembly', 'complete']:
+# Complete analysis
+elif args.analysis_type == 'complete':
+    print("** bam file(s) --> %s" %(args.bam_dir))
+    print("** output folder --> %s" %(args.out_dir))
+    print("** bed file --> %s" %(args.bed_dir))
+    print("** intermediate files --> %s" %(args.store_temp))
+    print('** reference genome --> %s' %(args.ref))
+    print('** number of cpus --> %s' %(args.thread))
+    print("** window used --> %s" %(args.window))
+    print('** polishing --> %s' %(args.polish))
     print("** assembly type --> %s" %(args.ass_type))
-if args.analysis_type in ['coverage_profile', 'complete']:
-    print("** step --> %s" %(args.step))
-if args.analysis_type == 'extract_raw_reads':
+    print("** assembly ploidy --> %s" %(args.ass_ploidy))
+    print("** number of cpus for assembly/alignment --> %s" %(args.thread_asm_aln))
+    print("** phasing using SNPs in --> %s" %(args.snp_dir))
+    print("** mapping IDs between long-read and SNPs using --> %s" %(args.snp_data_ids))
+    print("** step for coverage --> %s" %(args.step))
+    print("** median absolute deviation --> %s" %(args.thr_mad))
+# Coverage analysis
+elif args.analysis_type == 'coverage_profile':
+    print("** bam file(s) --> %s" %(args.bam_dir))
+    print("** output folder --> %s" %(args.out_dir))
+    print("** bed file --> %s" %(args.bed_dir))
+    print("** intermediate files --> %s" %(args.store_temp))
+    print('** reference genome --> %s' %(args.ref))
+    print('** number of cpus --> %s' %(args.thread))
+    print("** step for coverage --> %s" %(args.step))
+# Extract reads analysis
+elif args.analysis_type == 'extract_raw_reads':
+    print("** bam file(s) --> %s" %(args.bam_dir))
+    print("** output folder --> %s" %(args.out_dir))
+    print("** bed file --> %s" %(args.bed_dir))
+    print("** window used --> %s" %(args.window))
     print('** read IDs to extract --> %s' %(args.target_reads))
-print("** intermediate files --> %s" %(args.store_temp))
-print('** reference genome --> %s' %(args.ref))
-print('** variant file --> %s' %(args.variant_file))
-print('** number of cpus --> %s' %(args.thread))
-print("** window used --> %s\n********************\n" %(args.window))
+# Reads-spanning-TRF analysis
+elif args.analysis_type == 'reads_spanning_trf':
+    print("** bam file(s) --> %s" %(args.bam_dir))
+    print("** output folder --> %s" %(args.out_dir))
+    print("** bed file --> %s" %(args.bed_dir))
+    print("** intermediate files --> %s" %(args.store_temp))
+    print('** reference genome --> %s' %(args.ref))
+    print('** number of cpus --> %s' %(args.thread))
+    print("** window used --> %s" %(args.window))
+    print('** polishing --> %s' %(args.polish))
+    print("** phasing using SNPs in --> %s" %(args.snp_dir))
+    print("** mapping IDs between long-read and SNPs using --> %s" %(args.snp_data_ids))
+    print("** median absolute deviation --> %s" %(args.thr_mad))
+# Assembly-TRF analysis
+elif args.analysis_type == 'assembly_trf':
+    print("** bam file(s) --> %s" %(args.bam_dir))
+    print("** output folder --> %s" %(args.out_dir))
+    print("** bed file --> %s" %(args.bed_dir))
+    print("** intermediate files --> %s" %(args.store_temp))
+    print('** reference genome --> %s' %(args.ref))
+    print('** number of cpus --> %s' %(args.thread))
+    print("** window used --> %s" %(args.window))
+    print('** polishing --> %s' %(args.polish))
+    print("** assembly type --> %s" %(args.ass_type))
+    print("** assembly ploidy --> %s" %(args.ass_ploidy))
+    print("** number of cpus for assembly/alignment --> %s" %(args.thread_asm_aln))
+    print("** median absolute deviation --> %s" %(args.thr_mad))
+# Measure analysis
+elif args.analysis_type == 'measure':
+    print("** bam file(s) --> %s" %(args.bam_dir))
+    print("** output folder --> %s" %(args.out_dir))
+    print("** bed file --> %s" %(args.bed_dir))
+    print("** intermediate files --> %s" %(args.store_temp))
+    print('** reference genome --> %s' %(args.ref))
+    print('** number of cpus --> %s' %(args.thread))
+    print("** window used --> %s" %(args.window))
+# Extract SNPs analysis
+elif args.analysis_type in ['extract_snps', 'extract_annotate']:
+    print("** bam file(s) --> %s" %(args.bam_dir))
+    print("** output folder --> %s" %(args.out_dir))
+    print('** variant file --> %s' %(args.variant_file))
+# Annotate SNPs analysis
+elif args.analysis_type == 'annotate_snps':
+    print('** variant file --> %s' %(args.variant_file))
+# SNP calling analysis
+elif args.analysis_type == 'genotype_snps_pacbio':
+    print("** bam file(s) --> %s" %(args.bam_dir))
+    print('** variant file --> %s' %(args.variant_file))
+# Put some space before actual analysis
+print('********************\n\n')
 
-# Store arguments
+## Store arguments
 bed_file, anal_type, var_file, bam_directory, output_directory, store_temporary = args.bed_dir, args.analysis_type, args.variant_file, args.bam_dir, args.out_dir, args.store_temp
 window_size, assembly_type, assembly_ploidy, number_threads, polishing, snp_dir = args.window, args.ass_type, args.ass_ploidy, args.thread, args.polish, args.snp_dir
 snp_data_ids, step, target_reads, fasta_dir, trf_file, phase_file = args.snp_data_ids, args.step, args.target_reads, args.fasta_dir, args.trf_file, args.phase_file
 asm_file, ref_fasta, thr_mad, number_threads_asm_aln = args.asm_file, args.ref, args.thr_mad, args.thread_asm_aln
 
-# Store arguments (for debugging only)
+## Store arguments (for debugging only)
 #bed_file, anal_type, var_file, bam_directory, output_directory, store_temporary, window_size, assembly_type, assembly_ploidy, number_threads, polishing, snp_dir, snp_data_ids, step, target_reads = '/project/holstegelab/Share/nicco/workspaces/20211013_target_approach/automatic_pipeline/DMPK/dmpk.bed', '', '', '/project/holstegelab/Share/nicco/workspaces/20211013_target_approach/automatic_pipeline/DMPK/extract_reads/case/DNA15-20132_2.haplotagged_step1_hifi.bam', '/project/holstegelab/Share/nicco/workspaces/20211013_target_approach/automatic_pipeline/DMPK/phase_reads/case', 'True', 100000, '', 2, 4, 'True', '/project/holstegelab/Share/pacbio/radbound_rfc1_cases/DNA15-20132-DMPK/Analyzed/GRCh38_20220408/SNVCalling_20220411_deepvariant//DNA15-20132_2.phased.pvar', '/project/holstegelab/Share/nicco/workspaces/20211013_target_approach/automatic_pipeline/DMPK/phase_reads/case/map.txt', 500, '/project/holstegelab/Share/nicco/workspaces/20211013_target_approach/automatic_pipeline/RFC1/subreads/c7_all_reads.txt'
 
 ## Check whether output directory exists otherwise create it
