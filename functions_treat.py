@@ -985,6 +985,7 @@ def findSNPs_gwas(SNPs_data_directory, bed, window):
             pass
         else:
             line = inpf[i].rstrip().split()
+            print(line)
             chrom_snp, pos, snpid, ref, alt = line[0:5]
             if 'chr' + chrom_snp in chroms_interest:
                 for interval in bed['chr' + chrom_snp]:
