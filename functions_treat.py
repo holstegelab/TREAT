@@ -707,7 +707,7 @@ def localAssembly_MP(group_name, strategy, out_dir, ploidy, thread):
     inp_fasta = ' '.join(strategy[group_name])
     outname = '%s/%s__Assembly' %(out_dir, group_name)
     cmd_assembly = 'hifiasm -o %s -t %s --n-hap %s -n 2 -r 3 -N 200 %s >/dev/null 2>&1' %(outname, thread, ploidy, inp_fasta)
-    print('**** assembly done with hifiasm using %s threads. Command line is: %s\n' %(cmd_assembly))    
+    print('**** assembly done with hifiasm using %s threads. Command line is: %s\n' %(thread, cmd_assembly))    
     #cmd_assembly = 'hifiasm -o %s -t %s --n-hap %s -n 2 -r 3 -N 200 %s' %(outname, thread, ploidy, inp_fasta)
     try:
         os.system(cmd_assembly)
