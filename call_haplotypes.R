@@ -744,11 +744,7 @@
         print(paste0('** processing sample --> ', s))
         for (r in all_regions){
             # get data of the sample and the region of interest -- depending on type (reads_spanning or asm)
-            if (type == 'reads_spanning'){
-                tmp_data = reads_span[which(reads_span$SAMPLE_NAME == s & reads_span$REGION == r),]
-            } else {
-                tmp_data = asm[which(asm$SAMPLE_NAME == s & asm$REGION == r),]
-            }
+            tmp_data = reads_span[which(reads_span$SAMPLE_NAME == s & reads_span$REGION == r),]
             if (nrow(tmp_data) >0){
                 reads_df = tmp_data[, c('COPIES_TRF', 'HAPLOTYPE', 'UNIFORM_MOTIF', 'REGION', 'PASSES', 'READ_QUALITY', 'LENGTH_SEQUENCE', 'READ_NAME', 'START_TRF', 'END_TRF', 'TRF_PERC_MATCH', 'TRF_PERC_INDEL')]
                 if (type == 'reads_spanning'){

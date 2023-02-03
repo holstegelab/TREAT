@@ -266,7 +266,9 @@ elif anal_type == 'assembly':
     # otherwise (if there are multiple samples to process), if the user requested a specif number of cpu use that, otherwise use 4 cpus for assembly and alignment
     else:
         if number_threads_asm_aln == 'default':
-            threads_per_asm_aln = 4; parallel_assemblies = int(number_threads / threads_per_asm_aln); all_samples = list(strategy.keys())
+            threads_per_asm_aln = 4; parallel_assemblies = int(number_threads / threads_per_asm_aln); parallel_alignment = parallel_assemblies
+            threads_per_asm_aln = 4 if parallel_assemblies >1 else number_threads
+            all_samples = list(strategy.keys())
         else:
             threads_per_asm_aln = int(number_threads_asm_aln); parallel_assemblies = int(number_threads / threads_per_asm_aln); all_samples = list(strategy.keys())
         if parallel_assemblies == 0:
