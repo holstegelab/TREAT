@@ -811,7 +811,8 @@ elif anal_type == 'assembly_trf':
         else:
             threads_per_asm_aln = int(number_threads_asm_aln); parallel_assemblies = int(number_threads / threads_per_asm_aln); all_samples = list(strategy.keys())
         if parallel_assemblies == 0:
-            parallel_assemblies = 1; parallel_alignment = 1    pool = multiprocessing.Pool(processes=parallel_assemblies)
+            parallel_assemblies = 1; parallel_alignment = 1 
+    pool = multiprocessing.Pool(processes=parallel_assemblies)
     assembly_fun = partial(localAssembly_MP, strategy = strategy, out_dir = '%s/assembly' %(output_directory), ploidy = assembly_ploidy, thread = threads_per_asm_aln)
     assembly_results = pool.map(assembly_fun, all_samples)
     print('**** done with assembly                                     ')
