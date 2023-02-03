@@ -116,9 +116,11 @@ if (args.analysis_type in ['phase_reads'] and args.snp_dir == 'False'):
 
 ## Print arguments
 # Introduction message
-print("\n** Tandem REpeat Annotation Toolkit (Treat) **")
-print('******* put together by Niccolo Tesi *******')
-print("********************\n** Your settings in use:")
+print("**********************************************")
+print("** Tandem REpeat Annotation Toolkit (Treat) **")
+print('******** put together by Niccolo Tesi ********')
+print("**********************************************\n")
+print("Your settings in use:")
 # Main arguments depending on the analysis type
 print("** analysis type --> %s" %(args.analysis_type))
 # Haplotyping analysis
@@ -192,7 +194,7 @@ elif args.analysis_type == 'coverage_profile':
     print('** number of cpus --> %s' %(args.thread))
     print("** step for coverage --> %s" %(args.step))
 # Extract reads analysis
-elif args.analysis_type == 'extract_raw_reads':
+elif args.analysis_type == 'extract_reads':
     print("** bam file(s) --> %s" %(args.bam_dir))
     print("** output folder --> %s" %(args.out_dir))
     print("** bed file --> %s" %(args.bed_dir))
@@ -514,16 +516,6 @@ elif anal_type == 'coverage_profile':
         for x in coverage_info[s]:
             outname.write('%s\t%s\t%s\t%s\t%s\t%s\n' %(x[0], x[1], x[2], x[3], x[4], x[5]))
     outname.close()
-elif anal_type == 'extract_raw_reads':
-    print("** checking bam files")
-    all_bams = checkBAM(bam_directory)
-    print('** reading target reads')
-    target = open(target_reads, 'r').readlines()
-    print('** finding target reads in bam')
-    print('** alright, have a sit and get some coffee, cause this may take a while')
-    target_bam = findTargetReads(target, all_bams, output_directory)
-    print('** reads found, now aligning')
-    alignment = alignRawReads(target_bam, output_directory)
 elif anal_type == 'complete':
     # 1. read bed regions
     print("**** reading bed file")
