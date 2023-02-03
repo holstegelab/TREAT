@@ -133,7 +133,7 @@ elif args.analysis_type == 'realign':
     print('** reference genome --> %s' %(args.ref))
     print("** output folder is the same as input fasta file(s)")
 # Tandem repeat finder analysis
-elif args.analysis_type == 'trf'
+elif args.analysis_type == 'trf':
     print("** bam file(s) --> %s" %(args.bam_dir))
     print("** output folder --> %s" %(args.out_dir))
     print("** bed file --> %s" %(args.bed_dir))
