@@ -33,7 +33,7 @@ parser = argparse.ArgumentParser(description = 'Find information about a specifi
 
 ## Main arguments
 # analysis type
-parser.add_argument('--analysis-type', dest = 'analysis_type', type = str, help = 'Type of analysis to perform [reads_spanning_trf / assembly_trf / measure / trf / assembly / extract_snps / annotate_snps / extract_annotate / genotype_snps_pacbio / phase_reads / coverage_profile / extract_raw_reads / realign / complete / haplotyping]. See docs for further information.', required = True)
+parser.add_argument('--analysis-type', dest = 'analysis_type', type = str, help = 'Type of analysis to perform [reads_spanning_trf / assembly_trf / measure / trf / assembly / extract_snps (beta) / annotate_snps (beta) / extract_annotate (beta) / genotype_snps_pacbio (beta) / phase_reads / coverage_profile (beta) / extract_raw_reads (beta) / realign (beta) / complete / haplotyping]. See docs for further information.', required = True)
 # bed file
 parser.add_argument('--bed', dest = 'bed_dir', type = str, help = '.bed file containing the region(s) to look. Header is not required but if present, it must starts with #.', required = False, default = 'None')
 # bam file
@@ -267,7 +267,7 @@ print(checkOutDir(output_directory, anal_type))
 ## Add log file with run information in the output folder
 print(addLogRun(bed_file, anal_type, var_file, bam_directory, output_directory, store_temporary, window_size, assembly_type, assembly_ploidy, number_threads, polishing, snp_dir, snp_data_ids, step, target_reads, ref_fasta, fasta_dir, trf_file, phase_file, asm_file))
 
-## Extract reads mapping to the location of interest
+## Different analyses mode
 if anal_type == 'extract_reads':
     # 1. read bed regions
     print("**** reading bed file")
@@ -857,7 +857,9 @@ elif anal_type == 'assembly_trf':
     file_path = '/'.join(file_path.split('/')[:-1])
     os.system("Rscript %s/call_haplotypes.R --asm %s/trf_assembly/measures_spanning_reads_and_trf.txt --out %s/haplotyping --cpu %s" %(file_path, output_directory, output_directory, number_threads))
 
-# Check whether to keep or delete temporary files
+## Check whether to keep or delete temporary files
 if (store_temporary == 'False' and anal_type not in ['haplotyping', 'extract_reads', 'coverage_profile', 'complete']):
     print(cleanTemp(output_directory, anal_type))
+
+## Final message 
 print('\n** run complete! all results are correctly stored. \ngoing to sleep now \nciao!')

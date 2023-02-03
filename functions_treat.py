@@ -761,12 +761,14 @@ def alignAssembly_MP(asm, outname_list, thread, reference):
     # haplotype-aware fastas
     asm_name = asm + '_haps.fasta'
     outname = asm + outname_prefix
-    cmd = "pbmm2 align --preset CCS %s -j %s --log-level FATAL --sort %s %s" %(ref_hifi, thread, asm_name, outname)       # command for alignment
+    #cmd = "pbmm2 align --preset CCS %s -j %s --log-level FATAL --sort %s %s" %(ref_hifi, thread, asm_name, outname)       # command for alignment
+    cmd = "minimap2 -ax asm10 %s -t %s %s | samtools sort - -@ %s -O bam -o %s" %(ref_hifi, thread, asm_name, thread, outname)       # command for alignment
     os.system(cmd)
     # primary contigs as well
     asm_name = asm + '_p_ctg.fasta'
     outname_primary = asm + outname_primary_prefix
-    cmd = "pbmm2 align --preset CCS %s -j %s --log-level FATAL --sort %s %s" %(ref_hifi, thread, asm_name, outname_primary)       # command for alignment
+    #cmd = "pbmm2 align --preset CCS %s -j %s --log-level FATAL --sort %s %s" %(ref_hifi, thread, asm_name, outname_primary)       # command for alignment
+    cmd = "minimap2 -ax asm10 %s -t %s %s | samtools sort - -@ %s -O bam -o %s" %(ref_hifi, thread, asm_name, thread, outname_primary)       # command for alignment
     os.system(cmd)
     print('**** done alignment for %s                                            ' %(asm.split('/')[-1]), end = '\r')
     return(outname)
