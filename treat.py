@@ -93,7 +93,7 @@ args = parser.parse_args()
 if (args.analysis_type != 'realign') and (args.out_dir == 'None'):
     parser.error('!! You should provide the desired output directory if analysis_type is --> %s' %(args.analysis_type))
 # Throw error when bam_dir is not specified for a wide range of analyses (except those specified in the list below)
-if (args.analysis_type not in ['haplotyping', 'annotate_snps', 'realign_assembly', 'extract_snps', 'extract_annotate', 'extract_raw_reads', 'realign']) and (args.bam_dir == 'None'):
+if (args.analysis_type not in ['haplotyping', 'annotate_snps', 'realign_assembly', 'extract_snps', 'extract_annotate', 'realign']) and (args.bam_dir == 'None'):
     parser.error('!! You should provide at least a .bam file if analysis_type is --> %s' %(args.analysis_type))
 # Throw error when bed_dir is not specified for a wide range of analyses (except those specified in the list below)
 elif (args.analysis_type not in ['haplotyping', 'genotype_snps_pacbio', 'annotate_snps', 'extract_raw_reads', 'realign']) and (args.bed_dir == 'None'):
@@ -116,7 +116,7 @@ if (args.analysis_type in ['phase_reads'] and args.snp_dir == 'False'):
 
 ## Print arguments
 # Introduction message
-print("**********************************************")
+print("\n**********************************************")
 print("** Tandem REpeat Annotation Toolkit (Treat) **")
 print('******** put together by Niccolo Tesi ********')
 print("**********************************************\n")
@@ -142,7 +142,7 @@ elif args.analysis_type == 'trf':
     print("** intermediate files --> %s" %(args.store_temp))
     print('** reference genome --> %s' %(args.ref))
     print('** number of cpus --> %s' %(args.thread))
-    print("** window used --> %s\n********************\n" %(args.window))
+    print("** window used --> %s" %(args.window))
     print('** polishing --> %s' %(args.polish))
 # Assembly analysis
 elif args.analysis_type == 'assembly':
@@ -152,7 +152,7 @@ elif args.analysis_type == 'assembly':
     print("** intermediate files --> %s" %(args.store_temp))
     print('** reference genome --> %s' %(args.ref))
     print('** number of cpus --> %s' %(args.thread))
-    print("** window used --> %s\n********************\n" %(args.window))
+    print("** window used --> %s" %(args.window))
     print("** assembly type --> %s" %(args.ass_type))
     print("** assembly ploidy --> %s" %(args.ass_ploidy))
     print("** number of cpus for assembly/alignment --> %s" %(args.thread_asm_aln))
@@ -164,7 +164,7 @@ elif args.analysis_type == 'phase_reads':
     print("** intermediate files --> %s" %(args.store_temp))
     print('** reference genome --> %s' %(args.ref))
     print('** number of cpus --> %s' %(args.thread))
-    print("** window used --> %s\n********************\n" %(args.window))
+    print("** window used --> %s" %(args.window))
     print("** phasing using SNPs in --> %s" %(args.snp_dir))
     print("** mapping IDs between long-read and SNPs using --> %s" %(args.snp_data_ids))
 # Complete analysis
@@ -249,7 +249,7 @@ elif args.analysis_type == 'genotype_snps_pacbio':
     print("** bam file(s) --> %s" %(args.bam_dir))
     print('** variant file --> %s' %(args.variant_file))
 # Put some space before actual analysis
-print('********************\n\n')
+print('********************\n')
 
 ## Store arguments
 bed_file, anal_type, var_file, bam_directory, output_directory, store_temporary = args.bed_dir, args.analysis_type, args.variant_file, args.bam_dir, args.out_dir, args.store_temp
