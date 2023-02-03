@@ -985,7 +985,6 @@ def findSNPs_gwas(SNPs_data_directory, bed, window):
             pass
         else:
             line = inpf[i].rstrip().split()
-            print(line)
             chrom_snp, pos, snpid, ref, alt = line[0:5]
             if 'chr' + chrom_snp in chroms_interest:
                 for interval in bed['chr' + chrom_snp]:
@@ -1072,6 +1071,8 @@ def phase_reads_MP(f, reads_bam, snps_to_keep, output_directory, SNPs_data_direc
     map_ids = pd.read_csv(snp_data_ids, sep = " |\t", engine = 'python') if snp_data_ids != 'False' else False
     phasing_info = {}
     fname = f.split('/')[-1].replace('__rawReads.bam', '.bam')
+    print(fname)
+    print(map_ids)
     id_gwas = list(map_ids['ID_GWAS'][map_ids['ID_PACBIO'] == fname]) if isinstance(map_ids, pd.DataFrame) == True else [f.split('/')[-1].split('_')[0]]          # find gwas id for the corresponding sample
     # throw error in case no match is found here
     if id_gwas == []:
