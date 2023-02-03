@@ -596,10 +596,21 @@ elif anal_type == 'complete':
     print('** 5. assembly')
     os.system('mkdir %s/assembly' %(output_directory))
     strategy = AsmStrategy(assembly_type, reads_fasta, '%s/assembly' %(output_directory))
-    # decide how many assembly in parallel to run (keep 2 cores per assembly, then depends on the total number of cores available)
-    threads_per_asm = 4; parallel_assemblies = int(number_threads / threads_per_asm); all_samples = list(strategy.keys())
+    # decide how many assembly in parallel to run: if there's only 1 genome to do, give all the cpus that were submitted (also true for alignment)
+    if len(reads_fasta) == 1:
+        threads_per_asm_aln = number_threads; parallel_assemblies = 1; parallel_alignment = 1; all_samples = list(strategy.keys())
+    # otherwise (if there are multiple samples to process), if the user requested a specif number of cpu use that, otherwise use 4 cpus for assembly and alignment
+    else:
+        if number_threads_asm_aln == 'default':
+            threads_per_asm_aln = 4; parallel_assemblies = int(number_threads / threads_per_asm_aln); parallel_alignment = parallel_assemblies
+            threads_per_asm_aln = 4 if parallel_assemblies >1 else number_threads
+            all_samples = list(strategy.keys())
+        else:
+            threads_per_asm_aln = int(number_threads_asm_aln); parallel_assemblies = int(number_threads / threads_per_asm_aln); all_samples = list(strategy.keys())
+        if parallel_assemblies == 0:
+            parallel_assemblies = 1; parallel_alignment = 1
     pool = multiprocessing.Pool(processes=parallel_assemblies)
-    assembly_fun = partial(localAssembly_MP, strategy = strategy, out_dir = '%s/assembly' %(output_directory), ploidy = assembly_ploidy, thread = threads_per_asm)
+    assembly_fun = partial(localAssembly_MP, strategy = strategy, out_dir = '%s/assembly' %(output_directory), ploidy = assembly_ploidy, thread = threads_per_asm_aln)
     assembly_results = pool.map(assembly_fun, all_samples)
     print('**** done with assembly                                     ')
 
@@ -609,9 +620,8 @@ elif anal_type == 'complete':
 
     # 13. alignment
     print('** 7. align contigs')
-    threads_per_aln = 4; parallel_alignment = int(number_threads / threads_per_aln)
     pool = multiprocessing.Pool(processes=parallel_alignment)
-    align_fun = partial(alignAssembly_MP, outname_list = assembly_results, thread = threads_per_aln, reference = ref_fasta)
+    align_fun = partial(alignAssembly_MP, outname_list = assembly_results, thread = threads_per_asm_aln, reference = ref_fasta)
     align_results = pool.map(align_fun, assembly_results)
     print('**** done with contig alignment                                     ')
 
@@ -789,10 +799,20 @@ elif anal_type == 'assembly_trf':
     print('** 5. assembly')
     os.system('mkdir %s/assembly' %(output_directory))
     strategy = AsmStrategy(assembly_type, reads_fasta, '%s/assembly' %(output_directory))
-    # decide how many assembly in parallel to run (keep 2 cores per assembly, then depends on the total number of cores available)
-    threads_per_asm = 4; parallel_assemblies = int(number_threads / threads_per_asm); all_samples = list(strategy.keys())
-    pool = multiprocessing.Pool(processes=parallel_assemblies)
-    assembly_fun = partial(localAssembly_MP, strategy = strategy, out_dir = '%s/assembly' %(output_directory), ploidy = assembly_ploidy, thread = threads_per_asm)
+    # decide how many assembly in parallel to run: if there's only 1 genome to do, give all the cpus that were submitted (also true for alignment)
+    if len(reads_fasta) == 1:
+        threads_per_asm_aln = number_threads; parallel_assemblies = 1; parallel_alignment = 1; all_samples = list(strategy.keys())
+    # otherwise (if there are multiple samples to process), if the user requested a specif number of cpu use that, otherwise use 4 cpus for assembly and alignment
+    else:
+        if number_threads_asm_aln == 'default':
+            threads_per_asm_aln = 4; parallel_assemblies = int(number_threads / threads_per_asm_aln); parallel_alignment = parallel_assemblies
+            threads_per_asm_aln = 4 if parallel_assemblies >1 else number_threads
+            all_samples = list(strategy.keys())
+        else:
+            threads_per_asm_aln = int(number_threads_asm_aln); parallel_assemblies = int(number_threads / threads_per_asm_aln); all_samples = list(strategy.keys())
+        if parallel_assemblies == 0:
+            parallel_assemblies = 1; parallel_alignment = 1    pool = multiprocessing.Pool(processes=parallel_assemblies)
+    assembly_fun = partial(localAssembly_MP, strategy = strategy, out_dir = '%s/assembly' %(output_directory), ploidy = assembly_ploidy, thread = threads_per_asm_aln)
     assembly_results = pool.map(assembly_fun, all_samples)
     print('**** done with assembly                                     ')
 
@@ -804,14 +824,14 @@ elif anal_type == 'assembly_trf':
     print('** 7. align contigs')
     threads_per_aln = 4; parallel_alignment = int(number_threads / threads_per_aln)
     pool = multiprocessing.Pool(processes=parallel_alignment)
-    align_fun = partial(alignAssembly_MP, outname_list = assembly_results, thread = threads_per_aln, reference = ref_fasta)
+    align_fun = partial(alignAssembly_MP, outname_list = assembly_results, thread = threads_per_asm_aln, reference = ref_fasta)
     align_results = pool.map(align_fun, assembly_results)
     print('**** done with contig alignment                                     ')
 
     # 9. measure distance on contigs
     print('** 8. calculate size of the regions of interest in contigs')
     # list all files that should be processed
-    haps_to_process = ['%s_haps_hg38.bam' %(x) for x in assembly_results]; prim_to_process = ['%s_p_ctg_hg38.bam' %(x) for x in assembly_results]; files_to_process = haps_to_process + prim_to_process
+    haps_to_process = ['%s_haps_aln.bam' %(x) for x in assembly_results]; prim_to_process = ['%s_p_ctg_aln.bam' %(x) for x in assembly_results]; files_to_process = haps_to_process + prim_to_process
     pool = multiprocessing.Pool(processes=number_threads)
     measure_fun = partial(measureDistance_MP, bed = bed_regions, window = 1)
     extract_results = pool.map(measure_fun, files_to_process)
