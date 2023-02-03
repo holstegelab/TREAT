@@ -679,7 +679,185 @@ elif anal_type == 'haplotyping':
     #    os.system("Rscript %s/call_haplotypes.R --reads_spanning %s --asm %s --out %s" %(file_path, trf_file, asm_file, output_directory))
     #else:
     #    os.system("Rscript %s/call_haplotypes.R --reads_spanning %s --phase %s --asm %s --out %s" %(file_path, trf_file, phase_file, asm_file, output_directory))
+elif anal_type == 'reads_spanning_trf':
+    # 1. read bed regions
+    print("**** reading bed file")
+    bed_regions = readBed(bed_file)
 
+    # 2. check bam files
+    print("** checking bam files")
+    all_bam_files = checkBAM(bam_directory)
+    
+    # 3. read motif
+    motif = readMotif(bed_file)
+    
+    # 4. extract reads mapping to regions of interest in bed -- multiprocessing
+    print("\n** 1. extracting reads")
+    os.system('mkdir %s/raw_reads' %(output_directory))
+    pool = multiprocessing.Pool(processes=number_threads)
+    extract_fun = partial(extractReads_MP, bed = bed_regions, out_dir = '%s/raw_reads' %(output_directory), window = window_size, all_bams = all_bam_files)
+    extract_results = pool.map(extract_fun, all_bam_files); print('**** read extraction done!                                         ')
+    
+    # 5. combine results together
+    reads_bam = [x[0] for x in extract_results]; reads_fasta = [x[1] for x in extract_results]
+    
+    # 6. calculate size of the regions of interest -- multiprocessing
+    print('** 2. calculate size of the regions of interest')
+    pool = multiprocessing.Pool(processes=number_threads)
+    measure_fun = partial(measureDistance_MP, bed = bed_regions, window = 1)
+    extract_results = pool.map(measure_fun, reads_bam)
+    print('**** done measuring reference                                     ', end = '\r')
+    dist_reference = measureDistance_reference(bed_regions, 1, ref_fasta); print('**** read measurement done!                                         ')
+    extract_results.append(dist_reference)
+    # combine results
+    distances = {k:v for element in extract_results for k,v in element.items()}
+    
+    # 7. TRF on single-reads
+    print('** 3. tandem repeat finder on the single-reads')
+    all_bams = list(distances.keys()); trf_out_dir = '%s/trf_reads' %(output_directory); os.system('mkdir %s' %(trf_out_dir));
+    pool = multiprocessing.Pool(processes=number_threads)
+    trf_fun = partial(trf_MP, out_dir = trf_out_dir, motif = motif, polished = 'False', distances = distances)
+    trf_results = pool.map(trf_fun, all_bams)
+    # combine df from different samples together
+    df_trf = pd.concat(trf_results)
+    print('**** done running TRF                                     ')
+
+    # 8. combine these results and make output
+    outf = output_directory + '/trf_reads/measures_spanning_reads_and_trf.txt'
+    df_trf.to_csv(outf, sep = "\t", index=False)
+
+    # 9. phasing and haplotagging -- multiprocessing
+    if snp_dir == 'False':
+        print('** 4. phasing and haplotagging NOT selected (not specified any SNP data)')
+    else:
+        print('** 4. phasing and haplotagging')
+        os.system('mkdir %s/phasing' %(output_directory))
+        print('**** finding SNPs for phasing')
+        snps_for_phasing, snps_to_keep, SNPs_data_path = findSNPs_gwas(snp_dir, bed_regions, window_size)
+        print('**** start phasing                                  ', end = '\r')
+        pool = multiprocessing.Pool(processes=number_threads)
+        phasing_fun = partial(phase_reads_MP, reads_bam = reads_bam, snps_to_keep = snps_to_keep, output_directory = '%s/phasing' %(output_directory), SNPs_data_directory = SNPs_data_path, snp_data_ids = snp_data_ids)
+        phasing_results = pool.map(phasing_fun, reads_bam)
+        print('**** done with phasing                                     ')
+
+    # 10. combine results and output files if phasing was selected
+    if snp_dir != 'False':
+        phasing_info = {k:v for element in phasing_results for k,v in element.items()}
+        fout = open('%s/phasing/haplotags_reads.txt' %(output_directory), 'w')
+        header = 'SAMPLE\tREAD_ID\tHAPLOTYPE\n'
+        fout.write(header)
+        for sample in phasing_info.keys():
+            for read in phasing_info[sample]:
+                if read == 'NA':
+                    to_write = '%s\t%s\t%s\n' %(sample, 'NA', 'NA')
+                else:
+                    to_write = '%s\t%s\t%s\n' %(sample, read, phasing_info[sample][read])
+                fout.write(to_write)
+        fout.close()
+
+    # 11. haplotyping
+    print("** 11. haplotype calling on reads-spanning and eventually phasing")
+    file_path = os.path.realpath(__file__)
+    file_path = '/'.join(file_path.split('/')[:-1])
+    if snp_dir == 'False':
+        os.system("Rscript %s/call_haplotypes.R --reads_spanning %s/trf_reads/measures_spanning_reads_and_trf.txt --out %s/haplotyping --cpu %s" %(file_path, output_directory, output_directory, output_directory, number_threads))
+    else:
+        os.system("Rscript %s/call_haplotypes.R --reads_spanning %s/trf_reads/measures_spanning_reads_and_trf.txt --phase %s/phasing/haplotags_reads.txt --out %s/haplotyping --cpu %s" %(file_path, output_directory, output_directory, output_directory, number_threads))
+elif anal_type == 'assembly_trf':
+    # 1. read bed regions
+    print("**** reading bed file")
+    bed_regions = readBed(bed_file)
+
+    # 2. check bam files
+    print("** checking bam files")
+    all_bam_files = checkBAM(bam_directory)
+    
+    # 3. read motif
+    motif = readMotif(bed_file)
+    
+    # 4. extract reads mapping to regions of interest in bed -- multiprocessing
+    print("\n** 1. extracting reads")
+    os.system('mkdir %s/raw_reads' %(output_directory))
+    pool = multiprocessing.Pool(processes=number_threads)
+    extract_fun = partial(extractReads_MP, bed = bed_regions, out_dir = '%s/raw_reads' %(output_directory), window = window_size, all_bams = all_bam_files)
+    extract_results = pool.map(extract_fun, all_bam_files); print('**** read extraction done!                                         ')
+    
+    # 5. combine results together
+    reads_bam = [x[0] for x in extract_results]; reads_fasta = [x[1] for x in extract_results]
+
+    # 6. assembly
+    print('** 5. assembly')
+    os.system('mkdir %s/assembly' %(output_directory))
+    strategy = AsmStrategy(assembly_type, reads_fasta, '%s/assembly' %(output_directory))
+    # decide how many assembly in parallel to run (keep 2 cores per assembly, then depends on the total number of cores available)
+    threads_per_asm = 4; parallel_assemblies = int(number_threads / threads_per_asm); all_samples = list(strategy.keys())
+    pool = multiprocessing.Pool(processes=parallel_assemblies)
+    assembly_fun = partial(localAssembly_MP, strategy = strategy, out_dir = '%s/assembly' %(output_directory), ploidy = assembly_ploidy, thread = threads_per_asm)
+    assembly_results = pool.map(assembly_fun, all_samples)
+    print('**** done with assembly                                     ')
+
+    # 7. clean contigs
+    print('** 6. clean assembled contigs')
+    out_dir = cleanContigs('%s/assembly' %(output_directory))
+
+    # 8. alignment
+    print('** 7. align contigs')
+    threads_per_aln = 4; parallel_alignment = int(number_threads / threads_per_aln)
+    pool = multiprocessing.Pool(processes=parallel_alignment)
+    align_fun = partial(alignAssembly_MP, outname_list = assembly_results, thread = threads_per_aln, reference = ref_fasta)
+    align_results = pool.map(align_fun, assembly_results)
+    print('**** done with contig alignment                                     ')
+
+    # 9. measure distance on contigs
+    print('** 8. calculate size of the regions of interest in contigs')
+    # list all files that should be processed
+    haps_to_process = ['%s_haps_hg38.bam' %(x) for x in assembly_results]; prim_to_process = ['%s_p_ctg_hg38.bam' %(x) for x in assembly_results]; files_to_process = haps_to_process + prim_to_process
+    pool = multiprocessing.Pool(processes=number_threads)
+    measure_fun = partial(measureDistance_MP, bed = bed_regions, window = 1)
+    extract_results = pool.map(measure_fun, files_to_process)
+    print('**** read measurement done!                                         ')
+    
+    # 10. combine results together and make output
+    distances = {k:v for element in extract_results for k,v in element.items()}; os.system('mkdir %s/trf_assembly' %(output_directory))
+
+    # 11. tandem repeat finder on assembled contigs
+    print('** 9. tandem repeat finder on contigs')
+    all_bams = list(distances.keys())
+    motif = readMotif(bed_file)
+    pool = multiprocessing.Pool(processes=number_threads)
+    trf_fun = partial(trf_MP, out_dir = '%s/trf_assembly' %(output_directory), motif = motif, polished = 'False', distances = distances)
+    trf_results = pool.map(trf_fun, all_bams)
+    df_trf = pd.concat(trf_results)
+    print('**** done running TRF on assemblies                                     ')
+
+    # 12. make output
+    outf = output_directory + '/trf_assembly/measures_spanning_reads_and_trf.txt'
+    df_trf.to_csv(outf, sep = "\t", index=False)
+
+    # 13. coverage profile
+    print("** 10. generating coverage profile")
+    os.system('mkdir %s/coverage' %(output_directory))
+    pool = multiprocessing.Pool(processes=number_threads)
+    coverage_fun = partial(generateCoverageProfile_MP, bed = bed_regions, all_bams = reads_bam, window_size = window_size, step = step, output_directory = '%s/coverage' %(output_directory))
+    coverage_results = pool.map(coverage_fun, reads_bam)
+    print('**** done with coverage profiles                                     ')
+
+    # 14. combine results and output files
+    coverage_info = {k:v for element in coverage_results for k,v in element.items()}
+    outname = open('%s/coverage/coverage_profiles.bed' %(output_directory), 'w')
+    outname.write('CHROM\tSTART_POS\tEND_POS\tSAMPLE\tCOVERAGE\tREGION_ID\n')
+    for s in coverage_info.keys():
+        for x in coverage_info[s]:
+            outname.write('%s\t%s\t%s\t%s\t%s\t%s\n' %(x[0], x[1], x[2], x[3], x[4], x[5]))
+    outname.close()
+
+    # 15. haplotyping
+    print("** 11. haplotype calling and reads-spanning vs. assembly comparison")
+    file_path = os.path.realpath(__file__)
+    file_path = '/'.join(file_path.split('/')[:-1])
+    os.system("Rscript %s/call_haplotypes.R --asm %s/trf_assembly/measures_spanning_reads_and_trf.txt --out %s/haplotyping --cpu %s" %(file_path, output_directory, output_directory, number_threads))
+
+# Check whether to keep or delete temporary files
 if (store_temporary == 'False' and anal_type not in ['haplotyping', 'extract_reads', 'coverage_profile', 'complete']):
     print(cleanTemp(output_directory, anal_type))
 print('\n** run complete! all results are correctly stored. \ngoing to sleep now \nciao!')
