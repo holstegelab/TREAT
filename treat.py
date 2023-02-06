@@ -855,15 +855,7 @@ elif anal_type == 'assembly_trf':
     outf = output_directory + '/trf_assembly/measures_spanning_reads_and_trf.txt'
     df_trf.to_csv(outf, sep = "\t", index=False)
 
-    # 13. coverage profile
-    print("** 10. generating coverage profile")
-    os.system('mkdir %s/coverage' %(output_directory))
-    pool = multiprocessing.Pool(processes=number_threads)
-    coverage_fun = partial(generateCoverageProfile_MP, bed = bed_regions, all_bams = reads_bam, window_size = window_size, step = step, output_directory = '%s/coverage' %(output_directory))
-    coverage_results = pool.map(coverage_fun, reads_bam)
-    print('**** done with coverage profiles                                     ')
-
-    # 14. combine results and output files
+    # 13. combine results and output files
     coverage_info = {k:v for element in coverage_results for k,v in element.items()}
     outname = open('%s/coverage/coverage_profiles.bed' %(output_directory), 'w')
     outname.write('CHROM\tSTART_POS\tEND_POS\tSAMPLE\tCOVERAGE\tREGION_ID\n')
@@ -872,7 +864,7 @@ elif anal_type == 'assembly_trf':
             outname.write('%s\t%s\t%s\t%s\t%s\t%s\n' %(x[0], x[1], x[2], x[3], x[4], x[5]))
     outname.close()
 
-    # 15. haplotyping
+    # 14. haplotyping
     print("** 11. haplotype calling and reads-spanning vs. assembly comparison")
     file_path = os.path.realpath(__file__)
     file_path = '/'.join(file_path.split('/')[:-1])
