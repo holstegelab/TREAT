@@ -792,7 +792,7 @@
                 # calculate coverage of this new combined sequence
                 combined_seq_coverage = length(combined_seq) / h1$polished_haplo_values
                 # check if the coverage of the combined sequence is higher than the single sequence
-                if (combined_seq_coverage[i] > max(h1$COVERAGE_TR)){
+                if (combined_seq_coverage[i] > (max(h1$COVERAGE_TR) + 0.05)){
                     # if so, this is a motif we want to use
                     motifs_to_use = c(motifs_to_use, as.character(alt_motifs$UNIFORM_MOTIF[i]))
                 }
@@ -830,7 +830,6 @@
             # for example, if there were 2 motifs found, that means that there are 2 defined TRF matches that (should) start at the same position
             h1 = h1[order(h1$START_TRF),]
             # fit k-means using the data sorted by start position of TRF, and the number of motifs is the k-value
-            # of course, if we only have 2 lines, 
             fit = kmeans(x = h1[, c('START_TRF', 'END_TRF')], centers = length(motifs_to_use), algorithm = 'Lloyd')
             specific_representation = c()
             # iterate over the clusters to determine the specific representation
@@ -869,10 +868,12 @@
             n_haplo = unique(tmp$HAPLOTYPE)
             # treat haplotypes independently from each other
             if (1 %in% tmp$HAPLOTYPE & 2 %in% tmp$HAPLOTYPE){
-                h1 = tmp[which(tmp$HAPLOTYPE == 1),]; h2 = tmp[which(tmp$HAPLOTYPE == 2),]
+                h1 = tmp[which(tmp$HAPLOTYPE == 1),]
+                h2 = tmp[which(tmp$HAPLOTYPE == 2),]
                 #h1_consensus_motif = consensusMotif_conscious(h1); h2_consensus_motif = consensusMotif_conscious(h2)
                 # calculate consensus motif using the majority rule consensus
-                h1_consensus_motif = motif_generalization(h1); h2_consensus_motif = motif_generalization(h2)
+                h1_consensus_motif = motif_generalization(h1)
+                h2_consensus_motif = motif_generalization(h2)
                 # calculate copy number estimation wrt reference genome -- uniform for associations altough not exactly correct
                 reference_motif = unique(motif_res_reference$CONSENSUS_MOTIF[which(motif_res_reference$REGION == r)])
                 h1_consensus_motif$CONSENSUS_MOTIF_REF = reference_motif; h2_consensus_motif$CONSENSUS_MOTIF_REF = reference_motif
@@ -1314,8 +1315,8 @@
     all_samples = unique(all_res$sample); all_regions = unique(all_res$REGION); motif_res = list()
     # first run on the reference genome
     motif_res_reference = generateConsens_mp(s = 'reference', all_regions, all_res = all_res_combined, motif_res_reference = NA)
-    motif_res = rbindlist(mclapply(all_samples[which(all_samples != 'reference')], generateConsens_mp, all_regions = all_regions, all_res = all_res_combined, motif_res_reference = motif_res_reference, mc.cores = n_cpu))
-    
+    motif_res = rbindlist(mclapply(all_samples[which(all_samples != 'reference')], generateConsens_mp, all_regions = all_regions, all_res = all_res_combined, motif_res_reference = motif_res_reference, mc.cores = n_cpu), use.names=TRUE)
+
     # 10. finally call haplotypes -- implemented parallel computing
     cat('****** Haplotype calling\n')
     all_samples = unique(motif_res$sample); all_regions = unique(motif_res$REGION)
