@@ -1081,8 +1081,8 @@ def phase_reads_MP(f, reads_bam, snps_to_keep, output_directory, SNPs_data_direc
     id_gwas = list(map_ids['ID_GWAS'][map_ids['ID_PACBIO'] == fname]) if isinstance(map_ids, pd.DataFrame) == True else [f.split('/')[-1].split('_')[0]]          # find gwas id for the corresponding sample
     # throw error in case no match is found here
     if id_gwas == []:
-        print('!! Error while mapping GWAS and Long-read IDs. Please ensure the sample ID are the same or provide a file as described in docs!')
-        phasing_info = []
+        print('!! Error while mapping SNPs and Sequencing IDs for sample %s. Phasing for %s skipped. Check documentation for help!' %(fname, fname))
+        phasing_info[f.split('/')[-1]] = ['NA']
     else:
         # make random number for the sample
         rand_num = str(random()).replace('.', '')
