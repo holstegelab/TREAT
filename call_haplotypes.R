@@ -1288,7 +1288,7 @@
     if (anal_type %in% c('assembly', 'reads-spanning + assembly + comparison')){
         cat(paste0('******** Processing assembly-based data\n'))
         all_samples = unique(asm$SAMPLE_NAME); all_regions = unique(asm$REGION)
-        res_asm = rbindlist(mclapply(all_samples, haplotyping_mp, all_regions = all_regions, type = 'asm', mc.cores = n_cpu), fill = T)
+        res_asm = rbindlist(mclapply(all_samples, haplotyping_mp, reads_span = asm, all_regions = all_regions, type = 'asm', thr_mad = thr_mad, mc.cores = n_cpu), fill = T)
         res_asm$DATA_TYPE = 'assembly'
     }
     # Merge all results together
