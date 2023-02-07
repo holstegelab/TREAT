@@ -742,6 +742,8 @@
     # Function to do haplotyping based on multiple processing
     haplotyping_mp = function(s, reads_span, all_regions, type, thr_mad){
         print(paste0('** processing sample --> ', s))
+        # initialize dataframe for results
+        tmp_res = data.frame()
         for (r in all_regions){
             # get data of the sample and the region of interest -- depending on type (reads_spanning or asm)
             tmp_data = reads_span[which(reads_span$SAMPLE_NAME == s & reads_span$REGION == r),]
@@ -753,11 +755,7 @@
                     phased_data = assemblyBased_size(reads_df, sample_name = s, region = r, thr_mad)
                 }
                 polished_data = polishHaplo_afterPhasing_size(phased_data, thr_mad)
-                if (r == all_regions[1]){
-                    tmp_res = polished_data
-                } else {
-                    tmp_res = rbind.fill(tmp_res, polished_data)
-                }
+                tmp_res = rbind.fill(tmp_res, polished_data)
             }
         }
         return(tmp_res)
