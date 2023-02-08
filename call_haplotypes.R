@@ -761,9 +761,51 @@
         return(tmp_res)
     }
 
+    # Function to align motifs and take only one
+    aln_motifs = function(h1){
+        # the problem is that TRF finds different motifs that represent be the same motif
+        # example: AAAAG and AAAAAGAAAAG --> AAAG(2)
+        # take all motifs
+        all_motifs = as.character(unique(h1$UNIFORM_MOTIF))
+        # do this only if there are more than 1 motif -- otherwise there's nothing to merge
+        if (length(all_motifs) >1){
+            # so we take the smaller motif
+            smaller_motif = all_motifs[order(nchar(all_motifs))][1]
+            other_motifs = all_motifs[order(nchar(all_motifs))][2:length(all_motifs)]
+            df = data.frame(motif = smaller_motif, copies = 1, tomerge = 'yes', motif_to_merge = smaller_motif)
+            # then we iterate over the other motifs
+            for (m in other_motifs){
+                # we count the occurrences of the small motif in the other motif
+                copies_smaller_motif = str_count(m, smaller_motif)
+                # also check reverse complement
+                copies_smaller_motif_reverse = str_count(m, toupper(reverseComplement(x = smaller_motif)))
+                copies_smaller_motif = max(copies_smaller_motif, copies_smaller_motif_reverse)
+                # then generate the corresponding sequence of the small motif repetead as many times as it was found in the longer motif
+                smaller_motif_seq = paste(rep(smaller_motif, copies_smaller_motif), collapse = '')
+                # now we need to check how similar the motifs are -- allow 10% deviation max
+                deviation = 1 - (nchar(smaller_motif_seq) / nchar(m))
+                tomerge = ifelse(deviation < 0.10, 'yes', 'no')
+                # create a dataframe
+                df = rbind(df, data.frame(motif = m, copies = copies_smaller_motif, tomerge = tomerge, motif_to_merge = smaller_motif))
+            }
+            # finally we need to change the motifs to be merged in the data
+            for (i in 1:nrow(df)){
+                if (df$copies[i] != 1){
+                    # update motif and copy number if it needs to be updated
+                    if (df$tomerge[i] == 'yes'){
+                        h1 = h1[which(h1$UNIFORM_MOTIF != df$motif[i])]
+                    }
+                }
+            }
+        }
+        return(h1)
+    }
+
     # Function to generate consensus motif using the majority rule consensus
     motif_generalization = function(h1){
         # idea is to calculate a consensus motif, then iterate on the reads and generate the consensus representation
+        # the first step is to recognized whether different motifs are actually a repetition of a smaller motif
+        h1 = aln_motifs(h1)
         # to generate the consensus motif, list all possible motifs
         all_motifs = as.character(unique(h1$UNIFORM_MOTIF))
         motifs_to_use = c()
@@ -773,6 +815,8 @@
         # before going to the consensus motif generation, we should identify the scenario we are in
         # to do that, first, calculate the fraction of sequence covered by each read
         h1$COVERAGE_TR = (h1$END_TRF - h1$START_TRF + 1) / h1$LENGTH_SEQUENCE
+        # sort results by the highest coverage value
+        h1 = h1[order(-h1$COVERAGE_TR),]
         # next, take the motif that covers the most of the TR
         best_motif = as.character(h1$UNIFORM_MOTIF[order(-h1$COVERAGE_TR)][1])
         motifs_to_use = best_motif
@@ -790,7 +834,7 @@
                 # calculate coverage of this new combined sequence
                 combined_seq_coverage = length(combined_seq) / max(h1$LENGTH_SEQUENCE[1], alt_motifs$LENGTH_SEQUENCE[i])
                 # check if the coverage of the combined sequence is higher than the single sequence
-                if (combined_seq_coverage[i] > (max(h1$COVERAGE_TR) + 0.05)){
+                if (combined_seq_coverage > (max(h1$COVERAGE_TR) + 0.10)){
                     # if so, this is a motif we want to use
                     motifs_to_use = c(motifs_to_use, as.character(alt_motifs$UNIFORM_MOTIF[i]))
                 }
