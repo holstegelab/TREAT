@@ -1358,6 +1358,7 @@
     # first run on the reference genome
     motif_res_reference = generateConsens_mp(s = 'reference', all_regions, all_res = all_res_combined, motif_res_reference = NA)
     motif_res = rbindlist(mclapply(all_samples[which(all_samples != 'reference')], generateConsens_mp, all_regions = all_regions, all_res = all_res_combined, motif_res_reference = motif_res_reference, mc.cores = n_cpu), use.names=TRUE)
+    motif_res = rbind(motif_res, motif_res_reference)
 
     # 10. finally call haplotypes -- implemented parallel computing
     cat('****** Haplotype calling\n')
