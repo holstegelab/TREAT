@@ -762,7 +762,7 @@ def alignAssembly_MP(asm, outname_list, thread, reference):
     asm_name = asm + '_haps.fasta'
     outname = asm + outname_prefix
     #cmd = "pbmm2 align --preset CCS %s -j %s --log-level FATAL --sort %s %s" %(ref_hifi, thread, asm_name, outname)       # command for alignment
-    cmd = "minimap2 -ax asm10 %s -t %s %s | samtools sort - -@ %s -O bam -o %s" %(ref_hifi, thread, asm_name, thread, outname)       # command for alignment
+    cmd = "minimap2 -ax -Y asm10 %s -t %s %s | samtools sort - -@ %s -O bam -o %s" %(ref_hifi, thread, asm_name, thread, outname)       # command for alignment
     os.system(cmd)
     # then index
     cmd = 'samtools index %s' %(outname)
