@@ -772,7 +772,7 @@
         # 2. different trf matches cover the same sequence --> motifs are variable and we should report 1 motif only
         # before going to the consensus motif generation, we should identify the scenario we are in
         # to do that, first, calculate the fraction of sequence covered by each read
-        h1$COVERAGE_TR = (h1$END_TRF - h1$START_TRF + 1) / h1$polished_haplo_values
+        h1$COVERAGE_TR = (h1$END_TRF - h1$START_TRF + 1) / h1$LENGTH_SEQUENCE
         # next, take the motif that covers the most of the TR
         best_motif = as.character(h1$UNIFORM_MOTIF[order(-h1$COVERAGE_TR)][1])
         motifs_to_use = best_motif
@@ -788,7 +788,7 @@
                 combined_seq = c(best_motif_seq, alt_motif_seq)
                 combined_seq = combined_seq[!duplicated(combined_seq)]
                 # calculate coverage of this new combined sequence
-                combined_seq_coverage = length(combined_seq) / h1$polished_haplo_values
+                combined_seq_coverage = length(combined_seq) / max(h1$LENGTH_SEQUENCE[1], alt_motifs$LENGTH_SEQUENCE[i])
                 # check if the coverage of the combined sequence is higher than the single sequence
                 if (combined_seq_coverage[i] > (max(h1$COVERAGE_TR) + 0.05)){
                     # if so, this is a motif we want to use
@@ -1250,7 +1250,7 @@
     trf_pha = merge(all_trf, all_pha, by.x = 'READ_NAME', by.y = 'READ_ID', all.x = T)
     trf_pha = rbind.fill(trf_pha, reference)
   
-    # 4. Let's adjust the motifs -- generate a consensus -- essentially merging the same motifs together -- this for both analyses
+    # 4. Let's adjust the motifs -- generate a consensus -- essentially merging the same motifs together at the single read level -- this for both analyses
     cat('****** Merging similar motifs together\n')
     all_motifs = data.frame(motif = unique(trf_pha$TRF_MOTIF), stringsAsFactors = F)
     all_motifs = all_motifs[!is.na(all_motifs$motif),]
