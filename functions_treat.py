@@ -344,14 +344,19 @@ def measureDistance_MP(reads_bam, bed, window):
                 ref_start = int(read.reference_start)           # take the reference start position
                 ref_end = int(read.reference_end)               # take the reference end position
                 if (ref_end != "NA") and (int(ref_start) <= start) and (int(ref_end) >= end):
-                    start_poi_dist = start - int(ref_start)         # calculate distance in the aligned sequence between start and positions of interest
-                    end_poi_dist = end - int(ref_start)
+                    start_poi_dist_with_padding = start - int(ref_start)         # calculate distance in the aligned sequence between start and positions of interest: WITH PADDING
+                    start_poi_dist = (start + window) - int(ref_start)         # calculate distance in the aligned sequence between start and positions of interest: WITHOUT PADDING
+                    end_poi_dist_with_padding = end - int(ref_start)
+                    end_poi_dist = (end - window) - int(ref_start)
                     cigar = read.cigartuples                        # take cigar string
-                    poi_start = findPositionOfInterest(cigar, start_poi_dist)                             # find start position of interest
+                    poi_start_with_padding = findPositionOfInterest(cigar, start_poi_dist_with_padding)                             # find start position of interest WITH PADDING
+                    poi_start = findPositionOfInterest(cigar, start_poi_dist)                             # find start position of interest WITHOUT PADDING
+                    poi_end_with_padding = findPositionOfInterest(cigar, end_poi_dist_with_padding)                                 # find end position of interest
                     poi_end = findPositionOfInterest(cigar, end_poi_dist)                                 # find end position of interest
                     padding_before = str(read.query_sequence)[0 : poi_start]                                # find padding sequence before sequence of interest
                     padding_after = str(read.query_sequence)[poi_end :]                                     # find padding sequence after sequence of interest   
-                    sequence_interest = str(read.query_sequence)[poi_start : poi_end]                       # find sequence of interest
+                    sequence_interest = str(read.query_sequence)[poi_start : poi_end]                       # find sequence of interest WITHOUT PADDING
+                    sequence_interest_with_padding = str(read.query_sequence)[poi_start_with_padding : poi_end_with_padding]                       # find sequence of interest WITHOUT PADDING
                     read_name = str(read.query_name)
                     info = read.tags                                                                        # read tags
                     np, rq, mc = 'NA', 'NA', 'NA'
@@ -365,9 +370,9 @@ def measureDistance_MP(reads_bam, bed, window):
                     sec_aln = str(read.is_secondary)
                     sup_aln = str(read.is_supplementary)
                     if bam_name in distances.keys():
-                        distances[bam_name].append([region_id, read_name, np, rq, mc, sequence_interest, len(sequence_interest), window])
+                        distances[bam_name].append([region_id, read_name, np, rq, mc, sequence_interest, sequence_interest_with_padding, len(sequence_interest), len(sequence_interest_with_padding), window])
                     else:
-                        distances[bam_name] = [[region_id, read_name, np, rq, mc, sequence_interest, len(sequence_interest), window]]
+                        distances[bam_name] = [[region_id, read_name, np, rq, mc, sequence_interest, sequence_interest_with_padding, len(sequence_interest), len(sequence_interest_with_padding), window]]
     inBam.close()
     print('**** done measuring %s                   ' %(bam_name), end = '\r')
     return distances
@@ -378,13 +383,16 @@ def measureDistance_reference(bed, window, ref):
     for chrom in bed.keys():
         for region in bed[chrom]:
             region_id = chrom + ':' + region[0] + '-' + region[1]
-            start, end = int(region[0]) - window, int(region[1]) + window
-            sequence_in_reference = [x.rstrip() for x in list(os.popen('samtools faidx %s %s:%s-%s' %(ref, chrom, start, end)))]
+            start_with_padding, end_with_padding = int(region[0]) - window, int(region[1]) + window           # coordinates with padding
+            start, end = int(region[0]), int(region[1])           # coordinates without padding
+            sequence_in_reference_with_padding = [x.rstrip() for x in list(os.popen('samtools faidx %s %s:%s-%s' %(ref, chrom, start_with_padding, end_with_padding)))]        # sequence with padding
+            sequence_in_reference = [x.rstrip() for x in list(os.popen('samtools faidx %s %s:%s-%s' %(ref, chrom, start, end)))]        # sequence without padding
             seq_merged = ''.join(sequence_in_reference[1:])
+            seq_merged_with_padding = ''.join(sequence_in_reference_with_padding[1:])
             if 'reference' in distances.keys():
-                distances['reference'].append([region_id, 'NA', 'NA', 'NA', 'NA', seq_merged, len(seq_merged), window])
+                distances['reference'].append([region_id, 'NA', 'NA', 'NA', 'NA', seq_merged, seq_merged_with_padding, len(seq_merged), len(seq_merged_with_padding), window])
             else:
-                distances['reference'] = [[region_id, 'NA', 'NA', 'NA', 'NA', seq_merged, len(seq_merged), window]]
+                distances['reference'] = [[region_id, 'NA', 'NA', 'NA', 'NA', seq_merged, seq_merged_with_padding, len(seq_merged), len(seq_merged_with_padding), window]]
     return distances
 
 # Run TRF given a sequence
@@ -598,14 +606,14 @@ def trf_MP(bam, out_dir, motif, polished, distances):
     tmp_name = out_dir + '/tmp_trf_' + str(random()).replace('.', '') + '.fasta'            # create fasta file for running trf
     tmp_out = open(tmp_name, 'w')
     for read in distances[bam]:                 # then loop on each read, that is, every read on every region
-        seq = read[-2] if polished == 'True' else read[-3]
+        seq = read[-2] if polished == 'True' else read[-5]
         if bam == 'reference' and polished == 'True':
             seq = read[-5]
         elif bam == 'reference' and polished != 'True':
-            seq = read[-3]
-        region, read_id, passes, qual, cons, seq_size = read[0], read[1], read[2], read[3], read[4], read[-2]
+            seq = read[-5]
+        region, read_id, passes, qual, cons, seq_size, seq_with_padding = read[0], read[1], read[2], read[3], read[4], len(seq), read[-4]
         motif_type = motif[region]              # get the correspondin motif
-        tmp_out.write('>%s;%s;%s;%s;%s;%s\n%s\n' %(read_id, region, passes, qual, cons, seq_size, seq))
+        tmp_out.write('>%s;%s;%s;%s;%s;%s;%s\n%s\n' %(read_id, region, passes, qual, cons, seq_size, seq_with_padding, seq))
     tmp_out.close()
     # then run tandem repeat finder
     cmd = 'trf4.10.0-rc.2.linux64.exe ' + tmp_name + ' 2 7 7 80 10 50 200 -ngs -h'
@@ -615,11 +623,11 @@ def trf_MP(bam, out_dir, motif, polished, distances):
     x = 0; trf_matches = []
     while x < len(trf):
         if trf[x].startswith('@'):
-            read_id, region, passes, qual, cons, seq_size = trf[x].split(';')
+            read_id, region, passes, qual, cons, seq_size, seq_with_padding = trf[x].split(';')
             x += 1
             while x < len(trf) and not trf[x].startswith('@'):
                 motif_type = motif[region]              # get the correspondin motif
-                tmp_trf_match = [bam, read_id, region, passes, qual, cons, motif_type, seq_size] + trf[x].split()
+                tmp_trf_match = [bam, read_id, region, passes, qual, cons, motif_type, seq_size, seq_with_padding] + trf[x].split()
                 trf_matches.append(tmp_trf_match)
                 x += 1
     # loop on results agains and check the motif
@@ -661,7 +669,7 @@ def trf_MP(bam, out_dir, motif, polished, distances):
     if len(trf_matches) == 0:
         trf_matches = [['NA' for i in range(27)]] 
     df = pd.DataFrame(trf_matches)
-    df.columns = ['SAMPLE_NAME', 'READ_NAME', 'REGION', 'PASSES', 'READ_QUALITY', 'MAPPING_CONSENSUS', 'EXPECTED_MOTIF', 'LENGTH_SEQUENCE', 'START_TRF', 'END_TRF', 'LENGTH_MOTIF_TRF', 'COPIES_TRF', 'TRF_CONSENSUS_SIZE', 'TRF_PERC_MATCH', 'TRF_PERC_INDEL', 'TRF_SCORE', 'TRF_A_PERC', 'TRF_C_PERC', 'TRF_G_PERC', 'TRF_T_PERC', 'TRF_ENTROPY', 'TRF_MOTIF', 'TRF_REPEAT_SEQUENCE', 'TRF_PADDING_BEFORE', 'TRF_PADDING_AFTER', 'MATCH_LENGTH', 'MATCH_MOTIF']
+    df.columns = ['SAMPLE_NAME', 'READ_NAME', 'REGION', 'PASSES', 'READ_QUALITY', 'MAPPING_CONSENSUS', 'EXPECTED_MOTIF', 'LENGTH_SEQUENCE', 'SEQUENCE_WITH_PADDING', 'START_TRF', 'END_TRF', 'LENGTH_MOTIF_TRF', 'COPIES_TRF', 'TRF_CONSENSUS_SIZE', 'TRF_PERC_MATCH', 'TRF_PERC_INDEL', 'TRF_SCORE', 'TRF_A_PERC', 'TRF_C_PERC', 'TRF_G_PERC', 'TRF_T_PERC', 'TRF_ENTROPY', 'TRF_MOTIF', 'TRF_REPEAT_SEQUENCE', 'TRF_PADDING_BEFORE', 'TRF_PADDING_AFTER', 'MATCH_LENGTH', 'MATCH_MOTIF']
     return df
 
 # Read strategy file for assembly
