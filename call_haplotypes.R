@@ -8,7 +8,7 @@
 #########################################
 
 # Libraries
-    list.of.packages <- c("plyr", "data.table", "argparse", "stringr", "parallel", "spgs")
+    list.of.packages <- c("plyr", "data.table", "argparse", "stringr", "parallel", "spgs", "seqinr")
     new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[, "Package"])]
     if(length(new.packages)) install.packages(new.packages)
     library(plyr)
@@ -16,7 +16,9 @@
     library(argparse)
     library(parallel)
     library(stringr)
+    library(msa)
     library(spgs)
+    library(seqinr)
 
 # Functions
     # Function to make permutations of letters given a word, used to check motifs
@@ -1179,6 +1181,45 @@
             if (nrow(tmp_combined_res) >0){ comparison[[(length(comparison) + 1)]] = tmp_combined_res }
         }
         comparison = rbindlist(comparison, use.names = T)
+    }
+
+    # Generate consensus motif or the reads belonging to the same haplotype
+    generateConsensus_reads_MP = function(all_samples, all_haplo, all_res, all_regions, trf_pha){
+        all_haplo$CONSENSUS_SEQUENCE_H1 = NA; all_haplo$CONSENSUS_SEQUENCE_H2 = NA
+        # iterate over regions
+        for (s in all_samples){
+            for (r in all_regions){
+                # subset to region and sample of interest
+                haplo_sb = all_res[which(all_res$sample == s & all_res$REGION == r),]
+                trf_sb = trf_pha[which(trf_pha$SAMPLE_NAME == s & trf_pha$REGION == r),]
+                # H1
+                # isolate sequences
+                seq_tmp = trf_sb$SEQUENCE_WITH_PADDING[which(trf_sb$READ_NAME %in% haplo_sb$READ_NAME[which(haplo_sb$HAPLOTYPE == 1)])]
+                if (length(seq_tmp) >0){
+                    Seq(seq_tmp)
+                    seq_df = data.frame()
+                    for (seq in seq_tmp){ tmp <- data.frame(t(strsplit(seq, "")[[1]])); seq_df = rbind.fill(seq_df, tmp, fill = '-') }
+                    seq_mt = as.matrix(seq_df)
+                    seq_mt[is.na(seq_mt)] = '-'
+                    # create a consensus sequence with IUPAC names to introduce degeneracy
+                    conseq <- paste(toupper(consensus(seq_mt, method ="IUPAC", type="DNA")), collapse = "")
+                    # save consensus sequencew
+                    all_haplo$CONSENSUS_SEQUENCE_H1[which(all_haplo$SAMPLE == s & all_haplo$REGION == r)] = conseq
+                }
+                # H2
+                # isolate sequences
+                seq_tmp = trf_sb$SEQUENCE_WITH_PADDING[which(trf_sb$READ_NAME %in% haplo_sb$READ_NAME[which(haplo_sb$HAPLOTYPE == 2)])]
+                if (length(seq_tmp) >0){
+                    seq_df = data.frame()
+                    for (seq in seq_tmp){ tmp <- data.frame(t(strsplit(seq, "")[[1]])); seq_df = rbind.fill(seq_df, tmp) }
+                    seq_mt = as.matrix(seq_df)
+                    # create a consensus sequence with IUPAC names to introduce degeneracy
+                    conseq <- paste(toupper(consensus(seq_mt, method ="IUPAC", type="DNA")), collapse = "")
+                    # save consensus sequencew
+                    all_haplo$CONSENSUS_SEQUENCE_H2[which(all_haplo$SAMPLE == s & all_haplo$REGION == r)] = conseq                
+                }
+            }
+        }
     }
 
 # Manage arguments
