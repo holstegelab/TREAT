@@ -50,12 +50,14 @@ parser.add_argument('--store-temp', dest = 'store_temp', type = str, help = 'Boo
 parser.add_argument('--thread', dest = 'thread', type = int, help = 'Number of parallel threads to be used', required = False, default = 1)
 
 ## Assembly arguments
-# numer of threads for assembly and alignment 
+# numer of threads for assembly and alignment
 parser.add_argument('--thread-asm-aln', dest = 'thread_asm_aln', type = str, help = 'Number of parallel threads to be used during assembly and alignment', required = False, default = "default")
 # ploidy
 parser.add_argument('--assembly-ploidy', dest = 'ass_ploidy', type = int, help = 'Ploidy to be used for the local assembly procedure. Default value is 2 (for diploid organisms).', required = False, default = 2)
 # assembly type
 parser.add_argument('--assembly-type', dest = 'ass_type', type = str, help = 'Type of local assembly to perform. By default, each .bam will result in an assembly. If you prefer to use multiple .bam files for an assembly, please submit a file with no header and 2 columns: the first column should report, for each line, a comma-separated list of .bam files to combine in the assembly. The second column, for each line, should report the output prefix of the final assembly for each group.', required = False, default = 'asm_per_bam')
+# window for assembly
+parser.add_argument('--window-asm', dest = 'window_asm', type = int, help = 'Window to use to recruit reads for assembly.', required = False, default = 5000)
 
 ## Phasing arguments
 # path to snp data
@@ -152,7 +154,7 @@ elif args.analysis_type == 'assembly':
     print("** intermediate files --> %s" %(args.store_temp))
     print('** reference genome --> %s' %(args.ref))
     print('** number of cpus --> %s' %(args.thread))
-    print("** window used --> %s" %(args.window))
+    print("** window used --> %s" %(args.window_asm))
     print("** assembly type --> %s" %(args.ass_type))
     print("** assembly ploidy --> %s" %(args.ass_ploidy))
     print("** number of cpus for assembly/alignment --> %s" %(args.thread_asm_aln))
@@ -165,6 +167,7 @@ elif args.analysis_type == 'phase_reads':
     print('** reference genome --> %s' %(args.ref))
     print('** number of cpus --> %s' %(args.thread))
     print("** window used --> %s" %(args.window))
+    print("** window for recruiting SNPs for phasing --> 2500bp")
     print("** phasing using SNPs in --> %s" %(args.snp_dir))
     print("** mapping IDs between long-read and SNPs using --> %s" %(args.snp_data_ids))
 # Complete analysis
@@ -179,8 +182,10 @@ elif args.analysis_type == 'complete':
     print('** polishing --> %s' %(args.polish))
     print("** assembly type --> %s" %(args.ass_type))
     print("** assembly ploidy --> %s" %(args.ass_ploidy))
+    print("** window used for assembly --> %s" %(args.window_asm))
     print("** number of cpus for assembly/alignment --> %s" %(args.thread_asm_aln))
     print("** phasing using SNPs in --> %s" %(args.snp_dir))
+    print("** window for recruiting SNPs for phasing --> 2500bp")
     print("** mapping IDs between long-read and SNPs using --> %s" %(args.snp_data_ids))
     print("** step for coverage --> %s" %(args.step))
     print("** median absolute deviation --> %s" %(args.thr_mad))
@@ -212,6 +217,7 @@ elif args.analysis_type == 'reads_spanning_trf':
     print('** polishing --> %s' %(args.polish))
     print("** phasing using SNPs in --> %s" %(args.snp_dir))
     print("** mapping IDs between long-read and SNPs using --> %s" %(args.snp_data_ids))
+    print("** window for recruiting SNPs for phasing --> 2500bp")
     print("** median absolute deviation --> %s" %(args.thr_mad))
 # Assembly-TRF analysis
 elif args.analysis_type == 'assembly_trf':
@@ -221,10 +227,11 @@ elif args.analysis_type == 'assembly_trf':
     print("** intermediate files --> %s" %(args.store_temp))
     print('** reference genome --> %s' %(args.ref))
     print('** number of cpus --> %s' %(args.thread))
-    print("** window used --> %s" %(args.window))
+    print("** window used for TRF --> %s" %(args.window))
     print('** polishing --> %s' %(args.polish))
     print("** assembly type --> %s" %(args.ass_type))
     print("** assembly ploidy --> %s" %(args.ass_ploidy))
+    print("** window used for assembly --> %s" %(args.window_asm))
     print("** number of cpus for assembly/alignment --> %s" %(args.thread_asm_aln))
     print("** median absolute deviation --> %s" %(args.thr_mad))
 # Measure analysis
@@ -255,7 +262,9 @@ print('********************\n')
 bed_file, anal_type, var_file, bam_directory, output_directory, store_temporary = args.bed_dir, args.analysis_type, args.variant_file, args.bam_dir, args.out_dir, args.store_temp
 window_size, assembly_type, assembly_ploidy, number_threads, polishing, snp_dir = args.window, args.ass_type, args.ass_ploidy, args.thread, args.polish, args.snp_dir
 snp_data_ids, step, target_reads, fasta_dir, trf_file, phase_file = args.snp_data_ids, args.step, args.target_reads, args.fasta_dir, args.trf_file, args.phase_file
-asm_file, ref_fasta, thr_mad, number_threads_asm_aln = args.asm_file, args.ref, args.thr_mad, args.thread_asm_aln
+asm_file, ref_fasta, thr_mad, number_threads_asm_alnm, window_asm = args.asm_file, args.ref, args.thr_mad, args.thread_asm_aln, args.window_asm
+# window for phasing should be larger
+window_for_phasing = 2500
 
 ## Store arguments (for debugging only)
 #bed_file, anal_type, var_file, bam_directory, output_directory, store_temporary, window_size, assembly_type, assembly_ploidy, number_threads, polishing, snp_dir, snp_data_ids, step, target_reads = '/project/holstegelab/Share/nicco/workspaces/20211013_target_approach/automatic_pipeline/DMPK/dmpk.bed', '', '', '/project/holstegelab/Share/nicco/workspaces/20211013_target_approach/automatic_pipeline/DMPK/extract_reads/case/DNA15-20132_2.haplotagged_step1_hifi.bam', '/project/holstegelab/Share/nicco/workspaces/20211013_target_approach/automatic_pipeline/DMPK/phase_reads/case', 'True', 100000, '', 2, 4, 'True', '/project/holstegelab/Share/pacbio/radbound_rfc1_cases/DNA15-20132-DMPK/Analyzed/GRCh38_20220408/SNVCalling_20220411_deepvariant//DNA15-20132_2.phased.pvar', '/project/holstegelab/Share/nicco/workspaces/20211013_target_approach/automatic_pipeline/DMPK/phase_reads/case/map.txt', 500, '/project/holstegelab/Share/nicco/workspaces/20211013_target_approach/automatic_pipeline/RFC1/subreads/c7_all_reads.txt'
@@ -390,7 +399,7 @@ elif anal_type == 'assembly':
     # 3. extract reads mapping to regions of interest in bed -- multiprocessing
     print("\n** 1. extracting reads")
     pool = multiprocessing.Pool(processes=number_threads)
-    extract_fun = partial(extractReads_MP, bed = bed_regions, out_dir = output_directory, window = window_size, all_bams = all_bam_files)
+    extract_fun = partial(extractReads_MP, bed = bed_regions, out_dir = output_directory, window = window_asm, all_bams = all_bam_files)
     extract_results = pool.map(extract_fun, all_bam_files); print('**** read extraction done!                                         ')
     
     # 4. combine results together
@@ -449,7 +458,7 @@ elif anal_type == 'phase_reads':
     # 5. phasing and haplotagging -- multiprocessing
     print('** 2. phasing and haplotagging')
     print('**** finding SNPs for phasing')
-    snps_for_phasing, snps_to_keep, SNPs_data_path = findSNPs_gwas(snp_dir, bed_regions, window_size)
+    snps_for_phasing, snps_to_keep, SNPs_data_path = findSNPs_gwas(snp_dir, bed_regions, window_for_phasing)
     print('**** start phasing                                  ', end = '\r')
     pool = multiprocessing.Pool(processes=number_threads)
     phasing_fun = partial(phase_reads_MP, reads_bam = reads_bam, snps_to_keep = snps_to_keep, output_directory = output_directory, SNPs_data_directory = SNPs_data_path, snp_data_ids = snp_data_ids, ref_path = ref_fasta)
@@ -570,7 +579,7 @@ elif anal_type == 'complete':
         print('** 4. phasing and haplotagging')
         os.system('mkdir %s/phasing' %(output_directory))
         print('**** finding SNPs for phasing')
-        snps_for_phasing, snps_to_keep, SNPs_data_path = findSNPs_gwas(snp_dir, bed_regions, window_size)
+        snps_for_phasing, snps_to_keep, SNPs_data_path = findSNPs_gwas(snp_dir, bed_regions, window_for_phasing)
         print('**** start phasing                                  ', end = '\r')
         pool = multiprocessing.Pool(processes=number_threads)
         phasing_fun = partial(phase_reads_MP, reads_bam = reads_bam, snps_to_keep = snps_to_keep, output_directory = '%s/phasing' %(output_directory), SNPs_data_directory = SNPs_data_path, snp_data_ids = snp_data_ids)
@@ -743,8 +752,7 @@ elif anal_type == 'reads_spanning_trf':
         print('** 4. phasing and haplotagging')
         os.system('mkdir %s/phasing' %(output_directory))
         print('**** finding SNPs for phasing')
-        # window size for phasing should be 2500bp
-        snps_for_phasing, snps_to_keep, SNPs_data_path = findSNPs_gwas(snp_dir, bed_regions, 2500)
+        snps_for_phasing, snps_to_keep, SNPs_data_path = findSNPs_gwas(snp_dir, bed_regions, window_for_phasing)
         print('**** start phasing                                  ', end = '\r')
         pool = multiprocessing.Pool(processes=number_threads)
         phasing_fun = partial(phase_reads_MP, reads_bam = reads_bam, snps_to_keep = snps_to_keep, output_directory = '%s/phasing' %(output_directory), SNPs_data_directory = SNPs_data_path, snp_data_ids = snp_data_ids, ref_path = ref_fasta)
@@ -790,7 +798,7 @@ elif anal_type == 'assembly_trf':
     print("\n** 1. extracting reads")
     os.system('mkdir %s/raw_reads' %(output_directory))
     pool = multiprocessing.Pool(processes=number_threads)
-    extract_fun = partial(extractReads_MP, bed = bed_regions, out_dir = '%s/raw_reads' %(output_directory), window = window_size, all_bams = all_bam_files)
+    extract_fun = partial(extractReads_MP, bed = bed_regions, out_dir = '%s/raw_reads' %(output_directory), window = window_asm, all_bams = all_bam_files)
     extract_results = pool.map(extract_fun, all_bam_files); print('**** read extraction done!                                         ')
     
     # 5. combine results together
@@ -835,7 +843,7 @@ elif anal_type == 'assembly_trf':
     # list all files that should be processed
     haps_to_process = ['%s_haps_aln.bam' %(x) for x in assembly_results]; prim_to_process = ['%s_p_ctg_aln.bam' %(x) for x in assembly_results]; files_to_process = haps_to_process + prim_to_process
     pool = multiprocessing.Pool(processes=number_threads)
-    measure_fun = partial(measureDistance_MP, bed = bed_regions, window = 1)
+    measure_fun = partial(measureDistance_MP, bed = bed_regions, window = window_size)
     extract_results = pool.map(measure_fun, files_to_process)
     print('**** read measurement done!                                         ')
     
