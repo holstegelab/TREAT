@@ -714,10 +714,10 @@ elif anal_type == 'reads_spanning_trf':
     # 6. calculate size of the regions of interest -- multiprocessing
     print('** 2. calculate size of the regions of interest')
     pool = multiprocessing.Pool(processes=number_threads)
-    measure_fun = partial(measureDistance_MP, bed = bed_regions, window = 1)
+    measure_fun = partial(measureDistance_MP, bed = bed_regions, window = window_size)
     extract_results = pool.map(measure_fun, reads_bam)
     print('**** done measuring reference                                     ', end = '\r')
-    dist_reference = measureDistance_reference(bed_regions, 1, ref_fasta); print('**** read measurement done!                                         ')
+    dist_reference = measureDistance_reference(bed_regions, window_size, ref_fasta); print('**** read measurement done!                                         ')
     extract_results.append(dist_reference)
     # combine results
     distances = {k:v for element in extract_results for k,v in element.items()}

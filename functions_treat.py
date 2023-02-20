@@ -667,7 +667,7 @@ def trf_MP(bam, out_dir, motif, polished, distances):
     print('**** done TRF on %s                                       ' %(bam), end = '\r') 
     # finally create pandas df and assign column names
     if len(trf_matches) == 0:
-        trf_matches = [['NA' for i in range(27)]] 
+        trf_matches = [['NA' for i in range(28)]] 
     df = pd.DataFrame(trf_matches)
     df.columns = ['SAMPLE_NAME', 'READ_NAME', 'REGION', 'PASSES', 'READ_QUALITY', 'MAPPING_CONSENSUS', 'EXPECTED_MOTIF', 'LENGTH_SEQUENCE', 'SEQUENCE_WITH_PADDING', 'START_TRF', 'END_TRF', 'LENGTH_MOTIF_TRF', 'COPIES_TRF', 'TRF_CONSENSUS_SIZE', 'TRF_PERC_MATCH', 'TRF_PERC_INDEL', 'TRF_SCORE', 'TRF_A_PERC', 'TRF_C_PERC', 'TRF_G_PERC', 'TRF_T_PERC', 'TRF_ENTROPY', 'TRF_MOTIF', 'TRF_REPEAT_SEQUENCE', 'TRF_PADDING_BEFORE', 'TRF_PADDING_AFTER', 'MATCH_LENGTH', 'MATCH_MOTIF']
     return df
