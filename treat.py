@@ -743,7 +743,8 @@ elif anal_type == 'reads_spanning_trf':
         print('** 4. phasing and haplotagging')
         os.system('mkdir %s/phasing' %(output_directory))
         print('**** finding SNPs for phasing')
-        snps_for_phasing, snps_to_keep, SNPs_data_path = findSNPs_gwas(snp_dir, bed_regions, window_size)
+        # window size for phasing should be 2500bp
+        snps_for_phasing, snps_to_keep, SNPs_data_path = findSNPs_gwas(snp_dir, bed_regions, 2500)
         print('**** start phasing                                  ', end = '\r')
         pool = multiprocessing.Pool(processes=number_threads)
         phasing_fun = partial(phase_reads_MP, reads_bam = reads_bam, snps_to_keep = snps_to_keep, output_directory = '%s/phasing' %(output_directory), SNPs_data_directory = SNPs_data_path, snp_data_ids = snp_data_ids, ref_path = ref_fasta)
