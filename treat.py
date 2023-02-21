@@ -883,7 +883,7 @@ elif anal_type == 'assembly_trf':
         outf = open('%s/otter_local_asm/otter_sizes.txt' %(output_directory), 'w')
         for s in res.keys():
             for r in res[s]:
-                outf.write('%s\t%s\t%s\n' %(s, r[0], r[1], r[2]))
+                outf.write('%s\t%s\t%s\t%s\n' %(s, r[0], r[1], r[2]))
         outf.close()
 
 ## Check whether to keep or delete temporary files
