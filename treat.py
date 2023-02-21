@@ -6,26 +6,10 @@
 #############################################################
 
 ## Libraries
-import os
-from inspect import getsourcefile
-from os.path import abspath
-import sys
-import pathlib
-from functions_treat import *
-import argparse
-import os.path
-import pysam
-from Bio.Seq import Seq
-from Bio import SeqIO
-from random import random
-import gzip
-import subprocess
-import json
-import pandas as pd
-from datetime import datetime
-from functools import partial
-from itertools import repeat
-import multiprocessing
+import os; from inspect import getsourcefile; from os.path import abspath; import sys; import pathlib
+from functions_treat import *; import argparse; import os.path; import pysam; from Bio.Seq import Seq
+from Bio import SeqIO; from random import random; import gzip; import subprocess; import json; import pandas as pd
+from datetime import datetime; from functools import partial; from itertools import repeat; import multiprocessing
 
 ## Main
 ## Define Arguments
@@ -56,6 +40,7 @@ parser.add_argument('--thread-asm-aln', dest = 'thread_asm_aln', type = str, hel
 parser.add_argument('--assembly-ploidy', dest = 'ass_ploidy', type = int, help = 'Ploidy to be used for the local assembly procedure. Default value is 2 (for diploid organisms).', required = False, default = 2)
 # assembly type
 parser.add_argument('--assembly-type', dest = 'ass_type', type = str, help = 'Type of local assembly to perform. By default, each .bam will result in an assembly. If you prefer to use multiple .bam files for an assembly, please submit a file with no header and 2 columns: the first column should report, for each line, a comma-separated list of .bam files to combine in the assembly. The second column, for each line, should report the output prefix of the final assembly for each group.', required = False, default = 'asm_per_bam')
+parse.add_argument('--assembly-tool', dest = 'ass_tool', type = str, help = '[hifiasm / otter]: the tool to use for local assembly.' required = False, default = 'hifiasm')
 # window for assembly
 parser.add_argument('--window-asm', dest = 'window_asm', type = int, help = 'Window to use to recruit reads for assembly.', required = False, default = 5000)
 
@@ -795,80 +780,111 @@ elif anal_type == 'assembly_trf':
     motif = readMotif(bed_file)
     
     # 4. extract reads mapping to regions of interest in bed -- multiprocessing
-    print("\n** 1. extracting reads")
-    os.system('mkdir %s/raw_reads' %(output_directory))
-    pool = multiprocessing.Pool(processes=number_threads)
-    extract_fun = partial(extractReads_MP, bed = bed_regions, out_dir = '%s/raw_reads' %(output_directory), window = window_asm, all_bams = all_bam_files)
-    extract_results = pool.map(extract_fun, all_bam_files); print('**** read extraction done!                                         ')
-    
-    # 5. combine results together
-    reads_bam = [x[0] for x in extract_results]; reads_fasta = [x[1] for x in extract_results]
+    if ass_tool == 'hifiasm':
+        print("\n** 1. extracting reads")
+        os.system('mkdir %s/raw_reads' %(output_directory))
+        pool = multiprocessing.Pool(processes=number_threads)
+        extract_fun = partial(extractReads_MP, bed = bed_regions, out_dir = '%s/raw_reads' %(output_directory), window = window_asm, all_bams = all_bam_files)
+        extract_results = pool.map(extract_fun, all_bam_files); print('**** read extraction done!                                         ')
+        
+        # 5. combine results together
+        reads_bam = [x[0] for x in extract_results]; reads_fasta = [x[1] for x in extract_results]
 
-    # 6. assembly
-    print('** 5. assembly')
-    os.system('mkdir %s/assembly' %(output_directory))
-    strategy = AsmStrategy(assembly_type, reads_fasta, '%s/assembly' %(output_directory))
-    # decide how many assembly in parallel to run: if there's only 1 genome to do, give all the cpus that were submitted (also true for alignment)
-    if len(reads_fasta) == 1:
-        threads_per_asm_aln = number_threads; parallel_assemblies = 1; parallel_alignment = 1; all_samples = list(strategy.keys())
-    # otherwise (if there are multiple samples to process), if the user requested a specif number of cpu use that, otherwise use 4 cpus for assembly and alignment
-    else:
-        if number_threads_asm_aln == 'default':
-            threads_per_asm_aln = 4; parallel_assemblies = int(number_threads / threads_per_asm_aln); parallel_alignment = parallel_assemblies
-            threads_per_asm_aln = 4 if parallel_assemblies >1 else number_threads
-            all_samples = list(strategy.keys())
+        # 6. assembly
+        print('** 5. assembly')
+        os.system('mkdir %s/assembly' %(output_directory))
+        strategy = AsmStrategy(assembly_type, reads_fasta, '%s/assembly' %(output_directory))
+        # decide how many assembly in parallel to run: if there's only 1 genome to do, give all the cpus that were submitted (also true for alignment)
+        if len(reads_fasta) == 1:
+            threads_per_asm_aln = number_threads; parallel_assemblies = 1; parallel_alignment = 1; all_samples = list(strategy.keys())
+        # otherwise (if there are multiple samples to process), if the user requested a specif number of cpu use that, otherwise use 4 cpus for assembly and alignment
         else:
-            threads_per_asm_aln = int(number_threads_asm_aln); parallel_assemblies = int(number_threads / threads_per_asm_aln); all_samples = list(strategy.keys())
-        if parallel_assemblies == 0:
-            parallel_assemblies = 1; parallel_alignment = 1 
-    pool = multiprocessing.Pool(processes=parallel_assemblies)
-    assembly_fun = partial(localAssembly_MP, strategy = strategy, out_dir = '%s/assembly' %(output_directory), ploidy = assembly_ploidy, thread = threads_per_asm_aln)
-    assembly_results = pool.map(assembly_fun, all_samples)
-    print('**** done with assembly                                     ')
+            if number_threads_asm_aln == 'default':
+                threads_per_asm_aln = 4; parallel_assemblies = int(number_threads / threads_per_asm_aln); parallel_alignment = parallel_assemblies
+                threads_per_asm_aln = 4 if parallel_assemblies >1 else number_threads
+                all_samples = list(strategy.keys())
+            else:
+                threads_per_asm_aln = int(number_threads_asm_aln); parallel_assemblies = int(number_threads / threads_per_asm_aln); all_samples = list(strategy.keys())
+            if parallel_assemblies == 0:
+                parallel_assemblies = 1; parallel_alignment = 1 
+        pool = multiprocessing.Pool(processes=parallel_assemblies)
+        assembly_fun = partial(localAssembly_MP, strategy = strategy, out_dir = '%s/assembly' %(output_directory), ploidy = assembly_ploidy, thread = threads_per_asm_aln)
+        assembly_results = pool.map(assembly_fun, all_samples)
+        print('**** done with assembly                                     ')
 
-    # 7. clean contigs
-    print('** 6. clean assembled contigs')
-    out_dir = cleanContigs('%s/assembly' %(output_directory))
+        # 7. clean contigs
+        print('** 6. clean assembled contigs')
+        out_dir = cleanContigs('%s/assembly' %(output_directory))
 
-    # 8. alignment
-    print('** 7. align contigs')
-    threads_per_aln = 4; parallel_alignment = int(number_threads / threads_per_aln)
-    pool = multiprocessing.Pool(processes=parallel_alignment)
-    align_fun = partial(alignAssembly_MP, outname_list = assembly_results, thread = threads_per_asm_aln, reference = ref_fasta)
-    align_results = pool.map(align_fun, assembly_results)
-    print('**** done with contig alignment                                     ')
+        # 8. alignment
+        print('** 7. align contigs')
+        threads_per_aln = 4; parallel_alignment = int(number_threads / threads_per_aln)
+        pool = multiprocessing.Pool(processes=parallel_alignment)
+        align_fun = partial(alignAssembly_MP, outname_list = assembly_results, thread = threads_per_asm_aln, reference = ref_fasta)
+        align_results = pool.map(align_fun, assembly_results)
+        print('**** done with contig alignment                                     ')
 
-    # 9. measure distance on contigs
-    print('** 8. calculate size of the regions of interest in contigs')
-    # list all files that should be processed
-    haps_to_process = ['%s_haps_aln.bam' %(x) for x in assembly_results]; prim_to_process = ['%s_p_ctg_aln.bam' %(x) for x in assembly_results]; files_to_process = haps_to_process + prim_to_process
-    pool = multiprocessing.Pool(processes=number_threads)
-    measure_fun = partial(measureDistance_MP, bed = bed_regions, window = window_size)
-    extract_results = pool.map(measure_fun, files_to_process)
-    print('**** read measurement done!                                         ')
-    
-    # 10. combine results together and make output
-    distances = {k:v for element in extract_results for k,v in element.items()}; os.system('mkdir %s/trf_assembly' %(output_directory))
+        # 9. measure distance on contigs
+        print('** 8. calculate size of the regions of interest in contigs')
+        # list all files that should be processed
+        haps_to_process = ['%s_haps_aln.bam' %(x) for x in assembly_results]; prim_to_process = ['%s_p_ctg_aln.bam' %(x) for x in assembly_results]; files_to_process = haps_to_process + prim_to_process
+        pool = multiprocessing.Pool(processes=number_threads)
+        measure_fun = partial(measureDistance_MP, bed = bed_regions, window = window_size)
+        extract_results = pool.map(measure_fun, files_to_process)
+        print('**** read measurement done!                                         ')
+        
+        # 10. combine results together and make output
+        distances = {k:v for element in extract_results for k,v in element.items()}; os.system('mkdir %s/trf_assembly' %(output_directory))
 
-    # 11. tandem repeat finder on assembled contigs
-    print('** 9. tandem repeat finder on contigs')
-    all_bams = list(distances.keys())
-    motif = readMotif(bed_file)
-    pool = multiprocessing.Pool(processes=number_threads)
-    trf_fun = partial(trf_MP, out_dir = '%s/trf_assembly' %(output_directory), motif = motif, polished = 'False', distances = distances)
-    trf_results = pool.map(trf_fun, all_bams)
-    df_trf = pd.concat(trf_results)
-    print('**** done running TRF on assemblies                                     ')
+        # 11. tandem repeat finder on assembled contigs
+        print('** 9. tandem repeat finder on contigs')
+        all_bams = list(distances.keys())
+        motif = readMotif(bed_file)
+        pool = multiprocessing.Pool(processes=number_threads)
+        trf_fun = partial(trf_MP, out_dir = '%s/trf_assembly' %(output_directory), motif = motif, polished = 'False', distances = distances)
+        trf_results = pool.map(trf_fun, all_bams)
+        df_trf = pd.concat(trf_results)
+        print('**** done running TRF on assemblies                                     ')
 
-    # 12. make output
-    outf = output_directory + '/trf_assembly/measures_spanning_reads_and_trf.txt'
-    df_trf.to_csv(outf, sep = "\t", index=False)
+        # 12. make output
+        outf = output_directory + '/trf_assembly/measures_spanning_reads_and_trf.txt'
+        df_trf.to_csv(outf, sep = "\t", index=False)
 
-    # 13. haplotyping
-    print("** 11. haplotype calling and reads-spanning vs. assembly comparison")
-    file_path = os.path.realpath(__file__)
-    file_path = '/'.join(file_path.split('/')[:-1])
-    os.system("Rscript %s/call_haplotypes.R --asm %s/trf_assembly/measures_spanning_reads_and_trf.txt --out %s/haplotyping --cpu %s" %(file_path, output_directory, output_directory, number_threads))
+        # 13. haplotyping
+        print("** 11. haplotype calling and reads-spanning vs. assembly comparison")
+        file_path = os.path.realpath(__file__)
+        file_path = '/'.join(file_path.split('/')[:-1])
+        os.system("Rscript %s/call_haplotypes.R --asm %s/trf_assembly/measures_spanning_reads_and_trf.txt --out %s/haplotyping --cpu %s" %(file_path, output_directory,     output_directory, number_threads))
+
+    else:
+        print("\n** 1. run otter")
+        os.system('mkdir %s/otter_local_asm' %(output_directory))
+        # run otter for all samples and regions
+        for s in all_bam_files:
+            outname = s.split('/')[-1].replace('.bam', '.fa')
+            cmd = '/project/holstegelab/Software/nicco/bin/otter/build/otter assemble -b %s -r %s %s > %s/otter_local_asm/%s' %(bed_file, ref_fasta, s, output_directory, outname)
+            os.system(cmd)
+        # collect otter sequences
+        otter_files = [x.rstrip() for x in os.popen('ls %s/otter_local_asm/' %(output_directory))]
+        res = {}
+        for f in otter_files:
+            f_open = [x.rstrip() for x in open('%s/otter_local_asm/%s' %(output_directory, f), 'r').readlines()]
+            for x in f_open:
+                if x.startswith('>'):
+                    region = x.split()[0].replace('>', '')
+                else:
+                    seq = x; seq_len = len(seq)
+                    # save hit at this point
+                    if f in res.keys():
+                        res[f].append([region, seq, seq_len])
+                    else:
+                        res[f] = [[region, seq, seq_len]]
+        # at the end, save the output
+        outf = open('%s/otter_local_asm/otter_sizes.txt' %(output_directory), 'w')
+        for s in res.keys():
+            for r in res[s]:
+                outf.write('%s\t%s\t%s\n' %(s, r[0], r[1], r[2]))
+        outf.close()
 
 ## Check whether to keep or delete temporary files
 if (store_temporary == 'False' and anal_type not in ['haplotyping', 'extract_reads', 'coverage_profile', 'complete']):
