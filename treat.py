@@ -247,7 +247,7 @@ print('********************\n')
 bed_file, anal_type, var_file, bam_directory, output_directory, store_temporary = args.bed_dir, args.analysis_type, args.variant_file, args.bam_dir, args.out_dir, args.store_temp
 window_size, assembly_type, assembly_ploidy, number_threads, polishing, snp_dir = args.window, args.ass_type, args.ass_ploidy, args.thread, args.polish, args.snp_dir
 snp_data_ids, step, target_reads, fasta_dir, trf_file, phase_file = args.snp_data_ids, args.step, args.target_reads, args.fasta_dir, args.trf_file, args.phase_file
-asm_file, ref_fasta, thr_mad, number_threads_asm_alnm, window_asm = args.asm_file, args.ref, args.thr_mad, args.thread_asm_aln, args.window_asm
+asm_file, ref_fasta, thr_mad, number_threads_asm_alnm, window_asm, ass_tool = args.asm_file, args.ref, args.thr_mad, args.thread_asm_aln, args.window_asm, args.ass_tool
 # window for phasing should be larger
 window_for_phasing = 2500
 
