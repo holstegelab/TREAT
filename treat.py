@@ -40,7 +40,7 @@ parser.add_argument('--thread-asm-aln', dest = 'thread_asm_aln', type = str, hel
 parser.add_argument('--assembly-ploidy', dest = 'ass_ploidy', type = int, help = 'Ploidy to be used for the local assembly procedure. Default value is 2 (for diploid organisms).', required = False, default = 2)
 # assembly type
 parser.add_argument('--assembly-type', dest = 'ass_type', type = str, help = 'Type of local assembly to perform. By default, each .bam will result in an assembly. If you prefer to use multiple .bam files for an assembly, please submit a file with no header and 2 columns: the first column should report, for each line, a comma-separated list of .bam files to combine in the assembly. The second column, for each line, should report the output prefix of the final assembly for each group.', required = False, default = 'asm_per_bam')
-parse.add_argument('--assembly-tool', dest = 'ass_tool', type = str, help = '[hifiasm / otter]: the tool to use for local assembly.' required = False, default = 'hifiasm')
+parser.add_argument('--assembly-tool', dest = 'ass_tool', type = str, help = '[hifiasm / otter]: the tool to use for local assembly.' required = False, default = 'hifiasm')
 # window for assembly
 parser.add_argument('--window-asm', dest = 'window_asm', type = int, help = 'Window to use to recruit reads for assembly.', required = False, default = 5000)
 
