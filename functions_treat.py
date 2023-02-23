@@ -605,6 +605,7 @@ def trf_MP(bam, out_dir, motif, polished, distances):
     # create a fasta file containing all sequences to be submitted to TRF search
     tmp_name = out_dir + '/tmp_trf_' + str(random()).replace('.', '') + '.fasta'            # create fasta file for running trf
     tmp_out = open(tmp_name, 'w')
+    seq_dict = {}
     for read in distances[bam]:                 # then loop on each read, that is, every read on every region
         seq = read[-2] if polished == 'True' else read[-5]
         if bam == 'reference' and polished == 'True':
@@ -613,7 +614,8 @@ def trf_MP(bam, out_dir, motif, polished, distances):
             seq = read[-5]
         region, read_id, passes, qual, cons, seq_size, seq_with_padding = read[0], read[1], read[2], read[3], read[4], len(seq), read[-4]
         motif_type = motif[region]              # get the correspondin motif
-        tmp_out.write('>%s;%s;%s;%s;%s;%s;%s\n%s\n' %(read_id, region, passes, qual, cons, seq_size, seq_with_padding, seq))
+        seq_dict[read_id] = [seq_with_padding, bam, region, passes, qual, cons, seq_size]
+        tmp_out.write('>%s;%s;%s;%s;%s;%s\n%s\n' %(read_id, region, passes, qual, cons, seq_size, seq))
     tmp_out.close()
     # then run tandem repeat finder
     cmd = 'trf4.10.0-rc.2.linux64.exe ' + tmp_name + ' 2 7 7 80 10 50 200 -ngs -h'
@@ -621,47 +623,24 @@ def trf_MP(bam, out_dir, motif, polished, distances):
     trf = [x for x in os.popen(cmd).read().split('\n') if x != '']
     # loop on trf results and save them into a list of lists
     x = 0; trf_matches = []
+    read_found = []
     while x < len(trf):
         if trf[x].startswith('@'):
-            read_id, region, passes, qual, cons, seq_size, seq_with_padding = trf[x].split(';')
+            read_id, region, passes, qual, cons, seq_size = trf[x].split(';')
+            read_found.append(read_id)
+            seq_with_padding = seq_dict[read_id.replace('@', '')][0]
             x += 1
             while x < len(trf) and not trf[x].startswith('@'):
                 motif_type = motif[region]              # get the correspondin motif
                 tmp_trf_match = [bam, read_id, region, passes, qual, cons, motif_type, seq_size, seq_with_padding] + trf[x].split()
                 trf_matches.append(tmp_trf_match)
                 x += 1
-    # loop on results agains and check the motif
-    for i in range(len(trf_matches)):
-        if len(trf_matches[i]) > 1:
-            exp_motif, exp_length = trf_matches[i][6], len(trf_matches[i][6])
-            trf_motif = trf_matches[i][21]
-            if len(trf_motif) == exp_length:
-                motif_len = 'same_length'
-                exact_motifs = exp_motif.split(',') if ',' in exp_motif else [exp_motif]         # find motif and all permutations of that
-                perm_motifs, rev_motifs, rev_perm_motifs = [], [], []       
-                for m in exact_motifs:
-                    tmp_perm = [m[x:] + m[:x] for x in range(len(m))]
-                    tmp_perm.remove(m)
-                    reverse = str(Seq(m).reverse_complement())
-                    perm_reverse = [reverse[x:] + reverse[:x] for x in range(len(reverse))]
-                    perm_reverse.remove(reverse)
-                    perm_motifs, rev_motifs, rev_perm_motifs = perm_motifs + tmp_perm, rev_motifs + [reverse], rev_perm_motifs + perm_reverse
-                # then check what kind of motif trf matched
-                if trf_motif in exact_motifs:
-                    motif_match = "exact_motif"
-                elif trf_motif in perm_motifs:
-                    motif_match = "perm_motif"
-                elif trf_motif in rev_motifs:
-                    motif_match = "rev_motif"
-                elif trf_motif in rev_perm_motifs:
-                    motif_match = "perm_rev_motif"
-                else:
-                    motif_match = "different_motif"
-            else:
-                motif_len = 'different_length'; motif_match = 'different_motif'
-        else:
-            motif_len, motif_match = 'no_matches', 'no_matches'
-        trf_matches[i].append(motif_len); trf_matches[i].append(motif_match)
+    # here, we need to check all read ids, as maybe some were missed because no trf match was found
+    for read in seq_dict.keys():
+        if read not in read_found:
+            tmp = [seq_dict[read][1], read.replace('@', ''), seq_dict[read][2], seq_dict[read][3], seq_dict[read][4], seq_dict[read][5], motif[seq_dict[read][2]], seq_dict[read][6], seq_dict[read][0]] + ["NA" for x in range(17)]
+            trf_matches.append(tmp)
+    # loop on results agains and check the motif: do NOT see the point of doing this anymore --> remove it
     # finally remove temporary file
     os.system('rm ' + tmp_name)
     print('**** done TRF on %s                                       ' %(bam), end = '\r') 
@@ -669,7 +648,7 @@ def trf_MP(bam, out_dir, motif, polished, distances):
     if len(trf_matches) == 0:
         trf_matches = [['NA' for i in range(28)]] 
     df = pd.DataFrame(trf_matches)
-    df.columns = ['SAMPLE_NAME', 'READ_NAME', 'REGION', 'PASSES', 'READ_QUALITY', 'MAPPING_CONSENSUS', 'EXPECTED_MOTIF', 'LENGTH_SEQUENCE', 'SEQUENCE_WITH_PADDING', 'START_TRF', 'END_TRF', 'LENGTH_MOTIF_TRF', 'COPIES_TRF', 'TRF_CONSENSUS_SIZE', 'TRF_PERC_MATCH', 'TRF_PERC_INDEL', 'TRF_SCORE', 'TRF_A_PERC', 'TRF_C_PERC', 'TRF_G_PERC', 'TRF_T_PERC', 'TRF_ENTROPY', 'TRF_MOTIF', 'TRF_REPEAT_SEQUENCE', 'TRF_PADDING_BEFORE', 'TRF_PADDING_AFTER', 'MATCH_LENGTH', 'MATCH_MOTIF']
+    df.columns = ['SAMPLE_NAME', 'READ_NAME', 'REGION', 'PASSES', 'READ_QUALITY', 'MAPPING_CONSENSUS', 'EXPECTED_MOTIF', 'LENGTH_SEQUENCE', 'SEQUENCE_WITH_PADDING', 'START_TRF', 'END_TRF', 'LENGTH_MOTIF_TRF', 'COPIES_TRF', 'TRF_CONSENSUS_SIZE', 'TRF_PERC_MATCH', 'TRF_PERC_INDEL', 'TRF_SCORE', 'TRF_A_PERC', 'TRF_C_PERC', 'TRF_G_PERC', 'TRF_T_PERC', 'TRF_ENTROPY', 'TRF_MOTIF', 'TRF_REPEAT_SEQUENCE', 'TRF_PADDING_BEFORE', 'TRF_PADDING_AFTER']
     return df
 
 # Read strategy file for assembly
