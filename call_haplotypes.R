@@ -16,9 +16,9 @@
     library(argparse)
     library(parallel)
     library(stringr)
-    library(msa)
+    #library(msa)
     library(spgs)
-    library(seqinr)
+    #library(seqinr)
 
 # Functions
     # Function to make permutations of letters given a word, used to check motifs
@@ -874,7 +874,7 @@
             # for example, if there were 2 motifs found, that means that there are 2 defined TRF matches that (should) start at the same position
             h1 = h1[order(h1$START_TRF),]
             # fit k-means using the data sorted by start position of TRF, and the number of motifs is the k-value
-            fit = kmeans(x = h1[, c('START_TRF', 'END_TRF')], centers = length(motifs_to_use), algorithm = 'Lloyd')
+            fit = kmeans(x = h1[, c('START_TRF', 'END_TRF', 'TRF_PERC_MATCH')], centers = length(motifs_to_use), algorithm = 'Lloyd')
             specific_representation = c()
             # iterate over the clusters to determine the specific representation
             for (i in unique(fit$cluster)){
@@ -1344,13 +1344,14 @@
     # alternative way using multiprocessing
     main_motifs = unlist(mclapply(all_motifs, mergeMotif_mp, mc.cores = n_cpu))
     all_motifs = data.frame(motif = all_motifs, UNIFORM_MOTIF = main_motifs)
-    trf_pha = merge(trf_pha, all_motifs, by.x = 'TRF_MOTIF', by.y = 'motif')
+    trf_pha = merge(trf_pha, all_motifs, by.x = 'TRF_MOTIF', by.y = 'motif', all.x = T)
 
     # to make sure there are no conflicts, change the read name
     trf_pha$UNIQUE_NAME = paste(trf_pha$READ_NAME, trf_pha$SAMPLE_NAME, trf_pha$REGION, sep = "___")
 
     # 5. add the TR size by substracting 20 (10*2 padding) to LENGTH_SEQUENCE
     trf_pha$TR_LENGHT = trf_pha$LENGTH_SEQUENCE
+    #trf_pha$TR_LENGHT = nchar(trf_pha$SEQUENCE_WITH_PADDING)
 
     # 6. good to exclude duplicated reads otherwise results would be biased towards sequences with more complex motifs (where TRF finds multiple matches)
     #trf_pha = trf_pha[which(trf_pha$SEQUENCE_WITH_WINDOW != ''),]
@@ -1384,9 +1385,7 @@
     # 8. now let's bring the duplicates in again and assign the correct haplotype based on the other duplicate
     # this is also now done using multiple processors
     dups_name = unique(dups$UNIQUE_NAME)
-    tmp_df_dups = data.frame(COPIES_TRF = dups$COPIES_TRF, UNIFORM_MOTIF = dups$UNIFORM_MOTIF, REGION = dups$REGION, PASSES = dups$PASSES, READ_QUALITY = dups$READ_QUALITY,
-        LENGTH_SEQUENCE = dups$LENGTH_SEQUENCE, READ_NAME = dups$READ_NAME, START_TRF = dups$START_TRF, END_TRF = dups$END_TRF, TRF_PERC_MATCH = dups$TRF_PERC_MATCH, TRF_PERC_INDEL = dups$TRF_PERC_INDEL,
-        DATA_TYPE = dups$DATA_TYPE, UNIQUE_NAME = dups$UNIQUE_NAME)
+    tmp_df_dups = data.frame(COPIES_TRF = dups$COPIES_TRF, UNIFORM_MOTIF = dups$UNIFORM_MOTIF, REGION = dups$REGION, PASSES = dups$PASSES, READ_QUALITY = dups$READ_QUALITY, LENGTH_SEQUENCE = dups$LENGTH_SEQUENCE, READ_NAME = dups$READ_NAME, START_TRF = dups$START_TRF, END_TRF = dups$END_TRF, TRF_PERC_MATCH = dups$TRF_PERC_MATCH, TRF_PERC_INDEL = dups$TRF_PERC_INDEL, DATA_TYPE = dups$DATA_TYPE, UNIQUE_NAME = dups$UNIQUE_NAME)
     # add information about type, sample, haplo_value, polished_reads and polished_haplo_values
     tmp_info = all_res[, c('UNIQUE_NAME', 'type', 'sample', 'haplo_value', 'polished_reads', 'polished_haplo_values', 'HAPLOTYPE')]
     tmp_df_dups = merge(tmp_df_dups, tmp_info, by = 'UNIQUE_NAME')
@@ -1398,6 +1397,7 @@
     all_samples = unique(all_res$sample); all_regions = unique(all_res$REGION); motif_res = list()
     # first run on the reference genome
     motif_res_reference = generateConsens_mp(s = 'reference', all_regions, all_res = all_res_combined, motif_res_reference = NA)
+    #motif_res = rbindlist(mclapply(all_samples[which(all_samples != 'reference')], generateConsens_mp, all_regions = all_regions, all_res = all_res_combined, motif_res_reference = motif_res_reference, mc.cores = n_cpu), use.names=TRUE)
     motif_res = rbindlist(mclapply(all_samples[which(all_samples != 'reference')], generateConsens_mp, all_regions = all_regions, all_res = all_res_combined, motif_res_reference = motif_res_reference, mc.cores = n_cpu), use.names=TRUE)
     motif_res = rbind(motif_res, motif_res_reference)
     # add actual sequence to motif_res
