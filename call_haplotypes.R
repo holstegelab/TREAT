@@ -828,7 +828,7 @@
             best_motif_seq = seq(h1$START_TRF[order(-h1$COVERAGE_TR)][1], h1$END_TRF[order(-h1$COVERAGE_TR)][1])
             # then see if adding other motifs improves the sequence coverage
             alt_motifs = h1[which(h1$UNIFORM_MOTIF != best_motif),]
-            if (nrow(alt_motifs) >=1){
+            if (nrow(alt_motifs) >1){
                 for (i in 1:nrow(alt_motifs)){
                     # define a sequence of indexes representing the coverage of the best motif based on TRF_START and TRF_END
                     alt_motif_seq = seq(alt_motifs$START_TRF[i], alt_motifs$END_TRF[i])
@@ -838,7 +838,7 @@
                     # calculate coverage of this new combined sequence
                     combined_seq_coverage = length(combined_seq) / max(h1$LENGTH_SEQUENCE[1], alt_motifs$LENGTH_SEQUENCE[i])
                     # check if the coverage of the combined sequence is higher than the single sequence
-                    if (combined_seq_coverage > (max(h1$COVERAGE_TR) + 0.10)){
+                    if (combined_seq_coverage > (max(na.omit(h1$COVERAGE_TR)) + 0.10)){
                         # if so, this is a motif we want to use
                         motifs_to_use = c(motifs_to_use, as.character(alt_motifs$UNIFORM_MOTIF[i]))
                     }
@@ -1400,7 +1400,7 @@
     tmp_df_dups = merge(tmp_df_dups, tmp_info, by = 'UNIQUE_NAME')
     # finally combine the duplicate information with the unique information
     all_res_combined = rbind(all_res, tmp_df_dups)
-
+    saved_all = all_res_combined
     # 9. now we should look at the motifs -- implemented parallel computing
     cat('****** Generating consensus motifs\n')
     all_samples = unique(all_res$sample); all_regions = unique(all_res$REGION); motif_res = list()
