@@ -769,6 +769,7 @@
         # example: AAAAG and AAAAAGAAAAG --> AAAG(2)
         # take all motifs
         all_motifs = as.character(unique(h1$UNIFORM_MOTIF))
+        all_motifs = all_motifs[!is.na(all_motifs)]
         # do this only if there are more than 1 motif -- otherwise there's nothing to merge
         if (length(all_motifs) >1){
             # so we take the smaller motif
@@ -808,8 +809,6 @@
         # idea is to calculate a consensus motif, then iterate on the reads and generate the consensus representation
         # the first step is to recognized whether different motifs are actually a repetition of a smaller motif
         h1 = aln_motifs(h1)
-        # to generate the consensus motif, list all possible motifs
-        all_motifs = as.character(unique(h1$UNIFORM_MOTIF))
         motifs_to_use = c()
         # in general there can be two scenarios: 
         # 1. different trf matches cover different part of the sequence --> motifs should be combined
@@ -821,83 +820,93 @@
         h1 = h1[order(-h1$COVERAGE_TR),]
         # next, take the motif that covers the most of the TR
         best_motif = as.character(h1$UNIFORM_MOTIF[order(-h1$COVERAGE_TR)][1])
-        motifs_to_use = best_motif
-        # define a sequence of indexes representing the coverage of the best motif based on TRF_START and TRF_END
-        best_motif_seq = seq(h1$START_TRF[order(-h1$COVERAGE_TR)][1], h1$END_TRF[order(-h1$COVERAGE_TR)][1])
-        # then see if adding other motifs improves the sequence coverage
-        alt_motifs = h1[which(h1$UNIFORM_MOTIF != best_motif),]
-        if (nrow(alt_motifs) >=1){
-            for (i in 1:nrow(alt_motifs)){
-                # define a sequence of indexes representing the coverage of the best motif based on TRF_START and TRF_END
-                alt_motif_seq = seq(alt_motifs$START_TRF[i], alt_motifs$END_TRF[i])
-                # join the two list of indexes and remove duplicates
-                combined_seq = c(best_motif_seq, alt_motif_seq)
-                combined_seq = combined_seq[!duplicated(combined_seq)]
-                # calculate coverage of this new combined sequence
-                combined_seq_coverage = length(combined_seq) / max(h1$LENGTH_SEQUENCE[1], alt_motifs$LENGTH_SEQUENCE[i])
-                # check if the coverage of the combined sequence is higher than the single sequence
-                if (combined_seq_coverage > (max(h1$COVERAGE_TR) + 0.10)){
-                    # if so, this is a motif we want to use
-                    motifs_to_use = c(motifs_to_use, as.character(alt_motifs$UNIFORM_MOTIF[i]))
+        best_motif = best_motif[!is.na(best_motif)]
+        # sometimes, there are no motifs, so we should skip the whole thing
+        if (length(best_motif) >0){
+            motifs_to_use = best_motif
+            # define a sequence of indexes representing the coverage of the best motif based on TRF_START and TRF_END
+            best_motif_seq = seq(h1$START_TRF[order(-h1$COVERAGE_TR)][1], h1$END_TRF[order(-h1$COVERAGE_TR)][1])
+            # then see if adding other motifs improves the sequence coverage
+            alt_motifs = h1[which(h1$UNIFORM_MOTIF != best_motif),]
+            if (nrow(alt_motifs) >=1){
+                for (i in 1:nrow(alt_motifs)){
+                    # define a sequence of indexes representing the coverage of the best motif based on TRF_START and TRF_END
+                    alt_motif_seq = seq(alt_motifs$START_TRF[i], alt_motifs$END_TRF[i])
+                    # join the two list of indexes and remove duplicates
+                    combined_seq = c(best_motif_seq, alt_motif_seq)
+                    combined_seq = combined_seq[!duplicated(combined_seq)]
+                    # calculate coverage of this new combined sequence
+                    combined_seq_coverage = length(combined_seq) / max(h1$LENGTH_SEQUENCE[1], alt_motifs$LENGTH_SEQUENCE[i])
+                    # check if the coverage of the combined sequence is higher than the single sequence
+                    if (combined_seq_coverage > (max(h1$COVERAGE_TR) + 0.10)){
+                        # if so, this is a motif we want to use
+                        motifs_to_use = c(motifs_to_use, as.character(alt_motifs$UNIFORM_MOTIF[i]))
+                    }
                 }
             }
-        }
-        motifs_to_use = unique(motifs_to_use)
-        # then go ahead with merging the motifs only if we have more than 1 motif
-        if (length(motifs_to_use) >1){
-            # for generating the consensus motif, we will use the "majority rule consensus"
-            # first thing is to convert the characters into a list of n elements (as many as the sequence length)
-            all_motifs_chars = lapply(X = motifs_to_use, FUN = function(x){strsplit(x, "")[[1]]})
-            # find the maximum length of all motifs in the sequence
-            max_len_motif <- max(sapply(all_motifs_chars, length))
-            # make sure to have all motifs with the same size by adding "x"
-            all_motifs_chars <- lapply(all_motifs_chars, function(y) { n_x <- max_len_motif - length(y); c(y, rep("x", n_x)) })
-            # initialize the consensus motif variable
-            consensus_motif = c()
-            # iterate on the indexes of the motif
-            for (pos in seq(1, max_len_motif)){
-                # get the values of each motif at a given position
-                pos_values <- unlist(lapply(all_motifs_chars, "[[", pos))
-                # check if the values are all the same
-                pos_value_consensus = ifelse(test = length(unique(pos_values)) == 1, yes = unique(pos_values), no = 'x')
-                # then add to the consensus motif
-                consensus_motif = c(consensus_motif, pos_value_consensus)
+            motifs_to_use = unique(motifs_to_use)
+            # then go ahead with merging the motifs only if we have more than 1 motif
+            if (length(motifs_to_use) >1){
+                # for generating the consensus motif, we will use the "majority rule consensus"
+                # first thing is to convert the characters into a list of n elements (as many as the sequence length)
+                all_motifs_chars = lapply(X = motifs_to_use, FUN = function(x){strsplit(x, "")[[1]]})
+                # find the maximum length of all motifs in the sequence
+                max_len_motif <- max(sapply(all_motifs_chars, length))
+                # make sure to have all motifs with the same size by adding "x"
+                all_motifs_chars <- lapply(all_motifs_chars, function(y) { n_x <- max_len_motif - length(y); c(y, rep("x", n_x)) })
+                # initialize the consensus motif variable
+                consensus_motif = c()
+                # iterate on the indexes of the motif
+                for (pos in seq(1, max_len_motif)){
+                    # get the values of each motif at a given position
+                    pos_values <- unlist(lapply(all_motifs_chars, "[[", pos))
+                    # check if the values are all the same
+                    pos_value_consensus = ifelse(test = length(unique(pos_values)) == 1, yes = unique(pos_values), no = 'x')
+                    # then add to the consensus motif
+                    consensus_motif = c(consensus_motif, pos_value_consensus)
+                }
+                # finally, combine motif
+                consensus_motif = paste(consensus_motif, collapse = "")
+                # also combine the different alternative motifs
+                motifs_to_use = motifs_to_use[order(motifs_to_use)]
+                alternative_motifs = paste(motifs_to_use, collapse = ',')
+                
+                # In addition to the consensus motif, we can also find the specific motif
+                # depending on the number of motifs that we find, we can use a clustering approach
+                # for example, if there were 2 motifs found, that means that there are 2 defined TRF matches that (should) start at the same position
+                h1 = h1[order(h1$START_TRF),]
+                # fit k-means using the data sorted by start position of TRF, and the number of motifs is the k-value
+                fit = kmeans(x = h1[, c('START_TRF', 'END_TRF', 'TRF_PERC_MATCH')], centers = length(motifs_to_use), algorithm = 'Lloyd')
+                specific_representation = c()
+                # iterate over the clusters to determine the specific representation
+                for (i in unique(fit$cluster)){
+                    # isolate matches on the cluster
+                    tmp_reads = h1[which(fit$cluster == i),]
+                    # there can be that there are still multiple motifs, but we want to select the most abundant one
+                    most_frequent <- names(which.max(table(tmp_reads$UNIFORM_MOTIF)))
+                    # the number of copies is the median value
+                    copy_n_median = median(tmp_reads$COPIES_TRF)
+                    # compose the specific motif
+                    specific_representation = paste0(specific_representation, '(', most_frequent, ')', copy_n_median)
+                }
+            } else {
+                # in this case, we only have 1 motif, so we are OK
+                consensus_motif = motifs_to_use
+                alternative_motifs = NA
+                specific_representation = motifs_to_use
             }
-            # finally, combine motif
-            consensus_motif = paste(consensus_motif, collapse = "")
-            # also combine the different alternative motifs
-            motifs_to_use = motifs_to_use[order(motifs_to_use)]
-            alternative_motifs = paste(motifs_to_use, collapse = ',')
-            
-            # In addition to the consensus motif, we can also find the specific motif
-            # depending on the number of motifs that we find, we can use a clustering approach
-            # for example, if there were 2 motifs found, that means that there are 2 defined TRF matches that (should) start at the same position
-            h1 = h1[order(h1$START_TRF),]
-            # fit k-means using the data sorted by start position of TRF, and the number of motifs is the k-value
-            fit = kmeans(x = h1[, c('START_TRF', 'END_TRF', 'TRF_PERC_MATCH')], centers = length(motifs_to_use), algorithm = 'Lloyd')
-            specific_representation = c()
-            # iterate over the clusters to determine the specific representation
-            for (i in unique(fit$cluster)){
-                # isolate matches on the cluster
-                tmp_reads = h1[which(fit$cluster == i),]
-                # there can be that there are still multiple motifs, but we want to select the most abundant one
-                most_frequent <- names(which.max(table(tmp_reads$UNIFORM_MOTIF)))
-                # the number of copies is the median value
-                copy_n_median = median(tmp_reads$COPIES_TRF)
-                # compose the specific motif
-                specific_representation = paste0(specific_representation, '(', most_frequent, ')', copy_n_median)
-            }
+            # add combined motif to data and estimate number of copies
+            h1$CONSENSUS_MOTIF = consensus_motif
+            h1$CONSENSUS_MOTIF_EST_COPIES = h1$polished_haplo_values / nchar(consensus_motif)
+            h1$CONSENSUS_MOTIF_ALT_MOTIFS = alternative_motifs
+            h1$SPECIFIC_MOTIF = specific_representation
         } else {
-            # in this case, we only have 1 motif, so we are OK
-            consensus_motif = motifs_to_use
-            alternative_motifs = NA
-            specific_representation = motifs_to_use
+            h1$CONSENSUS_MOTIF = NA
+            h1$CONSENSUS_MOTIF_EST_COPIES = NA
+            h1$CONSENSUS_MOTIF_ALT_MOTIFS = NA
+            h1$SPECIFIC_MOTIF = NA
+
         }
-        # add combined motif to data and estimate number of copies
-        h1$CONSENSUS_MOTIF = consensus_motif
-        h1$CONSENSUS_MOTIF_EST_COPIES = h1$polished_haplo_values / nchar(consensus_motif)
-        h1$CONSENSUS_MOTIF_ALT_MOTIFS = alternative_motifs
-        h1$SPECIFIC_MOTIF = specific_representation
         # return the same object we used as input with additional columns
         return(h1)
     }
