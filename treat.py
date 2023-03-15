@@ -27,7 +27,7 @@ parser.add_argument('--out-dir', dest = 'out_dir', type = str, help = 'Directory
 # reference genome
 parser.add_argument('--ref', dest = 'ref', type = str, help = 'Path to reference genome data.', required = False, default = 'None')
 # flanking window to use
-parser.add_argument('--window', dest = 'window', type = int, help = 'Integer. Will use this value to take reads surrounding the provided .bed file.', required = False, default = 1000)
+parser.add_argument('--window', dest = 'window', type = int, help = 'Integer. Will use this value to take reads surrounding the provided .bed file.', required = False, default = 10)
 # whether to store temporary files (reads aligning to bed file)
 parser.add_argument('--store-temp', dest = 'store_temp', type = str, help = 'Boolean (True/False). If True, will store all temporary .bam and .fasta files.', required = False, default = 'False')
 # number of threads overall
@@ -247,7 +247,7 @@ print('********************\n')
 bed_file, anal_type, var_file, bam_directory, output_directory, store_temporary = args.bed_dir, args.analysis_type, args.variant_file, args.bam_dir, args.out_dir, args.store_temp
 window_size, assembly_type, assembly_ploidy, number_threads, polishing, snp_dir = args.window, args.ass_type, args.ass_ploidy, args.thread, args.polish, args.snp_dir
 snp_data_ids, step, target_reads, fasta_dir, trf_file, phase_file = args.snp_data_ids, args.step, args.target_reads, args.fasta_dir, args.trf_file, args.phase_file
-asm_file, ref_fasta, thr_mad, number_threads_asm_alnm, window_asm, ass_tool = args.asm_file, args.ref, args.thr_mad, args.thread_asm_aln, args.window_asm, args.ass_tool
+asm_file, ref_fasta, thr_mad, number_threads_asm_aln, window_asm, ass_tool = args.asm_file, args.ref, args.thr_mad, args.thread_asm_aln, args.window_asm, args.ass_tool
 # window for phasing should be larger
 window_for_phasing = 2500
 
