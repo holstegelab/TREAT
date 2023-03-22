@@ -532,7 +532,8 @@
                 # for example, if there were 2 motifs found, that means that there are 2 defined TRF matches that (should) start at the same position
                 h1 = h1[order(h1$START_TRF),]
                 # fit k-means using the data sorted by start position of TRF, and the number of motifs is the k-value
-                fit = kmeans(x = h1[, c('START_TRF', 'END_TRF', 'TRF_PERC_MATCH')], centers = length(motifs_to_use), algorithm = 'Lloyd')
+                h1_noNA = h1[!is.na(h1$START_TRF),]
+                fit = kmeans(x = h1_noNA[, c('START_TRF', 'END_TRF', 'TRF_PERC_MATCH')], centers = length(motifs_to_use), algorithm = 'Lloyd')
                 specific_representation = c()
                 # iterate over the clusters to determine the specific representation
                 for (i in unique(fit$cluster)){
