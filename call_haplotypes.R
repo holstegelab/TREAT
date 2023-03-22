@@ -950,8 +950,11 @@
     extractInfoVCF = function(s, data, ids){
         # extract data for the sample
         tmp = data[which(data$SAMPLE_COMBINED == s),]
+        ids_df = data.frame(REGION_COMBINED = ids)
         # match the order of the reference genome
-        tmp_match = tmp[order(match(tmp$REGION_COMBINED, ids)), ]
+        tmp = merge(ids_df, tmp, by = 'REGION_COMBINED', all.x = T)
+        tmp_match <- tmp[order(match(tmp$REGION_COMBINED, ids)), ]
+
         # extract QC
         tmp_match$FILTER = ifelse(tmp_match$DECISION == 'OK_BOTH', 'PASS_BOTH', NA)
         tmp_match$FILTER[which(tmp_match$DECISION == 'PRIORITY_READS_SPANNING')] = 'PASS_RSP'
