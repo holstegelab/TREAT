@@ -6,12 +6,14 @@
 #############################################################
 
 ## Libraries
-import os; from inspect import getsourcefile; from os.path import abspath; import sys; import pathlib
+import os; from inspect import getsourcefile; from os.path import abspath; import sys; import pathlib; import time
 from functions_treat import *; import argparse; import os.path; import pysam; from Bio.Seq import Seq
 from Bio import SeqIO; from random import random; import gzip; import subprocess; import json; import pandas as pd
 from datetime import datetime; from functools import partial; from itertools import repeat; import multiprocessing
 
 ## Main
+## Start time
+start_time = time.time()
 ## Define Arguments
 parser = argparse.ArgumentParser(description = 'Find information about a specific region/tandem repeat')
 
@@ -887,8 +889,12 @@ elif anal_type == 'assembly_trf':
         outf.close()
 
 ## Check whether to keep or delete temporary files
-if (store_temporary == 'False' and anal_type not in ['haplotyping', 'extract_reads', 'coverage_profile', 'complete']):
+if (store_temporary == 'False' and anal_type not in ['reads_spanning_trf', 'assembly_trf', 'haplotyping', 'extract_reads', 'coverage_profile', 'complete']):
     print(cleanTemp(output_directory, anal_type))
 
+## Final time
+end_time = time.time()
+total_time = end_time - start_time
+
 ## Final message 
-print('\n** run complete! all results are correctly stored. \ngoing to sleep now \nciao!')
+print('\n** run complete in %s! all results are correctly stored. \ngoing to sleep now \nciao!' %(total_time))
