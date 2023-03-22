@@ -391,30 +391,6 @@
         return(data)
     }
 
-    # Function to make final decision between assembly and reads-spanning -- in use
-    makeDecision = function(all_haplo_annotated){
-        all_haplo_annotated$DECISION = NA        
-        # main loop to make decisions
-        for (i in 1:nrow(all_haplo_annotated)){
-            if (all_haplo_annotated$COMPARISON[i] %in% c('assembly_miss_1_but_homozygous', 'same_alleles')){
-                all_haplo_annotated$DECISION[i] = 'both_fine'
-            } else if (all_haplo_annotated$COMPARISON[i] %in% c('reads_spanning_miss_1_allele_other_ok', 'missing_reads_spanning', 'missing_both_reads_spanning_alleles', 'only_1_allele_from_assembly', 'reads_spanning_miss_1_allele_other_different')){
-                all_haplo_annotated$DECISION[i] = 'better_assembly'
-            } else if (all_haplo_annotated$COMPARISON[i] %in% c('assembly_miss_1_allele_other_ok', 'missing_assembly', 'only_1_allele_from_reads_spanning', 'assembly_miss_1_allele_other_different')){
-                all_haplo_annotated$DECISION[i] = 'better_reads_spanning'
-            } else if (all_haplo_annotated$COMPARISON[i] %in% c('alleles_do_not_overlap', 'both_miss_1_allele_other_different')){
-                all_haplo_annotated$DECISION[i] = 'different_alleles'
-            } else if (all_haplo_annotated$COMPARISON[i] %in% c('both_miss_1_allele_other_ok')){
-                all_haplo_annotated$DECISION[i] = 'missing_1_allele'
-            } else if (all_haplo_annotated$COMPARISON[i] %in% c('missing_all_alleles')){
-                all_haplo_annotated$DECISION[i] = 'missing_all_alleles'
-            } else {
-                cat(paste0('**** !!! problem for ', i, '\n'))
-            }
-        }
-        return(all_haplo_annotated)
-    }
-
     # Function to merge motifs based on multiple processing -- in use
     mergeMotif_mp = function(motif){
         all_perm = permutMotif(as.character(motif))
@@ -764,6 +740,264 @@
     }
     
     # Function to compare reads-spanning and assembly-based approached based on multiple processing -- in use
+    comparison_faster = function(s, all_regions, all_haplo, deviation){
+        # initialize container
+        comparison = list()
+        # main loop over regions
+        for (r in all_regions){
+            # extract data of the sample in the region of interest
+            tmp = all_haplo[which(all_haplo$SAME_NAME == s & all_haplo$REGION == r),]
+            # split assembly and reads-spanning
+            asm = tmp[which(tmp$DATA_TYPE == 'assembly'),]; spa = tmp[which(tmp$DATA_TYPE == 'reads-spanning'),]
+            # for the assembly, keep the haplotype-aware contigs if there are multiple entries
+            if (nrow(asm) >1){ asm = asm[grep('Assembly_haps', asm$SAMPLE),] }
+            # first check if we have asm and reads-spanning
+            if (nrow(asm) >0 & nrow(spa) >0){
+                # adjust homozygous genotypes
+                # asm
+                asm$H2_CONSENSUS[is.na(asm$H2_CONSENSUS)] = asm$H1_CONSENSUS[is.na(asm$H2_CONSENSUS)]
+                asm$H2_CONSENSUS_MOTIF[is.na(asm$H2_CONSENSUS_MOTIF)] = asm$H1_CONSENSUS_MOTIF[is.na(asm$H2_CONSENSUS_MOTIF)]
+                asm$H2_HAPLO_SIZE[is.na(asm$H2_HAPLO_SIZE)] = asm$H1_HAPLO_SIZE[is.na(asm$H2_HAPLO_SIZE)]
+                # spanning
+                spa$H2_CONSENSUS[is.na(spa$H2_CONSENSUS)] = spa$H1_CONSENSUS[is.na(spa$H2_CONSENSUS)]
+                spa$H2_CONSENSUS_MOTIF[is.na(spa$H2_CONSENSUS_MOTIF)] = spa$H1_CONSENSUS_MOTIF[is.na(spa$H2_CONSENSUS_MOTIF)]
+                spa$H2_HAPLO_SIZE[is.na(spa$H2_HAPLO_SIZE)] = spa$H1_HAPLO_SIZE[is.na(spa$H2_HAPLO_SIZE)]
+                # check if there are NAs (but there shouldn't be at this point)
+                if (NA %in% c(asm$H1_HAPLO_SIZE, asm$H2_HAPLO_SIZE, spa$H1_HAPLO_SIZE, spa$H2_HAPLO_SIZE)){
+                    print(paste0('help!! ', s, '-', r))
+                } else {
+                    # separate data of asm and spa, for both alleles
+                    asm_h1 = asm[, c('H1_CONSENSUS', 'H1_CONSENSUS_MOTIF', 'H1_HAPLO_SIZE')]; spa_h1 = spa[, c('H1_CONSENSUS', 'H1_CONSENSUS_MOTIF', 'H1_HAPLO_SIZE')]
+                    asm_h2 = asm[, c('H2_CONSENSUS', 'H2_CONSENSUS_MOTIF', 'H2_HAPLO_SIZE')]; spa_h2 = spa[, c('H2_CONSENSUS', 'H2_CONSENSUS_MOTIF', 'H2_HAPLO_SIZE')]
+                    # make sure variables are numeric
+                    spa_h1$H1_HAPLO_SIZE = as.numeric(spa_h1$H1_HAPLO_SIZE); spa_h2$H2_HAPLO_SIZE = as.numeric(spa_h2$H2_HAPLO_SIZE)
+                    asm_h1$H1_HAPLO_SIZE = as.numeric(asm_h1$H1_HAPLO_SIZE); asm_h2$H2_HAPLO_SIZE = as.numeric(asm_h2$H2_HAPLO_SIZE)
+                    # calculate distance between alleles: h1
+                    diff_h1 = abs(c(asm_h1$H1_HAPLO_SIZE - spa_h1$H1_HAPLO_SIZE, asm_h1$H1_HAPLO_SIZE - spa_h2$H2_HAPLO_SIZE))
+                    closest_h1 = which(diff_h1 == min(diff_h1))[1]; if (closest_h1 == 1){ closest_all = spa_h1 } else { closest_all = spa_h2 }
+                    if (diff_h1[closest_h1] <= max(1.5, as.numeric(closest_all[, 3])*deviation)){ check_h1 = 'same' } else { check_h1 = 'different' }
+                    # then h2, exclude the h1 allele
+                    if (colnames(closest_all)[1] == 'H2'){ diff_h2 = abs(asm_h2$H2_HAPLO_SIZE - spa_h1$H1_HAPLO_SIZE) } else { diff_h2 = abs(asm_h2$H2_HAPLO_SIZE - spa_h2$H2_HAPLO_SIZE) }
+                    closest_h2 = abs(closest_h1 - 1); if (closest_h2 == 1){ closest_all = spa_h1 } else { closest_all = spa_h2 }
+                    if (diff_h2 <= max(1.5, as.numeric(closest_all[, 3])*deviation)){ check_h2 = 'same' } else { check_h2 = 'different' }
+                    # summary of comparison
+                    if (check_h1 == 'same' & check_h2 == 'same'){ check = 'same_alleles' } else { check = 'alleles_do_not_overlap' }
+                    colnames(asm) = paste0(colnames(asm), '_ASM'); asm$COMPARISON = check; colnames(spa) = paste0(colnames(spa), '_READS_SPANNING'); spa$H1_DIFF = diff_h1[closest_h1]; spa$H2_DIFF = diff_h2
+                }
+            } else if (nrow(asm) >0){
+                colnames(asm) = paste0(colnames(asm), '_ASM'); asm$COMPARISON = 'missing_reads_spanning'                   
+                colnames(spa) = paste0(colnames(spa), '_READS_SPANNING'); spa$H1_DIFF = NA; spa$H2_DIFF = NA
+            } else if (nrow(spa) >0){
+                colnames(spa) = paste0(colnames(spa), '_READS_SPANNING'); spa$COMPARISON = 'missing_assembly'
+                colnames(asm) = paste0(colnames(asm), '_ASM'); spa$H1_DIFF = NA; spa$H2_DIFF = NA
+            }
+            tmp_combined_res = cbind(asm, spa)
+            if (nrow(tmp_combined_res) >0){ comparison[[(length(comparison) + 1)]] = tmp_combined_res }
+        }
+        comparison = rbindlist(comparison, use.names=TRUE)
+        return(comparison)
+    }
+
+    # Function to make final decision between assembly and reads-spanning -- in use
+    makeDecision_faster = function(all_haplo_annotated, n_cpu){
+        # fix some NA in the columns of interes
+        all_haplo_annotated[all_haplo_annotated == 'NA'] = NA
+        all_haplo_annotated$H2_REFERENCE_MOTIF_CN_ASM[is.na(all_haplo_annotated$H2_REFERENCE_MOTIF_CN_ASM)] = all_haplo_annotated$H1_REFERENCE_MOTIF_CN_ASM[is.na(all_haplo_annotated$H2_REFERENCE_MOTIF_CN_ASM)]
+        all_haplo_annotated$H2_REFERENCE_MOTIF_CN_READS_SPANNING[is.na(all_haplo_annotated$H2_REFERENCE_MOTIF_CN_READS_SPANNING)] = all_haplo_annotated$H1_REFERENCE_MOTIF_CN_READS_SPANNING[is.na(all_haplo_annotated$H2_REFERENCE_MOTIF_CN_READS_SPANNING)]
+        # first, we take out all regions (the majority) where reads-spanning and assembly do agree
+        regions_agree = all_haplo_annotated[which(all_haplo_annotated$COMPARISON == 'same_alleles'),]
+        # set decision, alleles, motifs and copies
+        regions_agree$DECISION = 'OK_BOTH'
+        regions_agree$H1_HAPLO_FINAL = regions_agree$H1_HAPLO_SIZE_READS_SPANNING; regions_agree$H2_HAPLO_FINAL = regions_agree$H2_HAPLO_SIZE_READS_SPANNING
+        regions_agree$H1_MOTIF_FINAL = regions_agree$H1_CONSENSUS_MOTIF_ASM; regions_agree$H2_MOTIF_FINAL = regions_agree$H2_CONSENSUS_MOTIF_ASM
+        regions_agree$H1_COPIE_FINAL = regions_agree$H1_CONSENSUS_ASM; regions_agree$H2_COPIE_FINAL = regions_agree$H2_CONSENSUS_ASM
+        regions_agree$H1_REFCOPY_FINAL = regions_agree$H1_REFERENCE_MOTIF_CN_ASM; regions_agree$H2_REFCOPY_FINAL = regions_agree$H2_REFERENCE_MOTIF_CN_ASM
+        # sometimes, there are NAs (this happens when no motif was found either in assembly or the reads-spanning). Because we take values from assembly, this can be a problem. So here we correct that.
+        regions_agree$H2_CONSENSUS_MOTIF_READS_SPANNING[is.na(regions_agree$H2_CONSENSUS_MOTIF_READS_SPANNING)] = regions_agree$H1_CONSENSUS_MOTIF_READS_SPANNING[is.na(regions_agree$H2_CONSENSUS_MOTIF_READS_SPANNING)]
+        regions_agree$H1_MOTIF_FINAL[is.na(regions_agree$H1_MOTIF_FINAL)] = regions_agree$H1_CONSENSUS_MOTIF_READS_SPANNING[is.na(regions_agree$H1_MOTIF_FINAL)]
+        regions_agree$H2_MOTIF_FINAL[is.na(regions_agree$H2_MOTIF_FINAL)] = regions_agree$H2_CONSENSUS_MOTIF_READS_SPANNING[is.na(regions_agree$H2_MOTIF_FINAL)]
+        regions_agree$H1_COPIE_FINAL[is.na(regions_agree$H1_COPIE_FINAL)] = regions_agree$H1_CONSENSUS_READS_SPANNING[is.na(regions_agree$H1_COPIE_FINAL)]
+        regions_agree$H2_COPIE_FINAL[is.na(regions_agree$H2_COPIE_FINAL)] = regions_agree$H2_CONSENSUS_READS_SPANNING[is.na(regions_agree$H2_COPIE_FINAL)]
+        regions_agree$H1_REFCOPY_FINAL[is.na(regions_agree$H1_REFCOPY_FINAL)] = regions_agree$H1_REFERENCE_MOTIF_CN_READS_SPANNING[is.na(regions_agree$H1_REFCOPY_FINAL)]
+        regions_agree$H2_REFCOPY_FINAL[is.na(regions_agree$H2_REFCOPY_FINAL)] = regions_agree$H2_REFERENCE_MOTIF_CN_READS_SPANNING[is.na(regions_agree$H2_REFCOPY_FINAL)]
+        # then we look at the missings: split missing assembly from missing reads_spanning
+        regions_missing_asm = all_haplo_annotated[which(all_haplo_annotated$COMPARISON == 'missing_assembly'),]
+        if (nrow(regions_missing_asm) >0){ 
+            regions_missing_asm$DECISION = 'PRIORITY_READS_SPANNING'
+            regions_missing_asm$H1_HAPLO_FINAL = regions_missing_asm$H1_HAPLO_SIZE_READS_SPANNING; regions_missing_asm$H2_HAPLO_FINAL = regions_missing_asm$H2_HAPLO_SIZE_READS_SPANNING
+            regions_missing_asm$H1_MOTIF_FINAL = regions_missing_asm$H1_CONSENSUS_MOTIF_READS_SPANNING; regions_missing_asm$H2_MOTIF_FINAL = regions_missing_asm$H2_CONSENSUS_MOTIF_READS_SPANNING
+            regions_missing_asm$H1_COPIE_FINAL = regions_missing_asm$H1_CONSENSUS_READS_SPANNING; regions_missing_asm$H2_COPIE_FINAL = regions_missing_asm$H2_CONSENSUS_READS_SPANNING
+            regions_missing_asm$H1_REFCOPY_FINAL = regions_missing_asm$H1_REFERENCE_MOTIF_CN_READS_SPANNING; regions_missing_asm$H2_REFCOPY_FINAL = regions_missing_asm$H2_REFERENCE_MOTIF_CN_READS_SPANNING
+            # fix NA
+            regions_missing_asm$H2_HAPLO_FINAL[is.na(regions_missing_asm$H2_HAPLO_FINAL)] = regions_missing_asm$H1_HAPLO_FINAL[is.na(regions_missing_asm$H2_HAPLO_FINAL)]
+            regions_missing_asm$H2_MOTIF_FINAL[is.na(regions_missing_asm$H2_MOTIF_FINAL)] = regions_missing_asm$H1_MOTIF_FINAL[is.na(regions_missing_asm$H2_MOTIF_FINAL)]
+            regions_missing_asm$H2_COPIE_FINAL[is.na(regions_missing_asm$H2_COPIE_FINAL)] = regions_missing_asm$H1_COPIE_FINAL[is.na(regions_missing_asm$H2_COPIE_FINAL)]
+            regions_missing_asm$H2_REFCOPY_FINAL[is.na(regions_missing_asm$H2_REFCOPY_FINAL)] = regions_missing_asm$H1_REFCOPY_FINAL[is.na(regions_missing_asm$H2_REFCOPY_FINAL)]
+        }
+        regions_missing_spa = all_haplo_annotated[which(all_haplo_annotated$COMPARISON == 'missing_reads_spanning'),]
+        if (nrow(regions_missing_spa) >0){ 
+            regions_missing_spa$DECISION = 'PRIORITY_ASSEMBLY' 
+            regions_missing_spa$H1_HAPLO_FINAL = regions_missing_spa$H1_HAPLO_SIZE_ASM; regions_missing_spa$H2_HAPLO_FINAL = regions_missing_spa$H2_HAPLO_SIZE_ASM
+            regions_missing_spa$H1_MOTIF_FINAL = regions_missing_spa$H1_CONSENSUS_MOTIF_ASM; regions_missing_spa$H2_MOTIF_FINAL = regions_missing_spa$H2_CONSENSUS_MOTIF_ASM
+            regions_missing_spa$H1_COPIE_FINAL = regions_missing_spa$H1_CONSENSUS_ASM; regions_missing_spa$H2_COPIE_FINAL = regions_missing_spa$H2_CONSENSUS_ASM
+            regions_missing_spa$H1_REFCOPY_FINAL = regions_missing_spa$H1_REFERENCE_MOTIF_CN_ASM; regions_missing_spa$H2_REFCOPY_FINAL = regions_missing_spa$H2_REFERENCE_MOTIF_CN_ASM
+            # fix NA
+            regions_missing_spa$H2_HAPLO_FINAL[is.na(regions_missing_spa$H2_HAPLO_FINAL)] = regions_missing_spa$H1_HAPLO_FINAL[is.na(regions_missing_spa$H2_HAPLO_FINAL)]
+            regions_missing_spa$H2_MOTIF_FINAL[is.na(regions_missing_spa$H2_MOTIF_FINAL)] = regions_missing_spa$H1_MOTIF_FINAL[is.na(regions_missing_spa$H2_MOTIF_FINAL)]
+            regions_missing_spa$H2_COPIE_FINAL[is.na(regions_missing_spa$H2_COPIE_FINAL)] = regions_missing_spa$H1_COPIE_FINAL[is.na(regions_missing_spa$H2_COPIE_FINAL)]
+            regions_missing_spa$H2_REFCOPY_FINAL[is.na(regions_missing_spa$H2_REFCOPY_FINAL)] = regions_missing_spa$H1_REFCOPY_FINAL[is.na(regions_missing_spa$H2_REFCOPY_FINAL)]
+        }
+        # then we look at the inconsistent regions. In general, prioritize more variability (2 alleles instead of 1)
+        inconsistent = all_haplo_annotated[which(all_haplo_annotated$COMPARISON == 'alleles_do_not_overlap'),]
+        inconsistent$DECISION = NA
+        # loop over the inconsistent regions
+        inconsistent_solved = rbindlist(mclapply(1:nrow(inconsistent), solve_inconsistency, inconsistent = inconsistent, mc.cores=n_cpu))
+        # fix NA
+        inconsistent_solved$H2_HAPLO_FINAL[is.na(inconsistent_solved$H2_HAPLO_FINAL)] = inconsistent_solved$H1_HAPLO_FINAL[is.na(inconsistent_solved$H2_HAPLO_FINAL)]
+        inconsistent_solved$H2_MOTIF_FINAL[is.na(inconsistent_solved$H2_MOTIF_FINAL)] = inconsistent_solved$H1_MOTIF_FINAL[is.na(inconsistent_solved$H2_MOTIF_FINAL)]
+        inconsistent_solved$H2_COPIE_FINAL[is.na(inconsistent_solved$H2_COPIE_FINAL)] = inconsistent_solved$H1_COPIE_FINAL[is.na(inconsistent_solved$H2_COPIE_FINAL)]
+        inconsistent_solved$H2_REFCOPY_FINAL[is.na(inconsistent_solved$H2_REFCOPY_FINAL)] = inconsistent_solved$H1_REFCOPY_FINAL[is.na(inconsistent_solved$H2_REFCOPY_FINAL)]
+        # combine data again
+        haplo_final = rbind(regions_agree, regions_missing_asm, regions_missing_spa, inconsistent_solved, use.names=TRUE, fill=TRUE)
+        return(haplo_final)
+    }
+
+    # Function to solve inconsistency of calls from assembly and reads spanning -- in use
+    solve_inconsistency = function(i, inconsistent){
+        # select entry of interest
+        tmp = inconsistent[i, ]
+        # extract alleles of asm and spa
+        asm_alleles = as.numeric(c(tmp$H1_HAPLO_SIZE_ASM, tmp$H2_HAPLO_SIZE_ASM))
+        spa_alleles = as.numeric(c(tmp$H1_HAPLO_SIZE_READS_SPANNING, tmp$H2_HAPLO_SIZE_READS_SPANNING))
+        # an easy check if by looking at unique alleles (if homozygous, the 2 alleles will be the same, otherwise different). we can then prioritize when 2 alleles are present.
+        n_unique_asm = length(unique(asm_alleles)); n_unique_spa = length(unique(spa_alleles))
+        if (n_unique_asm > n_unique_spa){
+            # more alleles in assembly than in reads-spanning
+            tmp$DECISION = 'PRIORITY_ASSEMBLY'
+            tmp$H1_HAPLO_FINAL = tmp$H1_HAPLO_SIZE_ASM; tmp$H2_HAPLO_FINAL = tmp$H2_HAPLO_SIZE_ASM
+            tmp$H1_MOTIF_FINAL = tmp$H1_CONSENSUS_MOTIF_ASM; tmp$H2_MOTIF_FINAL = tmp$H2_CONSENSUS_MOTIF_ASM
+            tmp$H1_COPIE_FINAL = tmp$H1_CONSENSUS_ASM; tmp$H2_COPIE_FINAL = tmp$H2_CONSENSUS_ASM
+            tmp$H1_REFCOPY_FINAL = tmp$H1_REFERENCE_MOTIF_CN_ASM; tmp$H2_REFCOPY_FINAL = tmp$H2_REFERENCE_MOTIF_CN_ASM
+        } else if (n_unique_asm < n_unique_spa){
+            # more alleles in reads-spanning than in assembly
+            tmp$DECISION = 'PRIORITY_READS_SPANNING'
+            tmp$H1_HAPLO_FINAL = tmp$H1_HAPLO_SIZE_READS_SPANNING; tmp$H2_HAPLO_FINAL = tmp$H2_HAPLO_SIZE_READS_SPANNING
+            tmp$H1_MOTIF_FINAL = tmp$H1_CONSENSUS_MOTIF_READS_SPANNING; tmp$H2_MOTIF_FINAL = tmp$H2_CONSENSUS_MOTIF_READS_SPANNING
+            tmp$H1_COPIE_FINAL = tmp$H1_CONSENSUS_READS_SPANNING; tmp$H2_COPIE_FINAL = tmp$H2_CONSENSUS_READS_SPANNING
+            tmp$H1_REFCOPY_FINAL = tmp$H1_REFERENCE_MOTIF_CN_READS_SPANNING; tmp$H2_REFCOPY_FINAL = tmp$H2_REFERENCE_MOTIF_CN_READS_SPANNING
+        } else {
+            # same number of alleles, but different
+            tmp$DECISION = 'UNCERTAIN'
+            tmp$H1_HAPLO_FINAL = NA; tmp$H2_HAPLO_FINAL = NA
+            tmp$H1_MOTIF_FINAL = NA; tmp$H2_MOTIF_FINAL = NA
+            tmp$H1_COPIE_FINAL = NA; tmp$H2_COPIE_FINAL = NA
+            tmp$H1_REFCOPY_FINAL = NA; tmp$H2_REFCOPY_FINAL = NA
+        }
+        return(tmp)
+    }
+
+    # Function to create VCF file -- in use
+    createVCFfile = function(data, reference, type){
+        # Create a data frame with the variant information -- this will be different for certain regions (also whether based on reads-spanning only or assembly only) and uncertain regions
+        if (type == 'comparison'){
+            # However, some info are common to all regions
+            data$REGION_COMBINED = ifelse(is.na(data$REGION_ASM), data$REGION_READS_SPANNING, data$REGION_ASM)
+            data$SAMPLE_COMBINED = ifelse(is.na(data$SAMPLE_ASM), data$SAMPLE_READS_SPANNING, data$SAMPLE_ASM)
+            # adjust the sample names
+            data$SAMPLE_COMBINED = str_replace_all(data$SAMPLE_COMBINED, '__Assembly_haps_aln.bam', '')
+            data$SAMPLE_COMBINED = str_replace_all(data$SAMPLE_COMBINED, '__Assembly_p_ctg_aln.bam', '')
+            data$SAMPLE_COMBINED = str_replace_all(data$SAMPLE_COMBINED, '__rawReads.bam', '')
+        } else {
+            data$REGION_COMBINED = data$REGION
+            data$SAMPLE_COMBINED = data$SAMPLE
+            # adjust the sample names
+            data$SAMPLE_COMBINED = str_replace_all(data$SAMPLE_COMBINED, '__Assembly_haps_aln.bam', '')
+            data$SAMPLE_COMBINED = str_replace_all(data$SAMPLE_COMBINED, '__Assembly_p_ctg_aln.bam', '')
+            data$SAMPLE_COMBINED = str_replace_all(data$SAMPLE_COMBINED, '__rawReads.bam', '')
+        }
+        # Chromosome -- from reference
+        chroms = str_split_fixed(reference$REGION, ':', 2)[, 1]
+        # Position
+        pos = as.numeric(str_split_fixed(str_split_fixed(reference$REGION, ':', 2)[, 2], '-', 2)[, 1])
+        # Id is the REGION_COMBINED_COLUMN
+        ids = reference$REGION
+        # REF is the size in the reference genome
+        ref_size = reference$H1_HAPLO_SIZE
+        # ALT we set to . as there are many alleles possible, and we report them in the SAMPLE field
+        alt_size = rep('.', length(ref_size))
+        # QUAL we also set to .
+        qual = rep('.', length(ref_size))
+        # FILTER we set to PASS, then each sample will have a personal entry of quality
+        filter = rep('PASS', length(ref_size))
+        # INFO we set put the information from the reference genome (consensus motif and number of copies)
+        info = paste(reference$H1_CONSENSUS_MOTIF, reference$H1_CONSENSUS, sep = ';')
+        # FORMAT is important: for each sample, we put the filter (PASS_BOTH, PASS_ASM, PASS_RSP, UNCERTAIN), the sizes (H1_HAPLO|H2_HAPLO), MOTIF (H1_MOTIF|H2_MOTIF), COPIES (H1_CN|H2_CN)
+        format = rep('QC;GT;MOTIF;CN;CN_REF', length(ref_size))
+        # SAMPLE is the actual sample information, we use a function to extract that for each sample
+        all_samples = unique(data$SAMPLE_COMBINED)
+        samples_info = lapply(all_samples, extractInfoVCF, data = data, ids = ids)
+        # FINALLY COMPILE THE DATAFRAME FOR VCF file
+        df <- data.frame(CHROM = chroms, POS = pos, ID = ids, REF = ref_size, ALT = alt_size, QUAL = qual, FILTER = filter, INFO = info, FORMAT = format)
+        # add the samples to the df
+        for (i in seq_along(samples_info)) { df <- cbind(df, samples_info[[i]]); colnames(df)[ncol(df)] <- all_samples[i] }
+        # write header
+        header <- c("##fileformat=VCFv4.2", "##INFO=<ID=REFERENCE_INFO,Number=2,Type=String,Description=\"Motif observed in the reference genome (GRCh38), and relative number of motif repetitions.\">", "##FORMAT=<ID=QC,Number=1,Type=String,Description=\"Quality summary of TREAT genotyping. PASS_BOTH: genotype agreed between reads-spanning and assembly. PASS_RSP: priority to genotype from reads-spanning. PASS_ASM: priority to genotype from assembly.\">", "##FORMAT=<ID=GT,Number=2,Type=String,Description=\"Phased size of the tandem repeats. H1_size | H2_size\">", "##FORMAT=<ID=MOTIF,Number=2,Type=String,Description=\"Phased consensus motif found in the sample. H1_motif | H2_motif\">", "##FORMAT=<ID=CN,Number=2,Type=String,Description=\"Phased number of copies of the motif found in the sample. H1_copies | H2_copies\">", "##FORMAT=<ID=CN_REF,Number=2,Type=String,Description=\"Phased estimation of the reference motif as found in the sample. H1_motif_ref | H2_motif_ref\">", paste("#CHROM", "POS", "ID", "REF", "ALT", "QUAL", "FILTER", "INFO", "FORMAT", paste(all_samples, collapse = "\t"), sep = "\t"))
+        # Combine header and data frame
+        vcf <- c(header, apply(df, 1, paste, collapse = "\t"))
+        return(vcf)
+    }
+
+    # Function to extract sample-specific information -- in use
+    extractInfoVCF = function(s, data, ids){
+        # extract data for the sample
+        tmp = data[which(data$SAMPLE_COMBINED == s),]
+        # match the order of the reference genome
+        tmp_match = tmp[order(match(tmp$REGION_COMBINED, ids)), ]
+        # extract QC
+        tmp_match$FILTER = ifelse(tmp_match$DECISION == 'OK_BOTH', 'PASS_BOTH', NA)
+        tmp_match$FILTER[which(tmp_match$DECISION == 'PRIORITY_READS_SPANNING')] = 'PASS_RSP'
+        tmp_match$FILTER[which(tmp_match$DECISION == 'PRIORITY_ASSEMBLY')] = 'PASS_ASM'
+        tmp_match$FILTER[is.na(tmp_match$FILTER)] = 'UNCERTAIN'
+        # extract GT
+        tmp_match$GT = paste(tmp_match$H1_HAPLO_FINAL, tmp_match$H2_HAPLO_FINAL, sep = "|")
+        # extract MOTIF
+        tmp_match$MOTIF = paste(tmp_match$H1_MOTIF_FINAL, tmp_match$H2_MOTIF_FINAL, sep = "|")
+        # extract COPIES
+        tmp_match$CN = paste(tmp_match$H1_COPIE_FINAL, tmp_match$H2_COPIE_FINAL, sep = "|")
+        # extract COPIES OF REFERENCE MOTIF
+        tmp_match$CN_REF = paste(tmp_match$H1_REFCOPY_FINAL, tmp_match$H2_REFCOPY_FINAL, sep = "|")
+        # combine all info
+        combined_info = paste(tmp_match$FILTER, tmp_match$GT, tmp_match$MOTIF, tmp_match$CN, tmp_match$CN_REF, sep=";")
+        return(combined_info)
+    }
+
+    # -----------------------------------------------------------------------------------------------------------------------------------------------------------------#
+
+    # Function to make final decision between assembly and reads-spanning -- NOT in use, but maybe useful for debugging in the near future
+    makeDecision = function(all_haplo_annotated){
+        all_haplo_annotated$DECISION = NA        
+        # main loop to make decisions
+        for (i in 1:nrow(all_haplo_annotated)){
+            if (all_haplo_annotated$COMPARISON[i] %in% c('assembly_miss_1_but_homozygous', 'same_alleles')){
+                all_haplo_annotated$DECISION[i] = 'both_fine'
+            } else if (all_haplo_annotated$COMPARISON[i] %in% c('reads_spanning_miss_1_allele_other_ok', 'missing_reads_spanning', 'missing_both_reads_spanning_alleles', 'only_1_allele_from_assembly', 'reads_spanning_miss_1_allele_other_different')){
+                all_haplo_annotated$DECISION[i] = 'better_assembly'
+            } else if (all_haplo_annotated$COMPARISON[i] %in% c('assembly_miss_1_allele_other_ok', 'missing_assembly', 'only_1_allele_from_reads_spanning', 'assembly_miss_1_allele_other_different')){
+                all_haplo_annotated$DECISION[i] = 'better_reads_spanning'
+            } else if (all_haplo_annotated$COMPARISON[i] %in% c('alleles_do_not_overlap', 'both_miss_1_allele_other_different')){
+                all_haplo_annotated$DECISION[i] = 'different_alleles'
+            } else if (all_haplo_annotated$COMPARISON[i] %in% c('both_miss_1_allele_other_ok')){
+                all_haplo_annotated$DECISION[i] = 'missing_1_allele'
+            } else if (all_haplo_annotated$COMPARISON[i] %in% c('missing_all_alleles')){
+                all_haplo_annotated$DECISION[i] = 'missing_all_alleles'
+            } else {
+                cat(paste0('**** !!! problem for ', i, '\n'))
+            }
+        }
+        return(all_haplo_annotated)
+    }
+    
+    # Function to compare reads-spanning and assembly-based approached based on multiple processing -- NOT in use, but maybe useful for debugging in the near future
     compareReadsSpanning_Asm_mp = function(s, all_regions, all_haplo, deviation){
         comparison = list()
         for (r in all_regions){
@@ -773,21 +1007,22 @@
             # for the assembly, keep the haplotype-aware contigs if there are multiple entries
             if (nrow(asm) >1){ asm = asm[grep('Assembly_haps', asm$SAMPLE),] }
             # first check if we have asm and reads-spanning
-            if (nrow(asm) >0 & nrow(spa)){
+            if (nrow(asm) >0 & nrow(spa) >0){
                 # pairwise comparison of haplotypes. first extract data for asm and spa for h1 and h2
-                asm_h1 = asm[, c('H1', 'H1_MOTIF', 'H1_LENGTH')]; spa_h1 = spa[, c('H1', 'H1_MOTIF', 'H1_LENGTH')]
-                asm_h2 = asm[, c('H2', 'H2_MOTIF', 'H2_LENGTH')]; spa_h2 = spa[, c('H2', 'H2_MOTIF', 'H2_LENGTH')]
+                asm_h1 = asm[, c('H1_CONSENSUS', 'H1_CONSENSUS_MOTIF', 'H1_HAPLO_SIZE')]; spa_h1 = spa[, c('H1_CONSENSUS', 'H1_CONSENSUS_MOTIF', 'H1_HAPLO_SIZE')]
+                asm_h2 = asm[, c('H2_CONSENSUS', 'H2_CONSENSUS_MOTIF', 'H2_HAPLO_SIZE')]; spa_h2 = spa[, c('H2_CONSENSUS', 'H2_CONSENSUS_MOTIF', 'H2_HAPLO_SIZE')]
                 # then check for NAs
-                if (NA %in% c(asm_h1$H1, asm_h2$H2, spa_h1$H1, spa_h2$H2)){
+                if (NA %in% c(asm_h1$H1_HAPLO_SIZE, asm_h2$H2_HAPLO_SIZE, spa_h1$H1_HAPLO_SIZE, spa_h2$H2_HAPLO_SIZE)){
                     # find the NA(s)
-                    na_index = which(is.na(c(asm_h1$H1, asm_h2$H2, spa_h1$H1, spa_h2$H2)))
+                    na_index = which(is.na(c(asm_h1$H1_HAPLO_SIZE, asm_h2$H2_HAPLO_SIZE, spa_h1$H1_HAPLO_SIZE, spa_h2$H2_HAPLO_SIZE)))
                     if (length(na_index) == 4){
                         colnames(asm) = paste0(colnames(asm), '_ASM'); asm$COMPARISON = 'missing_all_alleles'
                         colnames(spa) = paste0(colnames(spa), '_READS_SPANNING'); spa$H1_DIFF = NA; spa$H2_DIFF = NA
                     } else if (length(na_index) == 3){
                         good_one = which(!seq(1, 4) %in% na_index)
                         colnames(asm) = paste0(colnames(asm), '_ASM')
-                        colnames(spa) = paste0(colnames(spa), '_READS_SPANNING'); spa$H1_DIFF = diff_tmp; spa$H2_DIFF = NA
+                        colnames(spa) = paste0(colnames(spa), '_READS_SPANNING')
+                        spa$H1_DIFF = NA; spa$H2_DIFF = NA
                         if (good_one %in% c(1, 2)){ asm$COMPARISON = 'only_1_allele_from_assembly' } else { asm$COMPARISON = 'only_1_allele_from_reads_spanning' }
                     } else if (length(na_index) == 2){
                         if (na_index[1] %in% c(1, 2) & na_index[2] %in% c(1, 2)){
@@ -806,7 +1041,7 @@
                             # manage spanning
                             if (3 %in% na_index){ nonmissing_spa = spa_h2 } else if (4 %in% na_index){ nonmissing_spa = spa_h1 }
                             # check nonmissing allele
-                            diff_tmp = abs(as.numeric(nonmissing_asm[, 1]) - as.numeric(nonmissing_spa[, 1]))
+                            diff_tmp = abs(as.numeric(nonmissing_asm[, 3]) - as.numeric(nonmissing_spa[, 3]))
                             if (diff_tmp <= max(1.5, as.numeric(nonmissing_asm[, 1])*deviation)){ check = 'both_miss_1_allele_other_ok' } else { check = 'both_miss_1_allele_other_different' }
                             colnames(asm) = paste0(colnames(asm), '_ASM'); asm$COMPARISON = check
                             colnames(spa) = paste0(colnames(spa), '_READS_SPANNING'); spa$H1_DIFF = diff_tmp; spa$H2_DIFF = NA
@@ -815,7 +1050,7 @@
                         if (na_index %in% c(1, 2)){
                             if (na_index == 1){ nonmissing = asm_h2 } else { nonmissing = asm_h1 }
                             # calculate distance between alleles based on copy number
-                            diff_alleles = abs(c(as.numeric(nonmissing[, 1]) - spa_h1$H1, as.numeric(nonmissing[, 1]) - spa_h2$H2))
+                            diff_alleles = abs(c(as.numeric(nonmissing[, 3]) - as.numeric(spa_h1$H1_HAPLO_SIZE), as.numeric(nonmissing[, 3]) - as.numeric(spa_h2$H2_HAPLO_SIZE)))
                             if (length(unique(diff_alleles)) == 1){
                                 colnames(asm) = paste0(colnames(asm), '_ASM'); asm$COMPARISON = 'assembly_miss_1_but_homozygous'
                                 colnames(spa) = paste0(colnames(spa), '_READS_SPANNING'); spa$H1_DIFF = diff_alleles[1]; spa$H2_DIFF = NA
@@ -849,14 +1084,17 @@
                         }
                     }
                 } else {
+                    # make sure variables are numeric
+                    spa_h1$H1_HAPLO_SIZE = as.numeric(spa_h1$H1_HAPLO_SIZE); spa_h2$H2_HAPLO_SIZE = as.numeric(spa_h2$H2_HAPLO_SIZE)
+                    asm_h1$H1_HAPLO_SIZE = as.numeric(asm_h1$H1_HAPLO_SIZE); asm_h2$H2_HAPLO_SIZE = as.numeric(asm_h2$H2_HAPLO_SIZE)
                     # calculate distance between alleles: h1
-                    diff_h1 = abs(c(asm_h1$H1 - spa_h1$H1, asm_h1$H1 - spa_h2$H2))
+                    diff_h1 = abs(c(asm_h1$H1_HAPLO_SIZE - spa_h1$H1_HAPLO_SIZE, asm_h1$H1_HAPLO_SIZE - spa_h2$H2_HAPLO_SIZE))
                     closest_h1 = which(diff_h1 == min(diff_h1))[1]; if (closest_h1 == 1){ closest_all = spa_h1 } else { closest_all = spa_h2 }
-                    if (diff_h1[closest_h1] <= max(1.5, as.numeric(closest_all[,1])*deviation)){ check_h1 = 'same' } else { check_h1 = 'different' }
+                    if (diff_h1[closest_h1] <= max(1.5, as.numeric(closest_all[, 3])*deviation)){ check_h1 = 'same' } else { check_h1 = 'different' }
                     # then h2, exclude the h1 allele
-                    if (colnames(closest_all)[1] == 'H2'){ diff_h2 = abs(asm_h2$H2 - spa_h1$H1) } else { diff_h2 = abs(asm_h2$H2 - spa_h2$H2) }
+                    if (colnames(closest_all)[1] == 'H2'){ diff_h2 = abs(asm_h2$H2_HAPLO_SIZE - spa_h1$H1_HAPLO_SIZE) } else { diff_h2 = abs(asm_h2$H2_HAPLO_SIZE - spa_h2$H2_HAPLO_SIZE) }
                     closest_h2 = abs(closest_h1 - 1); if (closest_h2 == 1){ closest_all = spa_h1 } else { closest_all = spa_h2 }
-                    if (diff_h2 <= max(1.5, as.numeric(closest_all[,1])*deviation)){ check_h2 = 'same' } else { check_h2 = 'different' }
+                    if (diff_h2 <= max(1.5, as.numeric(closest_all[, 3])*deviation)){ check_h2 = 'same' } else { check_h2 = 'different' }
                     if (check_h1 == 'same' & check_h2 == 'same'){ check = 'same_alleles' } else { check = 'alleles_do_not_overlap' }
                     colnames(asm) = paste0(colnames(asm), '_ASM'); asm$COMPARISON = check; colnames(spa) = paste0(colnames(spa), '_READS_SPANNING'); spa$H1_DIFF = diff_h1[closest_h1]; spa$H2_DIFF = diff_h2
                 }
@@ -965,7 +1203,7 @@
         }
 
     # 2. Read and combine all input PHASING files
-        if (inp_pha != 'None'){
+        if (inp_pha[1] != 'None'){
             cat('****** Reading PHASING input\n')
             all_pha = list()
             for (i in 1:length(inp_pha)){
@@ -1056,27 +1294,43 @@
         cat('****** Haplotype calling\n')
         all_samples = unique(motif_res$sample); all_regions = unique(motif_res$REGION)
         all_haplo = rbindlist(mclapply(all_samples, callHaplo_mp, all_regions = all_regions, data = motif_res, mc.cores = n_cpu))
+        # add a unique identifier to match samples reads-spanning and assembly results
+        all_haplo$SAME_NAME = str_split_fixed(all_haplo$SAMPLE, '__', 2)[, 1]
+        # exclude reference
+        reference = all_haplo[which(all_haplo$SAME_NAME == 'reference'),]; all_haplo = all_haplo[which(all_haplo$SAME_NAME != 'reference'),]
 
-    # 11. if analysis type was different from the combined, we are done here: save output tables
-        cat('****** Generating tables\n')
-        out_dir = str_replace_all(out_dir, '/$', ''); if (!dir.exists(out_dir)){ system(paste0('mkdir ', out_dir)) }
-        write.table(motif_res, paste0(out_dir, '/haplotyping_single_reads.txt'), quote=F, row.names = F, sep = '\t')
-        write.table(all_haplo, paste0(out_dir, '/haplotyping_single_samples.txt'), quote=F, row.names = F, sep = '\t')
-
-    # 12. if both reads-spanning and assembly were submitted, we should compare them and make a unified call
-        # this will assume the names are the same. Will split with '.' and take the name before that.
+    # 11. if both reads-spanning and assembly were submitted, we should compare them and make a unified call
         if (anal_type == 'reads-spanning + assembly + comparison'){
             cat('****** Comparing reads-spanning with assembly\n')
-            # add a unique identifier to match samples reads-spanning and assembly results
-            all_haplo$SAME_NAME = str_split_fixed(all_haplo$SAMPLE, '__', 2)[, 1]
-            # exclude reference
-            reference = all_haplo[which(all_haplo$SAME_NAME == 'reference'),]; all_haplo = all_haplo[which(all_haplo$SAME_NAME != 'reference'),]
             # run multiprocessing for each sample independently
             all_samples = unique(all_haplo$SAME_NAME); all_regions = unique(all_haplo$REGION)
-            all_haplo_annotated = rbindlist(mclapply(all_samples, compareReadsSpanning_Asm_mp, all_regions = all_regions, all_haplo = all_haplo, deviation = thr_mad, mc.cores = n_cpu))
+            all_haplo_annotated = rbindlist(mclapply(all_samples, comparison_faster, all_regions = all_regions, all_haplo = all_haplo, deviation = thr_mad, mc.cores = n_cpu))
             # then make a final decision
-            decisions = makeDecision(all_haplo_annotated)
+            all_haplo_final = makeDecision_faster(all_haplo_annotated, n_cpu)
+            # finally we need to make VCFs for compatibility
+            vcf = createVCFfile(all_haplo_final, reference, type='comparison')
             # finally also save this dataset
-            write.table(decisions, paste0(out_dir, '/haplotyping_reads_spanning_VS_assembly.txt'), quote=F, row.names = F, sep = '\t')
+            out_dir = str_replace_all(out_dir, '/$', ''); if (!dir.exists(out_dir)){ system(paste0('mkdir ', out_dir)) }
+            write.table(vcf, paste0(out_dir, '/samples_genotypes.vcf'), quote=F, row.names = F, sep = '\t')
+            # also output the single-reads results
+            write.table(motif_res, paste0(out_dir, '/haplotyping_single_reads.txt'), quote=F, row.names = F, sep = '\t')
+        } else {
+            # otherwise, do not do the comparison, generate the tables and exit
+            cat('****** Generating tables\n')
+            out_dir = str_replace_all(out_dir, '/$', ''); if (!dir.exists(out_dir)){ system(paste0('mkdir ', out_dir)) }
+            # adjust for making the vcf
+            all_haplo$DECISION = ifelse(anal_type == 'reads_spanning', 'PRIORITY_READS_SPANNING', 'PRIORITY_ASSEMBLY')
+            # fix NA
+            all_haplo[all_haplo == 'NA'] = NA
+            all_haplo$H2_HAPLO_SIZE[is.na(all_haplo$H2_HAPLO_SIZE)] = all_haplo$H1_HAPLO_SIZE[is.na(all_haplo$H2_HAPLO_SIZE)]
+            all_haplo$H2_SPECIFIC_MOTIF[is.na(all_haplo$H2_SPECIFIC_MOTIF)] = all_haplo$H1_SPECIFIC_MOTIF[is.na(all_haplo$H2_SPECIFIC_MOTIF)]
+            all_haplo$H2_CONSENSUS[is.na(all_haplo$H2_CONSENSUS)] = all_haplo$H1_CONSENSUS[is.na(all_haplo$H2_CONSENSUS)]
+            all_haplo$H2_REFERENCE_MOTIF_CN[is.na(all_haplo$H2_REFERENCE_MOTIF_CN)] = all_haplo$H1_REFERENCE_MOTIF_CN[is.na(all_haplo$H2_REFERENCE_MOTIF_CN)]
+            # set the right columns
+            colnames(all_haplo) = c('SAMPLE', 'REGION', 'H1_COPIE_FINAL', 'H2_COPIE_FINAL', 'H1_MOTIF_FINAL', 'H2_MOTIF_FINAL', 'H1_HAPLO_FINAL', 'H2_HAPLO_FINAL', 'H1_SPECIFIC_MOTIF', 'H2_SPECIFIC_MOTIF', 'H1_ADDITIONAL_MOTIF', 'H2_ADDITIONAL_MOTIF', 'REFERENCE_MOTIF', 'H1_REFCOPY_FINAL', 'H2_REFCOPY_FINAL', 'EXCLUDED', 'EXCLUDED_LEN', 'DATA_TYPE', 'SAME_NAME')
+            vcf = createVCFfile(all_haplo, reference, type='single')
+            # write outputs
+            write.table(vcf, paste0(out_dir, '/samples_genotypes.vcf'), quote=F, row.names = F, sep = '\t')
+            write.table(motif_res, paste0(out_dir, '/haplotyping_single_reads.txt'), quote=F, row.names = F, sep = '\t')
         }
     cat('**** Analysis done!!\n')
