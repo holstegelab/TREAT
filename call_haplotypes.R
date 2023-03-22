@@ -17,7 +17,6 @@
     library(parallel)
     library(stringr)
     library(spgs)
-    library(seqinr)
 
 # Functions
     # Function to make permutations of letters given a word, used to check motifs -- in use
@@ -1307,6 +1306,7 @@
             all_haplo_annotated = rbindlist(mclapply(all_samples, comparison_faster, all_regions = all_regions, all_haplo = all_haplo, deviation = thr_mad, mc.cores = n_cpu))
             # then make a final decision
             all_haplo_final = makeDecision_faster(all_haplo_annotated, n_cpu)
+            cat('****** Generating tables\n')
             # finally we need to make VCFs for compatibility
             vcf = createVCFfile(all_haplo_final, reference, type='comparison')
             # finally also save this dataset
@@ -1325,9 +1325,10 @@
             all_haplo$H2_HAPLO_SIZE[is.na(all_haplo$H2_HAPLO_SIZE)] = all_haplo$H1_HAPLO_SIZE[is.na(all_haplo$H2_HAPLO_SIZE)]
             all_haplo$H2_SPECIFIC_MOTIF[is.na(all_haplo$H2_SPECIFIC_MOTIF)] = all_haplo$H1_SPECIFIC_MOTIF[is.na(all_haplo$H2_SPECIFIC_MOTIF)]
             all_haplo$H2_CONSENSUS[is.na(all_haplo$H2_CONSENSUS)] = all_haplo$H1_CONSENSUS[is.na(all_haplo$H2_CONSENSUS)]
+            all_haplo$H2_CONSENSUS_MOTIF[is.na(all_haplo$H2_CONSENSUS_MOTIF)] = all_haplo$H1_CONSENSUS_MOTIF[is.na(all_haplo$H2_CONSENSUS_MOTIF)]
             all_haplo$H2_REFERENCE_MOTIF_CN[is.na(all_haplo$H2_REFERENCE_MOTIF_CN)] = all_haplo$H1_REFERENCE_MOTIF_CN[is.na(all_haplo$H2_REFERENCE_MOTIF_CN)]
             # set the right columns
-            colnames(all_haplo) = c('SAMPLE', 'REGION', 'H1_COPIE_FINAL', 'H2_COPIE_FINAL', 'H1_MOTIF_FINAL', 'H2_MOTIF_FINAL', 'H1_HAPLO_FINAL', 'H2_HAPLO_FINAL', 'H1_SPECIFIC_MOTIF', 'H2_SPECIFIC_MOTIF', 'H1_ADDITIONAL_MOTIF', 'H2_ADDITIONAL_MOTIF', 'REFERENCE_MOTIF', 'H1_REFCOPY_FINAL', 'H2_REFCOPY_FINAL', 'EXCLUDED', 'EXCLUDED_LEN', 'DATA_TYPE', 'SAME_NAME')
+            colnames(all_haplo) = c('SAMPLE', 'REGION', 'H1_COPIE_FINAL', 'H2_COPIE_FINAL', 'H1_MOTIF_FINAL', 'H2_MOTIF_FINAL', 'H1_HAPLO_FINAL', 'H2_HAPLO_FINAL', 'H1_SPECIFIC_MOTIF', 'H2_SPECIFIC_MOTIF', 'H1_ADDITIONAL_MOTIF', 'H2_ADDITIONAL_MOTIF', 'REFERENCE_MOTIF', 'H1_REFCOPY_FINAL', 'H2_REFCOPY_FINAL', 'EXCLUDED', 'EXCLUDED_LEN', 'DATA_TYPE', 'SAME_NAME', 'DECISION')
             vcf = createVCFfile(all_haplo, reference, type='single')
             # write outputs
             write.table(vcf, paste0(out_dir, '/samples_genotypes.vcf'), quote=F, row.names = F, sep = '\t')
