@@ -897,4 +897,4 @@ end_time = time.time()
 total_time = end_time - start_time
 
 ## Final message 
-print('\n** run complete in %s! all results are correctly stored. \ngoing to sleep now \nciao!' %(total_time))
+print('\n** run complete in %s seconds! all results are correctly stored. \ngoing to sleep now \nciao!' %(round(total_time)))
