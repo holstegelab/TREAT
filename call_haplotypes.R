@@ -1311,7 +1311,7 @@
             vcf = createVCFfile(all_haplo_final, reference, type='comparison')
             # finally also save this dataset
             out_dir = str_replace_all(out_dir, '/$', ''); if (!dir.exists(out_dir)){ system(paste0('mkdir ', out_dir)) }
-            write.table(vcf, paste0(out_dir, '/samples_genotypes.vcf'), quote=F, row.names = F, sep = '\t')
+            write.table(vcf, paste0(out_dir, '/samples_genotypes.vcf'), quote=F, row.names = F, col.names = F, sep = '\t')
             # also output the single-reads results
             write.table(motif_res, paste0(out_dir, '/haplotyping_single_reads.txt'), quote=F, row.names = F, sep = '\t')
         } else {
@@ -1331,7 +1331,7 @@
             colnames(all_haplo) = c('SAMPLE', 'REGION', 'H1_COPIE_FINAL', 'H2_COPIE_FINAL', 'H1_MOTIF_FINAL', 'H2_MOTIF_FINAL', 'H1_HAPLO_FINAL', 'H2_HAPLO_FINAL', 'H1_SPECIFIC_MOTIF', 'H2_SPECIFIC_MOTIF', 'H1_ADDITIONAL_MOTIF', 'H2_ADDITIONAL_MOTIF', 'REFERENCE_MOTIF', 'H1_REFCOPY_FINAL', 'H2_REFCOPY_FINAL', 'EXCLUDED', 'EXCLUDED_LEN', 'DATA_TYPE', 'SAME_NAME', 'DECISION')
             vcf = createVCFfile(all_haplo, reference, type='single')
             # write outputs
-            write.table(vcf, paste0(out_dir, '/samples_genotypes.vcf'), quote=F, row.names = F, sep = '\t')
+            write.table(vcf, paste0(out_dir, '/samples_genotypes.vcf'), quote=F, row.names = F, col.names = F, sep = '\t')
             write.table(motif_res, paste0(out_dir, '/haplotyping_single_reads.txt'), quote=F, row.names = F, sep = '\t')
         }
     cat('**** Analysis done!!\n')
