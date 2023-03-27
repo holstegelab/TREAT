@@ -7,7 +7,7 @@
 
 ## Libraries
 import os; from inspect import getsourcefile; from os.path import abspath; import sys; import pathlib; import time; import itertools
-from functions_treat import *; import argparse; import os.path; import pysam; from Bio.Seq import Seq
+from functions_treat_v2 import *; import argparse; import os.path; import pysam; from Bio.Seq import Seq
 from Bio import SeqIO; from random import random; import gzip; import subprocess; import json; import pandas as pd
 from datetime import datetime; from functools import partial; from itertools import repeat; import multiprocessing
 
@@ -701,73 +701,70 @@ elif anal_type == 'reads_spanning_trf':
     print("\n** 1. extracting reads")
     os.system('mkdir %s/raw_reads' %(output_directory))
     pool = multiprocessing.Pool(processes=number_threads)
-    extract_fun = partial(extractReads_MP, bed = bed_regions, out_dir = '%s/raw_reads' %(output_directory), window = window_size, all_bams = all_bam_files)
-    extract_results = pool.map(extract_fun, all_bam_files); print('**** read extraction done!                                         ')
-    # combine results together
-    reads_bam = [x[0] for x in extract_results]; reads_fasta = [x[1] for x in extract_results]
-    
-    # 6. calculate size of the regions of interest -- multiprocessing
-    print('** 2. calculate size of the regions of interest')
-    pool = multiprocessing.Pool(processes=number_threads)
-    measure_fun = partial(measureDistance_MP, bed = bed_regions, window = window_size)
-    extract_results = pool.map(measure_fun, reads_bam)
-    print('**** done measuring reference                                     ', end = '\r')
-    dist_reference = measureDistance_reference(bed_regions, window_size, ref_fasta); print('**** read measurement done!                                         ')
-    extract_results.append(dist_reference)
-    # combine results
-    distances = {k:v for element in extract_results for k,v in element.items()}
-    
-    # 7. TRF on single-reads
+    extract_fun = partial(extract_sequences_nowrite_nosort, bed = bed_regions, out_dir = '%s/raw_reads' %(output_directory), window = window_size)
+    ts = time.time()
+    extract_results = pool.map(extract_fun, all_bam_files)
+    te = time.time()
+    time_extraction = te-ts
+    print('**** read extraction done in %s seconds                                 ' %(round(time_extraction, 0)))
+    # combine results together: this will give a list for each sample
+    reads_info = [x[-2] for x in extract_results]; reads_bam = [x[0] for x in extract_results]; reads_fasta = [x[1] for x in extract_results]; reads_fasta_padding = [x[2] for x in extract_results]; reads_ids = [x[-1] for x in extract_results]
+    # separately do the reference genome
+    dist_reference, reads_ids_reference, fasta_ref, fasta_withPadd_ref = measureDistance_reference(bed_regions, window_size, ref_fasta, output_directory)
+    # combine reads_ids into a single dictionary
+    reads_ids.append(reads_ids_reference)
+    reads_ids_combined = {}
+    for dic in reads_ids:
+        for key, value in dic.items():
+            reads_ids_combined[key] = value
+    # also combine the fasta files and the reads info and the bam
+    reads_fasta.append(fasta_ref)
+    reads_info.append(dist_reference)
+    all_bam_files.append('reference')
+
+    # 5. TRF on single-reads
     print('** 3. tandem repeat finder on the single-reads')
-    all_bams = list(distances.keys()); trf_out_dir = '%s/trf_reads' %(output_directory); os.system('mkdir %s' %(trf_out_dir));
+    trf_out_dir = '%s/trf_reads' %(output_directory); os.system('mkdir %s' %(trf_out_dir));
     pool = multiprocessing.Pool(processes=number_threads)
-    trf_fun = partial(trf_MP, out_dir = trf_out_dir, motif = motif, polished = 'False', distances = distances)
-    trf_results = pool.map(trf_fun, all_bams)
+    trf_fun = partial(run_trf, out_dir = trf_out_dir, motif = motif, polished = 'False', distances = reads_info, reads_ids_combined = reads_ids_combined, all_bam_files = all_bam_files)
+    ts = time.time()
+    trf_results = pool.map(trf_fun, reads_fasta)
+    te = time.time()
+    time_trf = te-ts
     # combine df from different samples together
-    df_trf = pd.concat(trf_results)
-    print('**** done running TRF                                     ')
+    df_trf_combined = pd.concat(trf_results)
+    print('**** TRF estimation done in %s seconds                                 ' %(round(time_trf, 0)))
+    os.system('rm -rf %s/trf_reads' %(output_directory))
 
-    # 8. combine these results and make output
-    outf = output_directory + '/trf_reads/measures_spanning_reads_and_trf.txt'
-    df_trf.to_csv(outf, sep = "\t", index=False)
-
-    # 9. phasing and haplotagging -- multiprocessing
+    # 6. phasing and haplotagging -- multiprocessing
     if snp_dir == 'False':
         print('** 4. phasing and haplotagging NOT selected (not specified any SNP data)')
+        combined_haplotags_df = pd.DataFrame(columns=['READ_NAME', 'HAPLOTAG'])
     else:
         print('** 4. phasing and haplotagging')
         os.system('mkdir %s/phasing' %(output_directory))
         print('**** finding SNPs for phasing')
-        snps_for_phasing, snps_to_keep, SNPs_data_path = findSNPs_gwas(snp_dir, bed_regions, window_for_phasing)
+        snps_for_phasing = find_SNPs_Samples_plink(snp_dir, output_directory, snp_data_ids, reads_bam)
+        print('**** based on mapping ids provided, phasing will be done on %s/%s samples' %(len(snps_for_phasing), len(reads_bam)))
         print('**** start phasing                                  ', end = '\r')
         pool = multiprocessing.Pool(processes=number_threads)
-        phasing_fun = partial(phase_reads_MP, reads_bam = reads_bam, snps_to_keep = snps_to_keep, output_directory = '%s/phasing' %(output_directory), SNPs_data_directory = SNPs_data_path, snp_data_ids = snp_data_ids, ref_path = ref_fasta)
-        phasing_results = pool.map(phasing_fun, reads_bam)
-        print('**** done with phasing                                     ')
+        phasing_fun = partial(phase_reads_MP, output_directory = output_directory, SNPs_data_directory = snp_dir, ref_path = ref_fasta, bed_file = bed_file, window = window_for_phasing)
+        ts = time.time()
+        phasing_results = pool.map(phasing_fun, snps_for_phasing)
+        te = time.time()
+        time_phasing = te-ts
+        print('**** phasing done in %s seconds                                       ' %(round(time_phasing, 0)))
+        combined_haplotags = sum(phasing_results, [])
+        combined_haplotags_df = pd.DataFrame(combined_haplotags)
+        combined_haplotags_df.columns = ['READ_NAME', 'HAPLOTAG']
 
-    # 10. combine results and output files if phasing was selected
-    if snp_dir != 'False':
-        phasing_info = {k:v for element in phasing_results for k,v in element.items()}
-        fout = open('%s/phasing/haplotags_reads.txt' %(output_directory), 'w')
-        header = 'SAMPLE\tREAD_ID\tHAPLOTYPE\n'
-        fout.write(header)
-        for sample in phasing_info.keys():
-            for read in phasing_info[sample]:
-                if read == 'NA':
-                    to_write = '%s\t%s\t%s\n' %(sample, 'NA', 'NA')
-                else:
-                    to_write = '%s\t%s\t%s\n' %(sample, read, phasing_info[sample][read])
-                fout.write(to_write)
-        fout.close()
+    # 7. combine these results and make output
+    df_trf_phasing_combined = pd.merge(df_trf_combined, combined_haplotags_df, left_on = 'READ_NAME', right_on = 'READ_NAME', how = 'outer')
+    outf = '%s/spanning_reads_trf_phasing.txt' %(output_directory)
+    df_trf_combined.to_csv(outf, sep = "\t", index=False, na_rep='NA')
 
     # 11. haplotyping
-    print("** 11. haplotype calling on reads-spanning and eventually phasing")
-    file_path = os.path.realpath(__file__)
-    file_path = '/'.join(file_path.split('/')[:-1])
-    if snp_dir == 'False':
-        os.system("Rscript %s/call_haplotypes.R --reads_spanning %s/trf_reads/measures_spanning_reads_and_trf.txt --out %s/haplotyping --cpu %s" %(file_path, output_directory, output_directory, output_directory, number_threads))
-    else:
-        os.system("Rscript %s/call_haplotypes.R --reads_spanning %s/trf_reads/measures_spanning_reads_and_trf.txt --phase %s/phasing/haplotags_reads.txt --out %s/haplotyping --cpu %s" %(file_path, output_directory, output_directory, output_directory, number_threads))
+    
 elif anal_type == 'assembly_trf':
     # 1. read bed regions
     print("**** reading bed file")
