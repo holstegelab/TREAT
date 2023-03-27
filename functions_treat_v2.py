@@ -1157,7 +1157,8 @@ def find_SNPs_Samples_plink(SNPs_data_directory, output_directory, snp_data_ids,
    for x in reads_bam:
       fname = os.path.basename(x).replace('__rawReads.bam', '.bam')
       tmp_match = list(map_ids['ID_GWAS'][map_ids['ID_PACBIO'] == fname]) if isinstance(map_ids, pd.DataFrame) == True else [fname.replace('.bam', '')]
-      id_gwas.append([tmp_match[0], fname, x])
+      if tmp_match != []:
+          id_gwas.append([tmp_match[0], fname, x])
    # generate as many random numbers as the number of samples to phase
    rand_num = [str(random()).replace('.', '') for x in range(len(id_gwas))]
    # loop to write VCF files for each sample keeping SNPs in the interval of the bed file
