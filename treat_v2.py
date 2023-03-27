@@ -763,7 +763,7 @@ elif anal_type == 'reads_spanning_trf':
     outf = '%s/spanning_reads_trf_phasing.txt' %(output_directory)
     df_trf_combined.to_csv(outf, sep = "\t", index=False, na_rep='NA')
 
-    # 11. haplotyping
+    # 11. haplotyping -- to be added
     
 elif anal_type == 'assembly_trf':
     # 1. read bed regions
