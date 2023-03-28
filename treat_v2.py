@@ -768,9 +768,9 @@ elif anal_type == 'reads_spanning_trf':
     file_path = os.path.realpath(__file__)
     file_path = '/'.join(file_path.split('/')[:-1])
     if snp_dir == 'False':
-        os.system("Rscript %s/call_haplotypes.R --reads_spanning %s/trf_reads/measures_spanning_reads_and_trf.txt --out %s/haplotyping --cpu %s" %(file_path, output_directory, output_directory, output_directory, number_threads))
+        os.system("Rscript %s/call_haplotypes_v2.R --reads_spanning %s/spanning_reads_trf_phasing.txt --out %s --cpu %s" %(file_path, output_directory, output_directory, number_threads))
     else:
-        os.system("Rscript %s/call_haplotypes.R --reads_spanning %s/trf_reads/measures_spanning_reads_and_trf.txt --phase %s/phasing/haplotags_reads.txt --out %s/haplotyping --cpu %s" %(file_path, output_directory, output_directory, output_directory, number_threads))
+        os.system("Rscript %s/call_haplotypes_v2.R --reads_spanning %s/spanning_reads_trf_phasing.txt --out %s --cpu %s" %(file_path, output_directory, output_directory, number_threads))
 elif anal_type == 'assembly_trf':
     # 1. read bed regions
     print("**** reading bed file")
