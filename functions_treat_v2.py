@@ -111,7 +111,7 @@ def findPositionOfInterest(cigar, positions_of_interest, positions_of_interest_e
    # make a list of 1 cigar element per position
    cigar_per_base = [x for cse in cigar for x in [cse[0]] * cse[1]]
    # Then loop on this list
-   for i, x in enumerate(cigar_per_base):
+   for x in cigar_per_base:
       # Parse cigar types: 
       if (x == 7) or (x == 0):   # 7 --> =
          counter_raw += 1
@@ -137,15 +137,72 @@ def findPositionOfInterest(cigar, positions_of_interest, positions_of_interest_e
          print("!!! Unknown term in cigar string --> %s" % (x))
          break
       # Then check if we reached the start/end position without padding
-      if counter_ref == positions_of_interest:
+      if pos_interest == 0 and counter_ref == (positions_of_interest-1):
          pos_interest = counter_raw
-      if counter_ref == positions_of_interest_end:
+      if pos_interest_end == 0 and counter_ref == (positions_of_interest_end-1):
          pos_interest_end = counter_raw
       # Then check if we reached the start/end position with padding
-      if counter_ref == positions_of_interest_with_padding:
+      if pos_interest_padd == 0 and counter_ref == (positions_of_interest_with_padding-1):
          pos_interest_padd = counter_raw_padd
-      if counter_ref == positions_of_interest_with_padding_end:
+      if pos_interest_padd_end == 0 and counter_ref == (positions_of_interest_with_padding_end-1):
          pos_interest_padd_end = counter_raw_padd
+   return pos_interest, pos_interest_end, pos_interest_padd, pos_interest_padd_end
+# Alternative version of the above to use a while loop: the advantage should be if the repeat is short, it doesn't need to go through all cigar elements
+def findPositionOfInterestWhile(cigar, positions_of_interest, positions_of_interest_end, positions_of_interest_with_padding, positions_of_interest_with_padding_end):
+   # define counter of the reference and the raw sequences
+   counter_ref = 0
+   counter_raw = 0
+   counter_raw_padd = 0
+   # define positions of interest
+   pos_interest = 0
+   pos_interest_padd = 0
+   pos_interest_end = 0
+   pos_interest_padd_end = 0
+   # make a list of 1 cigar element per position
+   cigar_per_base = [x for cse in cigar for x in [cse[0]] * cse[1]]
+   # Then loop on this list
+   i = 0; run = True
+   while (run == True) and (i < len(cigar_per_base)):
+      x = cigar_per_base[i]
+      # Parse cigar types: 
+      if (x == 7) or (x == 0):   # 7 --> =
+         counter_raw += 1
+         counter_ref += 1
+         counter_raw_padd += 1
+      elif x == 8:   # 8 --> X
+         counter_raw += 1
+         counter_ref += 1
+         counter_raw_padd += 1
+      elif x == 1:   # 1 --> I
+         counter_raw +=1
+         counter_raw_padd += 1
+      elif x == 2:   # 2 --> D
+         counter_ref += 1
+      elif x == 4:  # 4 --> S
+         counter_raw += 1
+         counter_raw_padd += 1
+      elif x == 5:  # 5 --> H
+         counter_raw += 1
+         counter_raw_padd += 1
+         print("!!! Alignments are hard clipped. Impossible to take actual sequence!")
+      else:
+         print("!!! Unknown term in cigar string --> %s" % (x))
+         break
+      # Then check if we reached the start/end position without padding
+      if pos_interest == 0 and counter_ref == (positions_of_interest-1):
+         pos_interest = counter_raw
+      if pos_interest_end == 0 and counter_ref == (positions_of_interest_end-1):
+         pos_interest_end = counter_raw
+      # Then check if we reached the start/end position with padding
+      if pos_interest_padd == 0 and counter_ref == (positions_of_interest_with_padding-1):
+         pos_interest_padd = counter_raw_padd
+      if pos_interest_padd_end == 0 and counter_ref == (positions_of_interest_with_padding_end-1):
+         pos_interest_padd_end = counter_raw_padd
+      # Finally check if we need to loop again
+      if 0 in [pos_interest, pos_interest_end, pos_interest_padd, pos_interest_padd_end]:
+        run = True; i += 1
+      else:
+        run = False
    return pos_interest, pos_interest_end, pos_interest_padd, pos_interest_padd_end
 
 # Extract reads mapping the the location of interest
@@ -393,7 +450,7 @@ def measureDist(read, chrom, start, end, window):
       # take cigar string
       cigar = read.cigartuples
       # find start/end positions of interest for the sequence with and witout paddings
-      pos_interest, pos_interest_end, pos_interest_padd, pos_interest_padd_end = findPositionOfInterest(cigar, start_poi_dist, end_poi_dist, start_poi_dist_with_padding, end_poi_dist_with_padding)
+      pos_interest, pos_interest_end, pos_interest_padd, pos_interest_padd_end = findPositionOfInterestWhile(cigar, start_poi_dist, end_poi_dist, start_poi_dist_with_padding, end_poi_dist_with_padding)
       # then extract the sequence in the region of interest, with and without padding
       sequence_interest = str(read.query_sequence)[pos_interest : pos_interest_end]
       sequence_interest_len = len(sequence_interest)
