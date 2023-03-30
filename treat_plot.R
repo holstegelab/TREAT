@@ -17,6 +17,9 @@
 # Functions
   # Pipeline to plot repeats
     plotRepeatsComplete <- function(rs_vcf, out_dir, out_name, plotFormat, ploType, custom_colors, region, kind){
+      # Disable warnings
+      defaultW <- getOption("warn"); options(warn = -1)
+
       # Read VCF
       vcf = readVCF(rs_vcf, region)
 
@@ -29,9 +32,7 @@
         vcf_info = extractHaploSize(vcf[which(vcf$ID == r),])
         
         # Extract Reference and add it to the data
-        defaultW <- getOption("warn"); options(warn = -1)
         vcf_info_withRef = extractReference(vcf, r, vcf_info)
-        options(warn = defaultW)
 
         # Clustering
         clustering_info = cluster_TR(vcf_info_withRef)
@@ -351,7 +352,7 @@ if (run == 'true'){
   if (out_name == 'None' & ploType == 'REPEATS'){ out_name = 'repeats' } else if (out_name == 'None' & ploType == 'MSA'){ out_name = 'msa' }
   # Split regions
   region = unlist(strsplit(region, ','))
-  
+
   # Pipeline to plot repeats
   if (ploType == 'REPEATS'){
     # Make complete plot
