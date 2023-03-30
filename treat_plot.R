@@ -15,7 +15,7 @@
   suppressPackageStartupMessages(library(argparse))
 
 # Functions
-  # Pipeline to plot repeats
+    # Pipeline to plot repeats
     plotRepeatsComplete <- function(rs_vcf, out_dir, out_name, plotFormat, ploType, custom_colors, region, kind){
       # Disable warnings
       defaultW <- getOption("warn"); options(warn = -1)
@@ -286,6 +286,21 @@
         }
     }
 
+    # Function to print summary of the run
+    summaryRun <- function(rs_vcf, inp_fasta, out_dir, out_name, plotFormat, ploType, custom_colors, region){
+      cat('\n********************\n')
+      cat('\n*** TREAT plot *****\n')
+      cat('\n*** Arguments:\n')
+      cat(paste0('\n*** Input VCF: ', rs_vcf, '\n')
+      cat(paste0('\n*** Input FASTA: ', inp_fasta '\n')
+      cat(paste0('\n*** Region(s): ', paste(regions, collapse = ', '), '\n')
+      cat(paste0('\n*** Output directory: ', out_dir, '\n')
+      cat(paste0('\n*** Output name: ', out_name, '\n')
+      cat(paste0('\n*** Plot format: ', plotFormat, '\n')
+      cat(paste0('\n*** Plot type: ', ploType, '\n')
+      cat(paste0('\n*** Custom colors: ', custom_colors, '\n')
+    }
+
 # Arguments definition
   parser <- ArgumentParser()
   # add arguments: --reads_spannning is the VCF file of the output of read_spanning_analysis
@@ -352,6 +367,8 @@ if (run == 'true'){
   if (out_name == 'None' & ploType == 'REPEATS'){ out_name = 'repeats' } else if (out_name == 'None' & ploType == 'MSA'){ out_name = 'msa' }
   # Split regions
   region = unlist(strsplit(region, ','))
+  # Print summary of the run
+  print(summaryRun(rs_vcf, inp_fasta, out_dir, out_name, plotFormat, ploType, custom_colors, region))
 
   # Pipeline to plot repeats
   if (ploType == 'REPEATS'){
