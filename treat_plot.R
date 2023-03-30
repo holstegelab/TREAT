@@ -356,5 +356,3 @@ if (run == 'true'){
     }
   }
 }
-all = rbind(ad, chc)
-TRplot(all_rs_info = all, all_asm_info = data.frame(), region = "chr19:524699-525186")
