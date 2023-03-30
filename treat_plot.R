@@ -37,8 +37,8 @@
         clustering_info = cluster_TR(vcf_info_withRef)
         
         # Plot name
-        out_name = paste0(out_name, '_', r, '.', plotFormat)
-        plotname = file.path(out_dir, out_name)
+        plt_name = paste0(out_name, '_', r, '.', plotFormat)
+        plotname = file.path(out_dir, plt_name)
         
         # Plot
         pdf(plotname, height = 10, width = 12)
