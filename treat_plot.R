@@ -15,42 +15,37 @@
   suppressPackageStartupMessages(library(argparse))
 
 # Functions
+  # Pipelines: set of functions
     # Pipeline to plot repeats
-    plotRepeatsComplete <- function(rs_vcf, out_dir, out_name, plotFormat, ploType, custom_colors, region, kind){
+    plotRepeatsComplete <- function(rs_vcf, out_dir, out_name, plotFormat, custom_colors, region){
       cat('\n')
       # Disable warnings
       defaultW <- getOption("warn"); options(warn = -1)
-
       # Read VCF
       vcf = readVCF(rs_vcf, region)
-
       # Identify the regions to be plotted
       all_regions = unique(vcf$ID)
-
       # The iterate over all regions
       for (r in all_regions){
         # Extract sizes
         vcf_info = extractHaploSize(vcf[which(vcf$ID == r),])
-        
         # Extract Reference and add it to the data
         vcf_info_withRef = extractReference(vcf, r, vcf_info)
-
         # Clustering
         clustering_info = cluster_TR(vcf_info_withRef)
-        
         # Plot name
         plt_name = paste0(out_name, '_', r, '.', plotFormat)
         plotname = file.path(out_dir, plt_name)
-        
         # Plot
         pdf(plotname, height = 10, width = 12)
-        plotComplete(vcf_info_withRef, clustering_info, custom_colors = 'None', region = r)
+        plotComplete(vcf_info_withRef, clustering_info, custom_colors = custom_colors, region = r)
         dev.off()
         cat('\nPlot done --> ', plotname)
       }
       cat('\n')
     }
 
+  # Single functions used in the pipelines
     # Function to read VCF, and restrict to region of interest
     readVCF <- function(rs_vcf, region){
       # read vcf
@@ -290,26 +285,23 @@
     }
 
     # Function to print summary of the run
-    summaryRun <- function(rs_vcf, inp_fasta, out_dir, out_name, plotFormat, ploType, custom_colors, region){
+    summaryRun <- function(rs_vcf, out_dir, out_name, plotFormat, custom_colors, region){
       cat('\n********************')
       cat('\n*** TREAT plot *****')
       cat('\n*** Arguments:')
       cat(paste0('\n*** Input VCF: ', rs_vcf))
-      cat(paste0('\n*** Input FASTA: ', inp_fasta))
       cat(paste0('\n*** Region(s): ', paste(region, collapse = ', ')))
       cat(paste0('\n*** Output directory: ', out_dir))
       cat(paste0('\n*** Output name: ', out_name))
       cat(paste0('\n*** Plot format: ', plotFormat))
-      cat(paste0('\n*** Plot type: ', ploType))
       cat(paste0('\n*** Custom colors: ', custom_colors))
+      return('*** Analysis started!')
     }
 
 # Arguments definition
   parser <- ArgumentParser()
   # add arguments: --reads_spannning is the VCF file of the output of read_spanning_analysis
   parser$add_argument("--vcf", default = 'None', help = "VCF file output of TREAT. Multiple files should be comma-separated.")
-  # add arguments: --fasta is the fasta file to do multiple sequence alignment and plot
-  parser$add_argument("--fasta", default = 'None', help = "Fasta file outputted by TREAT to be used for multiple sequence alignment and plot.")
   # add arguments: --out is the output directory
   parser$add_argument("--out", default = './', help = "Output directory where output will be placed. Default is the current directory.")
   # add arguments: --outname is the name of the output file
@@ -318,8 +310,6 @@
   parser$add_argument("--region", default = 'None', help = "Name of the region to plot. Can be one region, multiple (comma separated) regions, or all.")
   # add arguments: --plotformat is whether to give png or pdf as output plot. Default is pdf
   parser$add_argument("--plotformat", default = 'pdf', help = "File format of output plot. Choices are png or pdf. Default value is pdf.")
-  # add arguments: --plotype is the type of plot. Default is autodetection from the other arguments
-  parser$add_argument("--plotype", default = 'Auto', help = "Type of plot to draw. Choices are MSA or REPEATS. Default is autodetection from the other arguments.")
   # add arguments: --customColors accepts a file with 2 columns: sample name (same as in the data) and an additional column. Samples will be colored.
   parser$add_argument("--customColors", default = 'None', help = "Custom file for coloring options. Accepts a file with 2 columns, i.e sample name and a grouping variable.")
 
@@ -328,9 +318,6 @@
   # vcf of read-spanning analysis
   rs_vcf = args$vcf; rs_vcf = unlist(strsplit(rs_vcf, ','))
   # rs_vcf = 'samples_genotypes.vcf'
-  # fasta file for msa
-  inp_fasta = args$fasta; inp_fasta = unlist(strsplit(inp_fasta, ','))
-  # inp_fasta = 'None'
   # output directory
   out_dir = args$out
   # out_dir = './'
@@ -340,9 +327,6 @@
   # plot format
   plotFormat = args$plotformat
   # plotFormat = 'pdf'
-  # plot type
-  ploType = args$plotype
-  # ploType = 'Auto'
   # custom colors
   custom_colors = args$customColors
   # custom_colors = 'None'
@@ -353,31 +337,18 @@
 # Check arguments
   # stop if no input data is provided
   run = 'false'
-  if ((rs_vcf == 'None') & (inp_fasta == 'None')){ 
-    stop("Input error: Missing input file(s)!!")
-  } else if ((rs_vcf == 'None') & (ploType == 'REPEATS')){ 
-    stop("REPEAT plot selected, but no input files provided!!")
-  } else if ((inp_fasta != 'None') & (ploType == 'REPEATS')){ 
-    stop("REPEAT plot selected, but no fasta file provided provided!!")
-  } else if ((rs_vcf != 'None') & (region == 'None')){ stop("No region to plot selected!") 
-  } else { run = 'true'}
+  if (rs_vcf == 'None'){ stop("Input error: Missing input file(s)!!") } else if (region == 'None'){ stop("No region to plot selected!") } else { run = 'true'}
 
 # Main
-if (run == 'true'){
-  # Define the automatic variables: ploType
-  if (ploType == 'Auto' & inp_fasta == 'None'){ ploType = 'REPEATS' } else if (ploType == 'Auto' & inp_fasta != 'None' & rs_vcf == 'None'){ ploType = 'MSA' } else { ploType = 'BOTH' }
-  # Define the automatic variables: output name
-  if (out_name == 'None' & ploType == 'REPEATS'){ out_name = 'repeats' } else if (out_name == 'None' & ploType == 'MSA'){ out_name = 'msa' }
-  # Split regions
-  region = unlist(strsplit(region, ','))
-  # Print summary of the run
-  print(summaryRun(rs_vcf, inp_fasta, out_dir, out_name, plotFormat, ploType, custom_colors, region))
+  if (run == 'true'){
+    # Define the automatic variables: output name
+    if (out_name == 'None'){ out_name = 'repeats' }
+    # Split regions
+    region = unlist(strsplit(region, ','))
+    # Print summary of the run
+    print(summaryRun(rs_vcf, out_dir, out_name, plotFormat, custom_colors, region))
 
-  # Pipeline to plot repeats
-  if (ploType == 'REPEATS'){
-    # Make complete plot
-    if (ploType %in% c('REPEATS', 'BOTH')){
-      plotRepeatsComplete(rs_vcf, out_dir, out_name, plotFormat, ploType, custom_colors, region, kind)
+    # Pipeline to plot repeats
+    plotRepeatsComplete(rs_vcf, out_dir, out_name, plotFormat, custom_colors, region)
     }
   }
-}
