@@ -1,18 +1,18 @@
 #!/usr/bin/Rscript
 
 # Libraries
-  library(data.table)
-  library(stringr)
-  library(ggplot2)
-  library(openxlsx)
-  library(berryFunctions)
-  library(dendextend)
-  library(viridis)
-  library(dplyr)
-  library(ggsci)
-  library(ggpubr)
-  library(parallel)
-  library(argparse)
+  suppressPackageStartupMessages(library(data.table))
+  suppressPackageStartupMessages(library(stringr))
+  suppressPackageStartupMessages(library(ggplot2))
+  suppressPackageStartupMessages(library(openxlsx))
+  suppressPackageStartupMessages(library(berryFunctions))
+  suppressPackageStartupMessages(library(dendextend))
+  suppressPackageStartupMessages(library(viridis))
+  suppressPackageStartupMessages(library(dplyr))
+  suppressPackageStartupMessages(library(ggsci))
+  suppressPackageStartupMessages(library(ggpubr))
+  suppressPackageStartupMessages(library(parallel))
+  suppressPackageStartupMessages(library(argparse))
 
 # Functions
   # Pipeline to plot repeats
