@@ -346,9 +346,8 @@
     # Split regions
     region = unlist(strsplit(region, ','))
     # Print summary of the run
-    print(summaryRun(rs_vcf, out_dir, out_name, plotFormat, custom_colors, region))
+    x = summaryRun(rs_vcf, out_dir, out_name, plotFormat, custom_colors, region)
 
     # Pipeline to plot repeats
     plotRepeatsComplete(rs_vcf, out_dir, out_name, plotFormat, custom_colors, region)
-    }
   }
