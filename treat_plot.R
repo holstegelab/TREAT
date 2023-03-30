@@ -42,6 +42,7 @@
         pdf(plotname, height = 10, width = 12)
         plotComplete(vcf_info_withRef, clustering_info, custom_colors = 'None', region = r)
         dev.off()
+      }
     }
 
     # Function to read VCF, and restrict to region of interest
@@ -283,7 +284,6 @@
     }
 
 # Arguments definition
-  print('hello')
   parser <- ArgumentParser()
   # add arguments: --reads_spannning is the VCF file of the output of read_spanning_analysis
   parser$add_argument("--vcf", default = 'None', help = "VCF file output of TREAT. Multiple files should be comma-separated.")
