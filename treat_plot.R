@@ -305,7 +305,7 @@
 # Read arguments
   args <- parser$parse_args()
   # vcf of read-spanning analysis
-  rs_vcf = args$reads_spanning; inp_trf = unlist(strsplit(inp_trf, ','))
+  rs_vcf = args$reads_spanning; rs_vcf = unlist(strsplit(rs_vcf, ','))
   # rs_vcf = 'samples_genotypes.vcf'
   # fasta file for msa
   inp_fasta = args$fasta; inp_fasta = unlist(strsplit(inp_fasta, ','))
