@@ -295,7 +295,7 @@
       cat(paste0('\n*** Output name: ', out_name))
       cat(paste0('\n*** Plot format: ', plotFormat))
       cat(paste0('\n*** Custom colors: ', custom_colors))
-      return('*** Analysis started!')
+      return(cat('\n*** Analysis started!'))
     }
 
 # Arguments definition
