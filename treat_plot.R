@@ -29,13 +29,15 @@
         vcf_info = extractHaploSize(vcf[which(vcf$ID == r),])
         
         # Extract Reference and add it to the data
+        defaultW <- getOption("warn"); options(warn = -1)
         vcf_info_withRef = extractReference(vcf, r, vcf_info)
+        options(warn = defaultW)
 
         # Clustering
         clustering_info = cluster_TR(vcf_info_withRef)
         
         # Plot name
-        out_name = paste0(out_name, '_', region, '.', plotFormat)
+        out_name = paste0(out_name, '_', r, '.', plotFormat)
         plotname = file.path(out_dir, out_name)
         
         # Plot
@@ -50,7 +52,7 @@
       # read vcf
       d = fread(rs_vcf, h=T)
       # restrict to region of interest
-      if (region == 'all'){ sub = d } else { sub = d[which(d$ID %in% region),] }
+      if (length(region) == 1 && (region == 'all')){ sub = d } else { sub = d[which(d$ID %in% region),] }
       # check if region existed
       if (nrow(sub) >0){
         return(sub)
