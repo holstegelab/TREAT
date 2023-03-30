@@ -292,7 +292,7 @@
       cat('\n*** TREAT plot *****\n')
       cat('\n*** Arguments:\n')
       cat(paste0('\n*** Input VCF: ', rs_vcf, '\n'))
-      cat(paste0('\n*** Input FASTA: ', inp_fasta '\n'))
+      cat(paste0('\n*** Input FASTA: ', inp_fasta, '\n'))
       cat(paste0('\n*** Region(s): ', paste(regions, collapse = ', '), '\n'))
       cat(paste0('\n*** Output directory: ', out_dir, '\n'))
       cat(paste0('\n*** Output name: ', out_name, '\n'))
