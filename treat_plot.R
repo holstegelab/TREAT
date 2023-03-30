@@ -17,6 +17,7 @@
 # Functions
     # Pipeline to plot repeats
     plotRepeatsComplete <- function(rs_vcf, out_dir, out_name, plotFormat, ploType, custom_colors, region, kind){
+      cat('\n')
       # Disable warnings
       defaultW <- getOption("warn"); options(warn = -1)
 
@@ -45,6 +46,7 @@
         pdf(plotname, height = 10, width = 12)
         plotComplete(vcf_info_withRef, clustering_info, custom_colors = 'None', region = r)
         dev.off()
+        cat('\nPlot done --> ', plotname)
       }
     }
 
