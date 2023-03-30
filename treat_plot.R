@@ -328,7 +328,7 @@
   custom_colors = args$customColors
   # custom_colors = 'None'
   # region
-  region = args$region; region = unlist(strsplit(region, ','))
+  region = args$region
   # region = 'chr4:39348425-39348483'
 
 # Check arguments
@@ -349,7 +349,9 @@ if (run == 'true'){
   if (ploType == 'Auto' & inp_fasta == 'None'){ ploType = 'REPEATS' } else if (ploType == 'Auto' & inp_fasta != 'None' & rs_vcf == 'None'){ ploType = 'MSA' } else { ploType = 'BOTH' }
   # Define the automatic variables: output name
   if (out_name == 'None' & ploType == 'REPEATS'){ out_name = 'repeats' } else if (out_name == 'None' & ploType == 'MSA'){ out_name = 'msa' }
-
+  # Split regions
+  region = unlist(strsplit(region, ','))
+  
   # Pipeline to plot repeats
   if (ploType == 'REPEATS'){
     # Make complete plot
