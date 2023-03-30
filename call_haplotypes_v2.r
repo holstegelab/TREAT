@@ -401,7 +401,6 @@
 
     # Function to do haplotyping based on multiple processing -- in use
     haplotyping_mp = function(s, reads_span, all_regions, type, thr_mad){
-        print(paste0('** processing sample --> ', s))
         # initialize dataframe for results
         tmp_res = data.frame()
         for (r in all_regions){
@@ -628,7 +627,6 @@
             motif_res[[(length(motif_res) + 1)]] = tmp_res
         }
         motif_res = rbindlist(motif_res, use.names = T)
-        print(paste0('** done with ', s))
         return(motif_res)
     }
     
@@ -737,7 +735,6 @@
             }
         }
         all_haplo = rbindlist(all_haplo)
-        print(paste0('** done with ', s))
         return(all_haplo)
     }
     
