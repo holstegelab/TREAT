@@ -48,6 +48,7 @@
         dev.off()
         cat('\nPlot done --> ', plotname)
       }
+      cat('\n')
     }
 
     # Function to read VCF, and restrict to region of interest
