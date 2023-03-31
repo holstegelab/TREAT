@@ -788,11 +788,11 @@ elif anal_type == 'assembly_trf':
         print("\n** 1. extracting reads")
         os.system('mkdir %s/raw_reads' %(output_directory))
         pool = multiprocessing.Pool(processes=number_threads)
-        extract_fun = partial(extractReads_MP, bed = bed_regions, out_dir = '%s/raw_reads' %(output_directory), window = window_asm, all_bams = all_bam_files)
+        extract_fun = partial(extractReadsAssembly, bed = bed_regions, out_dir = '%s/raw_reads' %(output_directory), window = window_asm, all_bams = all_bam_files)
         extract_results = pool.map(extract_fun, all_bam_files); print('**** read extraction done!                                         ')
         
         # 5. combine results together
-        reads_bam = [x[0] for x in extract_results]; reads_fasta = [x[1] for x in extract_results]
+        reads_fasta = [x for x in extract_results]
 
         # 6. assembly
         print('** 5. assembly')
@@ -828,38 +828,61 @@ elif anal_type == 'assembly_trf':
         align_results = pool.map(align_fun, assembly_results)
         print('**** done with contig alignment                                     ')
 
-        # 9. measure distance on contigs
-        print('** 8. calculate size of the regions of interest in contigs')
+        # 4. extract reads mapping to regions of interest in bed -- multiprocessing
         # list all files that should be processed
         haps_to_process = ['%s_haps_aln.bam' %(x) for x in assembly_results]; prim_to_process = ['%s_p_ctg_aln.bam' %(x) for x in assembly_results]; files_to_process = haps_to_process + prim_to_process
+        print("\n** 8. extracting sequence of interest from aligned contigs")
         pool = multiprocessing.Pool(processes=number_threads)
-        measure_fun = partial(measureDistance_MP, bed = bed_regions, window = window_size)
-        extract_results = pool.map(measure_fun, files_to_process)
-        print('**** read measurement done!                                         ')
+        extract_fun = partial(extract_sequences_nowrite_nosort, bed = bed_regions, out_dir = '%s/raw_reads' %(output_directory), window = window_size)
+        ts = time.time()
+        extract_results = pool.map(extract_fun, files_to_process)
+        te = time.time()
+        time_extraction = te-ts
+        print('**** sequence extraction done in %s seconds                                 ' %(round(time_extraction, 0)))
+        # combine results together: this will give a list for each sample
+        reads_info = [x[-2] for x in extract_results]; reads_bam = [x[0] for x in extract_results]; reads_fasta = [x[1] for x in extract_results]; reads_fasta_padding = [x[2] for x in extract_results]; reads_ids = [x[-1] for x in extract_results]
+        # separately do the reference genome
+        dist_reference, reads_ids_reference, fasta_ref, fasta_withPadd_ref = measureDistance_reference(bed_regions, window_size, ref_fasta, output_directory)
+        # combine reads_ids into a single dictionary
+        reads_ids.append(reads_ids_reference)
+        reads_ids_combined = {}
+        for dic in reads_ids:
+            for key, value in dic.items():
+                reads_ids_combined[key] = value
+        # also combine the fasta files and the reads info and the bam
+        reads_fasta.append(fasta_ref)
+        reads_info.append(dist_reference)
+        files_to_process.append('reference')
+
+        # 5. TRF on single-reads
+        print('** 3. tandem repeat finder on the single-reads')
+        trf_out_dir = '%s/trf_reads' %(output_directory); os.system('mkdir %s' %(trf_out_dir));
+        pool = multiprocessing.Pool(processes=number_threads)
+        trf_fun = partial(run_trf, out_dir = trf_out_dir, motif = motif, polished = 'False', distances = reads_info, reads_ids_combined = reads_ids_combined, all_bam_files = files_to_process)
+        ts = time.time()
+        trf_results = pool.map(trf_fun, reads_fasta)
+        te = time.time()
+        time_trf = te-ts
+        # combine df from different samples together
+        df_trf_combined = pd.concat(trf_results)
+        print('**** TRF estimation done in %s seconds                                 ' %(round(time_trf, 0)))
+        os.system('rm -rf %s/trf_reads' %(output_directory))
+        # add haplotag column
+        combined_haplotags_df = pd.DataFrame(columns=['READ_NAME', 'HAPLOTAG'])
         
-        # 10. combine results together and make output
-        distances = {k:v for element in extract_results for k,v in element.items()}; os.system('mkdir %s/trf_assembly' %(output_directory))
+        # 6. combine these results and make output
+        df_trf_phasing_combined = pd.merge(df_trf_combined, combined_haplotags_df, left_on = 'READ_NAME', right_on = 'READ_NAME', how = 'outer')
+        outf = '%s/assembly_trf_phasing.txt' %(output_directory)
+        df_trf_phasing_combined.to_csv(outf, sep = "\t", index=False, na_rep='NA')
 
-        # 11. tandem repeat finder on assembled contigs
-        print('** 9. tandem repeat finder on contigs')
-        all_bams = list(distances.keys())
-        motif = readMotif(bed_file)
-        pool = multiprocessing.Pool(processes=number_threads)
-        trf_fun = partial(trf_MP, out_dir = '%s/trf_assembly' %(output_directory), motif = motif, polished = 'False', distances = distances)
-        trf_results = pool.map(trf_fun, all_bams)
-        df_trf = pd.concat(trf_results)
-        print('**** done running TRF on assemblies                                     ')
-
-        # 12. make output
-        outf = output_directory + '/trf_assembly/measures_spanning_reads_and_trf.txt'
-        df_trf.to_csv(outf, sep = "\t", index=False)
-
-        # 13. haplotyping
-        print("** 11. haplotype calling and reads-spanning vs. assembly comparison")
+        # 11. haplotyping
+        print("** 11. haplotype calling on reads-spanning and eventually phasing")
         file_path = os.path.realpath(__file__)
         file_path = '/'.join(file_path.split('/')[:-1])
-        os.system("Rscript %s/call_haplotypes.R --asm %s/trf_assembly/measures_spanning_reads_and_trf.txt --out %s/haplotyping --cpu %s" %(file_path, output_directory,     output_directory, number_threads))
-
+        if snp_dir == 'False':
+            os.system("Rscript %s/call_haplotypes_v2.R --reads_spanning %s/spanning_reads_trf_phasing.txt --out %s --cpu %s" %(file_path, output_directory, output_directory, number_threads))
+        else:
+            os.system("Rscript %s/call_haplotypes_v2.R --asm %s/assembly_trf_phasing.txt --out %s --cpu %s" %(file_path, output_directory, output_directory, number_threads))
     else:
         print("\n** 1. run otter")
         os.system('mkdir %s/otter_local_asm' %(output_directory))

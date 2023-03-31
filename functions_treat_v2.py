@@ -262,6 +262,26 @@ def extractReads_MP(bam, bed, out_dir, window, all_bams):
     print("**** done with %s          " %(bam.split('/')[-1]), end = '\r')
     return outname, outname_fasta
 
+# Extract reads mapping to the location of interest for assembly
+def extractReadsAssembly(bam, bed, out_dir, window, all_bams):
+    # set object to remember seen reads
+    read_ids_list = set()
+    # define output names of fasta files
+    outname_fasta = out_dir + '/' + os.path.basename(bam)[:-4] + '__rawReads.fasta'
+    # open bam files
+    with open(outname_fasta, 'w') as outf:
+        with pysam.AlignmentFile(bam, 'rb', check_sq=False) as inBam:
+            for chrom in bed.keys():
+                for region in bed[chrom]:
+                    start, end = int(region[0]) - window, int(region[1]) + window
+                    for read in inBam.fetch(chrom, start, end):
+                        read_name = read.query_name
+                        if read_name not in read_ids_list:
+                            read_ids_list.add(read_name)
+                            outf.write('>%s\n%s\n' %(read_name, str(read.query_sequence)))
+    print("**** done with %s          " %(bam.split('/')[-1]), end = '\r')
+    return outname_fasta
+
 # Polish reads using Alex's script
 def polishReads(bed, distances, out_dir):
     # first find the unique region ids
@@ -756,7 +776,7 @@ def AsmStrategy(ass_type, reads_fasta, out_dir):
     else:
         print('**** using default settings for assembly, that is, one per .bam')
         for x in reads_fasta:
-            x_name = x.split('/')[-1].replace('__rawReads.fasta', '')
+            x_name = os.path.basename(x).replace('__rawReads.fasta', '')
             strategy[x_name] = [x]
     return strategy
 
@@ -825,14 +845,6 @@ def alignAssembly(outname_list, thread, reference):
 
 # Align assembly
 def alignAssembly_MP(asm, outname_list, thread, reference):
-    #if reference == 'chm13':
-    #    ref_hifi = '/project/holstegelab/Share/asalazar/data/chm13/assembly/v2_0/chm13v2.0_hifi.mmi'
-    #    outname_prefix = '_haps_chm13.bam'
-    #    outname_primary_prefix = '_p_ctg_chm13.bam'
-    #else:
-    #    ref_hifi = '/project/holstegelab/Share/pacbio/resources/h38_ccs.mmi'
-    #    outname_prefix = '_haps_hg38.bam'
-    #    outname_primary_prefix = '_p_ctg_hg38.bam'
     ref_hifi = reference
     outname_prefix = '_haps_aln.bam'
     outname_primary_prefix = '_p_ctg_aln.bam'
