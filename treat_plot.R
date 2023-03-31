@@ -35,12 +35,18 @@
         clustering_info = cluster_TR(vcf_info_withRef)
         # Plot name
         plt_name = paste0(out_name, '_', r, '.', plotFormat)
+        plt_name_af = paste0(out_name, '_', r, '_Freq.', plotFormat)
         plotname = file.path(out_dir, plt_name)
-        # Plot
+        plotname_af = file.path(out_dir, plt_name_af)
+        # Plot tandem repeat
         pdf(plotname, height = 10, width = 12)
         plotComplete(vcf_info_withRef, clustering_info, custom_colors = custom_colors, region = r)
         dev.off()
-        cat('\nPlot done --> ', plotname)
+        # Plot allele frequency
+        pdf(plotname_af, height = 7, width = 12)
+        plotAlleleFrequency(vcf_info_withRef, custom_colors = custom_colors, region = r)
+        dev.off()
+        cat('\nPlots done --> ', plotname, ' + ', plotname_af)
       }
       cat('\n')
     }
@@ -58,6 +64,35 @@
       } else {
         stop('The region you provided does not exists! Stopping.')
       }
+    }
+
+    # Function to plot allele frequency
+    plotAlleleFrequency <- function(vcf_info_withRef, custom_colors, region){
+        # get all alleles
+        all_alleles = na.omit(c(vcf_info_withRef$short_allele, vcf_info_withRef$long_allele))
+        # bin size based on fixed value of 20bp
+        bin_size_fixed <- 10
+        # create bins based on the fixed values
+        intervals = seq(from = min(all_alleles), to = max(all_alleles), by = 2*bin_size_fixed)
+        intervals = c(intervals, intervals[length(intervals)] + 20)
+        # cut in bins
+        bins <- data.frame(table(cut(all_alleles, breaks = intervals, include.lowest = TRUE)))
+        bins$Size = intervals[1:length(intervals)-1] + 10
+        # clean the empty bins
+        bins = bins[which(bins$Freq >0),]
+        # calculate frequency
+        bins$fraction = bins$Freq / sum(bins$Freq)
+        # adjust label for the bin
+        bins$Var1 = str_replace_all(bins$Var1, c(',' = '-', '\\(' = '', '\\]' = '', '\\[' = ''))
+        # sort by frequency
+        bins = bins[order(bins$Size),]
+        bins$Var1 = factor(bins$Var1, levels = bins$Var1)
+        bins$x_pos = seq(1, nrow(bins))
+        # add labels
+        bins$label = paste0(bins$Size-10, '-', bins$Size+10)
+        # plot
+        plt = ggplot(bins, aes(x = x_pos, y = fraction, fill=Size)) + geom_bar(stat='identity') + scale_x_continuous(breaks = bins$x_pos, labels = bins$label) + theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 14), axis.text.y = element_text(size=14), axis.title.x = element_text(size = 16), axis.title.y = element_text(size = 16), panel.background = element_rect(fill = "white"), panel.grid.major = element_line(color = "grey90"), plot.title = element_text(size = 18), legend.text = element_text(size = 14), legend.margin = margin(t = 0, r = 5, b = 0, l = 5), legend.key.size = unit(1, "cm"), legend.key.width = unit(0.5, "cm"), legend.key.height = unit(1, "cm"), legend.title = element_text(size = 14)) + xlab('Bin size in base pairs') + ylab('Allele size frequency') + ggtitle(paste('Allele frequency of', region, 'in', nrow(vcf_info_withRef), 'samples')) + guides() + scale_fill_gradient(low = 'deepskyblue2', high = 'red', limits = c(min(all_alleles), max(all_alleles)))
+      return(plt)
     }
 
     # Function to extract reference sizes
