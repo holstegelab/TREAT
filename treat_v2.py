@@ -879,10 +879,7 @@ elif anal_type == 'assembly_trf':
         print("** 11. haplotype calling on reads-spanning and eventually phasing")
         file_path = os.path.realpath(__file__)
         file_path = '/'.join(file_path.split('/')[:-1])
-        if snp_dir == 'False':
-            os.system("Rscript %s/call_haplotypes_v2.R --reads_spanning %s/spanning_reads_trf_phasing.txt --out %s --cpu %s" %(file_path, output_directory, output_directory, number_threads))
-        else:
-            os.system("Rscript %s/call_haplotypes_v2.R --asm %s/assembly_trf_phasing.txt --out %s --cpu %s" %(file_path, output_directory, output_directory, number_threads))
+        os.system("Rscript %s/call_haplotypes_v2.R --asm %s/assembly_trf_phasing.txt --out %s --cpu %s" %(file_path, output_directory, output_directory, number_threads))
     else:
         print("\n** 1. run otter")
         os.system('mkdir %s/otter_local_asm' %(output_directory))
