@@ -50,12 +50,13 @@
     }
 
     # Function to print summary of the run
-    summaryRun <- function(rs_vcf, out_dir, out_name, region){
+    summaryRun <- function(rs_vcf, out_dir, out_name, region, mad_thr){
         cat('\n********************')
         cat('\n** TREAT analysis **')
         cat('\n*** Arguments:')
         cat(paste0('\n*** Input VCF: ', rs_vcf))
         cat(paste0('\n*** Region(s): ', paste(region, collapse = ', ')))
+        cat(paste0('\n*** MAD threshold: ', mad_thr))
         cat(paste0('\n*** Output directory: ', out_dir))
         cat(paste0('\n*** Output name: ', out_name))
         return('\n*** Analysis started!')
@@ -209,8 +210,8 @@ if (run == 'true'){
     # Split regions if it is not all
     if (region != 'all'){ region = unlist(strsplit(region, ',')) }
     # Print summary of the run
-    x = summaryRun(rs_vcf, out_dir, out_name, plotFormat, custom_colors, region)
+    x = summaryRun(rs_vcf, out_dir, out_name, region, mad_thr)
 
     # Pipeline to plot repeats
-    analysisPipeline(rs_vcf, out_dir, out_name, region, thr_mad)
+    analysisPipeline(rs_vcf, out_dir, out_name, region, mad_thr)
   }
