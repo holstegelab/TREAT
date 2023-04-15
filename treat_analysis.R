@@ -169,9 +169,6 @@
         return(vcf_info_withRef)
     }
 
-
-
-
 # Arguments definition
     parser <- ArgumentParser()
     # add arguments: --reads_spannning is the VCF file of the output of read_spanning_analysis
