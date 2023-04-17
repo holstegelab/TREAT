@@ -44,7 +44,7 @@
         dev.off()
         # Plot allele frequency
         pdf(plotname_af, height = 7, width = 12)
-        plotAlleleFrequency(vcf_info_withRef, custom_colors = custom_colors, region = r)
+        print(plotAlleleFrequency(vcf_info_withRef, custom_colors = custom_colors, region = r))
         dev.off()
         cat('\nPlots done --> ', plotname, ' + ', plotname_af)
       }
