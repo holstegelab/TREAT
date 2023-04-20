@@ -742,6 +742,7 @@
     
     # Function to compare reads-spanning and assembly-based approached based on multiple processing -- in use
     comparison_faster = function(s, all_regions, all_haplo, deviation){
+        print(s)
         # initialize container
         comparison = list()
         # main loop over regions
@@ -759,10 +760,20 @@
                 asm$H2_CONSENSUS[is.na(asm$H2_CONSENSUS)] = asm$H1_CONSENSUS[is.na(asm$H2_CONSENSUS)]
                 asm$H2_CONSENSUS_MOTIF[is.na(asm$H2_CONSENSUS_MOTIF)] = asm$H1_CONSENSUS_MOTIF[is.na(asm$H2_CONSENSUS_MOTIF)]
                 asm$H2_HAPLO_SIZE[is.na(asm$H2_HAPLO_SIZE)] = asm$H1_HAPLO_SIZE[is.na(asm$H2_HAPLO_SIZE)]
+                if (NA %in% asm$H1_CONSENSUS){
+                    asm$H1_CONSENSUS[is.na(asm$H1_CONSENSUS)] = asm$H2_CONSENSUS[is.na(asm$H1_CONSENSUS)]
+                    asm$H1_CONSENSUS_MOTIF[is.na(asm$H1_CONSENSUS_MOTIF)] = asm$H2_CONSENSUS_MOTIF[is.na(asm$H1_CONSENSUS_MOTIF)]
+                    asm$H1_HAPLO_SIZE[is.na(asm$H1_HAPLO_SIZE)] = asm$H2_HAPLO_SIZE[is.na(asm$H1_HAPLO_SIZE)]
+                }
                 # spanning
                 spa$H2_CONSENSUS[is.na(spa$H2_CONSENSUS)] = spa$H1_CONSENSUS[is.na(spa$H2_CONSENSUS)]
                 spa$H2_CONSENSUS_MOTIF[is.na(spa$H2_CONSENSUS_MOTIF)] = spa$H1_CONSENSUS_MOTIF[is.na(spa$H2_CONSENSUS_MOTIF)]
                 spa$H2_HAPLO_SIZE[is.na(spa$H2_HAPLO_SIZE)] = spa$H1_HAPLO_SIZE[is.na(spa$H2_HAPLO_SIZE)]
+                if (NA %in% spa$H1_CONSENSUS){
+                    spa$H1_CONSENSUS[is.na(spa$H1_CONSENSUS)] = spa$H2_CONSENSUS[is.na(spa$H1_CONSENSUS)]
+                    spa$H1_CONSENSUS_MOTIF[is.na(spa$H1_CONSENSUS_MOTIF)] = spa$H2_CONSENSUS_MOTIF[is.na(spa$H1_CONSENSUS_MOTIF)]
+                    spa$H1_HAPLO_SIZE[is.na(spa$H1_HAPLO_SIZE)] = spa$H2_HAPLO_SIZE[is.na(spa$H1_HAPLO_SIZE)]
+                }
                 # check if there are NAs (but there shouldn't be at this point)
                 if (NA %in% c(asm$H1_HAPLO_SIZE, asm$H2_HAPLO_SIZE, spa$H1_HAPLO_SIZE, spa$H2_HAPLO_SIZE)){
                     print(paste0('help!! ', s, '-', r))
