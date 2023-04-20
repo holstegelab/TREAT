@@ -406,12 +406,14 @@
         for (r in all_regions){
             # get data of the sample and the region of interest -- depending on type (reads_spanning or asm)
             tmp_data = reads_span[which(reads_span$SAMPLE_NAME == s & reads_span$REGION == r),]
+            # good idea to exclude NAs here
+            tmp_data = tmp_data[!is.na(tmp_data$LENGTH_SEQUENCE),]
             if (nrow(tmp_data) >0){
                 reads_df = tmp_data[, c('COPIES_TRF', 'HAPLOTYPE', 'UNIFORM_MOTIF', 'REGION', 'PASSES', 'READ_QUALITY', 'LENGTH_SEQUENCE', 'READ_NAME', 'START_TRF', 'END_TRF', 'TRF_PERC_MATCH', 'TRF_PERC_INDEL')]
                 if (type == 'reads_spanning'){
                     phased_data = PhasingBased_haplotyping_size(reads_df, sample_name = s, thr_mad)
                 } else {
-                    phased_data = assemblyBased_size(reads_df, sample_name = s, region = r, thr_mad)
+                    phased_data = assemblyBased_size(data = reads_df, sample_name = s, region = r, thr_mad)
                 }
                 polished_data = polishHaplo_afterPhasing_size(phased_data, thr_mad)
                 tmp_res = rbind.fill(tmp_res, polished_data)
