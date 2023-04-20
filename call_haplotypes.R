@@ -746,7 +746,6 @@
         comparison = list()
         # main loop over regions
         for (r in all_regions){
-            print(r)
             # extract data of the sample in the region of interest
             tmp = all_haplo[which(all_haplo$SAME_NAME == s & all_haplo$REGION == r),]
             # split assembly and reads-spanning

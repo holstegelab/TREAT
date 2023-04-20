@@ -19,7 +19,7 @@ parser = argparse.ArgumentParser(description = 'Find information about a specifi
 
 ## Main arguments
 # analysis type
-parser.add_argument('--analysis-type', dest = 'analysis_type', type = str, help = 'Type of analysis to perform [reads_spanning_trf / assembly_trf / haplotyping / extract_snps (beta) / annotate_snps (beta) / complete (beta) / extract_annotate (beta) / genotype_snps_pacbio (beta) / coverage_profile (beta) / extract_raw_reads (beta) / realign (beta)]. See docs for further information.', required = True)
+parser.add_argument('--analysis-type', dest = 'analysis_type', type = str, help = 'Type of analysis to perform [reads_spanning_trf / assembly_trf / haplotyping / complete / extract_snps (beta) / annotate_snps (beta) / extract_annotate (beta) / genotype_snps_pacbio (beta) / coverage_profile (beta) / extract_raw_reads (beta) / realign (beta)]. See docs for further information.', required = True)
 # bed file
 parser.add_argument('--bed', dest = 'bed_dir', type = str, help = '.bed file containing the region(s) to look. Header is not required but if present, it must starts with #.', required = False, default = 'None')
 # bam file
