@@ -927,6 +927,8 @@
             data$SAMPLE_COMBINED = str_replace_all(data$SAMPLE_COMBINED, '__Assembly_p_ctg_aln.bam', '')
             data$SAMPLE_COMBINED = str_replace_all(data$SAMPLE_COMBINED, '__rawReads.bam', '')
         }
+        # select unique regions
+        if ('reads-spanning' %in% reference$DATA_TYPE){ reference = reference[which(reference$DATA_TYPE == 'reads-spanning'),] }
         # Chromosome -- from reference
         chroms = str_split_fixed(reference$REGION, ':', 2)[, 1]
         # Position

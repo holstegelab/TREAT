@@ -22,7 +22,17 @@
       # Disable warnings
       defaultW <- getOption("warn"); options(warn = -1)
       # Read VCF
-      vcf = readVCF(rs_vcf, region)
+      vcf = data.frame()
+      for (v in rs_vcf){
+        tmp = readVCF(v, region)
+        if (nrow(vcf) == 0){
+          vcf = tmp
+        } else {
+          columns_to_select = c('ID', colnames(tmp)[10:ncol(tmp)])
+          tmp = tmp[, ..columns_to_select]
+          vcf = merge(vcf, tmp, by = 'ID', all=T)
+        }
+      }
       # Identify the regions to be plotted
       all_regions = unique(vcf$ID)
       # The iterate over all regions
@@ -324,7 +334,7 @@
       cat('\n********************')
       cat('\n*** TREAT plot *****')
       cat('\n*** Arguments:')
-      cat(paste0('\n*** Input VCF: ', rs_vcf))
+      cat(paste0('\n*** Input VCF: ', paste(rs_vcf, collapse = ',')))
       cat(paste0('\n*** Region(s): ', paste(region, collapse = ', ')))
       cat(paste0('\n*** Output directory: ', out_dir))
       cat(paste0('\n*** Output name: ', out_name))
@@ -372,7 +382,7 @@
 # Check arguments
   # stop if no input data is provided
   run = 'false'
-  if (rs_vcf == 'None'){ stop("Input error: Missing input file(s)!!") } else if (region == 'None'){ stop("No region to plot selected!") } else { run = 'true'}
+  if ((length(rs_vcf) == 1) && (rs_vcf == 'None')){ stop("Input error: Missing input file(s)!!") } else if (region == 'None'){ stop("No region to plot selected!") } else { run = 'true'}
 
 # Main
   if (run == 'true'){
