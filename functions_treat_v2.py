@@ -491,7 +491,7 @@ def measureDist(read, chrom, start, end, window):
    return [read_id, region_id, np, rq, mc, sequence_interest, sequence_interest_with_padding, sequence_interest_len, sequence_interest_with_padding_len, window]
 
 # Measure the distance in the reference genome
-def measureDistance_reference(bed, window, ref, output_directory):
+def measureDistance_reference(bed, window, ref, output_directory, type):
     distances = []
     reads_ids = {'reference' : []}
     for chrom in bed.keys():
@@ -506,10 +506,17 @@ def measureDistance_reference(bed, window, ref, output_directory):
             distances.append(['reference', region_id, 'NA', 'NA', 'NA', seq_merged, seq_merged_with_padding, len(seq_merged), len(seq_merged_with_padding), window])
             reads_ids['reference'].append(region_id)
     # then we write the fasta
-    outfasta = '%s/raw_reads/reference__rawReads.fasta' %(output_directory)
-    outf = open(outfasta, 'w')
-    outfasta_withPad = '%s/raw_reads/reference__rawReads_withPaddings.fasta' %(output_directory)
-    outf_withPad = open(outfasta_withPad, 'w')
+    if type != 'otter':
+        outfasta = '%s/raw_reads/reference__rawReads.fasta' %(output_directory)
+        outf = open(outfasta, 'w')
+        outfasta_withPad = '%s/raw_reads/reference__rawReads_withPaddings.fasta' %(output_directory)
+        outf_withPad = open(outfasta_withPad, 'w')
+    else:
+        outfasta = '%s/reference__rawReads.fasta' %(output_directory)
+        outf = open(outfasta, 'w')
+        outfasta_withPad = '%s/reference__rawReads_withPaddings.fasta' %(output_directory)
+        outf_withPad = open(outfasta_withPad, 'w')
+    # then write
     for x in distances:
         read_id, region_id, np, rq, mc, sequence_interest_len, sequence_interest, sequence_interest_with_padding_len, sequence_interest_with_padding = x[0], x[1], x[2], x[3], x[4], x[-3], x[5], x[-2], x[-4]
         outf.write('>%s;%s;%s;%s;%s;%s\n%s\n' %(read_id, region_id, np, rq, mc, sequence_interest_len, sequence_interest))
@@ -722,45 +729,61 @@ def trf_MP_old(bam, out_dir, motif, polished, distances):
     return trf_info
 
 # Run TRF given a sequence
-def run_trf(fasta, out_dir, motif, polished, distances, reads_ids_combined, all_bam_files):
-   # then run tandem repeat finder
-   cmd = 'trf4.10.0-rc.2.linux64.exe %s 2 7 7 80 10 50 200 -ngs -h' %(fasta)
-   trf = [x for x in os.popen(cmd).read().split('\n') if x != '']
-   # loop on trf results and save them into a list of lists
-   x = 0; trf_matches = []
-   read_found = []
-   while x < len(trf):
-      # check if the line is the header of an entry
-      if trf[x].startswith('@'):
-         # if so, save the corresponding information
-         read_id, region, passes, qual, cons, seq_size = trf[x].split(';')
-         read_found.append(read_id.replace('@', ''))
-         x += 1
-         while x < len(trf) and not trf[x].startswith('@'):
+def run_trf(fasta, out_dir, motif, polished, distances, reads_ids_combined, all_bam_files, type):
+    # then run tandem repeat finder
+    cmd = 'trf4.10.0-rc.2.linux64.exe %s 2 7 7 80 10 50 200 -ngs -h' %(fasta)
+    trf = [x for x in os.popen(cmd).read().split('\n') if x != '']
+    # loop on trf results and save them into a list of lists
+    x = 0; trf_matches = []; read_found = []
+    sample_interest = fasta.split('/')[-1].replace('_trf.fa','')
+    while x < len(trf):
+        # check if the line is the header of an entry
+        if trf[x].startswith('@'):
+            # if so, save the corresponding information depending on the type of input
+            if type != 'otter' or sample_interest == 'reference__rawReads.fasta':
+                read_id, region, passes, qual, cons, seq_size = trf[x].split(';')
+                read_found.append(read_id.replace('@', ''))
+            else:
+                read_id, region, seq_size_with_padding, seq_size = trf[x].split(';')
+                read_id = '@>' + read_id
+            x += 1
+        while x < len(trf) and not trf[x].startswith('@'):
             motif_type = motif[region]              # get the correspondin motif
             tmp_trf_match = [read_id.replace('@', '') + '_' + region, motif_type] + trf[x].split()
             trf_matches.append(tmp_trf_match)
             x += 1
-   # finally create pandas df and assign column names
-   if len(trf_matches) == 0:
-      trf_matches = [['NA' for i in range(19)]] 
-   df = pd.DataFrame(trf_matches)
-   df.columns = ['ID', 'EXPECTED_MOTIF', 'START_TRF', 'END_TRF', 'LENGTH_MOTIF_TRF', 'COPIES_TRF', 'TRF_CONSENSUS_SIZE', 'TRF_PERC_MATCH', 'TRF_PERC_INDEL', 'TRF_SCORE', 'TRF_A_PERC', 'TRF_C_PERC', 'TRF_G_PERC', 'TRF_T_PERC', 'TRF_ENTROPY', 'TRF_MOTIF', 'TRF_REPEAT_SEQUENCE', 'TRF_PADDING_BEFORE', 'TRF_PADDING_AFTER']
-   # finally, we need to add the reads where trf didn't find any motif
-   sample_interest = os.path.basename(fasta).replace('__rawReads.fasta', '')
-   all_samples = [os.path.basename(x).replace('.bam', '') for x in all_bam_files]
-   sample_interest_index = all_samples.index(sample_interest)
-   distances_sample = distances[sample_interest_index]
-   # convert distances to dataframe
-   distances_sample_df = pd.DataFrame(distances_sample)
-   distances_sample_df.columns = ['READ_NAME', 'REGION', 'PASSES', 'READ_QUALITY', 'MAPPING_CONSENSUS', 'SEQUENCE_FOR_TRF', 'SEQUENCE_WITH_PADDINGS', 'LEN_SEQUENCE_FOR_TRF', 'LEN_SEQUENCE_WITH_PADDINGS', 'WINDOW']
-   distances_sample_df['ID'] = distances_sample_df['READ_NAME'].str.cat(distances_sample_df['REGION'], sep='_')
-   # add sample name in a column
-   distances_sample_df['SAMPLE_NAME'] = sample_interest
-   # merge trf dataframe and reads dataframes
-   complete_df = pd.merge(distances_sample_df, df, left_on = 'ID', right_on = 'ID', how = 'outer')
-   print("**** done with %s                               " %(sample_interest), end = '\r')
-   return complete_df
+    # finally create pandas df and assign column names
+    if len(trf_matches) == 0:
+        trf_matches = [['NA' for i in range(19)]] 
+    df = pd.DataFrame(trf_matches)
+    df.columns = ['ID', 'EXPECTED_MOTIF', 'START_TRF', 'END_TRF', 'LENGTH_MOTIF_TRF', 'COPIES_TRF', 'TRF_CONSENSUS_SIZE', 'TRF_PERC_MATCH', 'TRF_PERC_INDEL', 'TRF_SCORE', 'TRF_A_PERC', 'TRF_C_PERC', 'TRF_G_PERC', 'TRF_T_PERC', 'TRF_ENTROPY', 'TRF_MOTIF', 'TRF_REPEAT_SEQUENCE', 'TRF_PADDING_BEFORE', 'TRF_PADDING_AFTER']
+    # finally, we need to add the reads where trf didn't find any motif
+    if type != 'otter':
+        sample_interest = os.path.basename(fasta).replace('__rawReads.fasta', '')
+        all_samples = [os.path.basename(x).replace('.bam', '') for x in all_bam_files]
+        sample_interest_index = all_samples.index(sample_interest)
+        distances_sample = distances[sample_interest_index]
+        # convert distances to dataframe
+        distances_sample_df = pd.DataFrame(distances_sample)
+        distances_sample_df.columns = ['READ_NAME', 'REGION', 'PASSES', 'READ_QUALITY', 'MAPPING_CONSENSUS', 'SEQUENCE_FOR_TRF', 'SEQUENCE_WITH_PADDINGS', 'LEN_SEQUENCE_FOR_TRF', 'LEN_SEQUENCE_WITH_PADDINGS', 'WINDOW']
+    else:
+        if sample_interest == 'reference__rawReads.fasta':
+            sample_interest = 'reference'
+        distances_sample = distances[sample_interest]
+        distances_sample_df = pd.DataFrame(distances_sample)
+        distances_sample_df.columns = ['REGION', 'READ_NAME', 'SEQUENCE_WITH_PADDINGS', 'LEN_SEQUENCE_WITH_PADDINGS', 'SEQUENCE_FOR_TRF', 'LEN_SEQUENCE_FOR_TRF']
+        # make same identifier
+        #distances_sample_df['ID'] = distances_sample_df['REGION'] + '_' + #distances_sample_df['LEN_SEQUENCE_WITH_PADDINGS'].astype(str) + '_' + #distances_sample_df['LEN_SEQUENCE_FOR_TRF'].astype(str)
+        # add other columns and put NA
+        distances_sample_df['PASSES'] = 'NA'; distances_sample_df['READ_QUALITY'] = 'NA'; distances_sample_df['MAPPING_CONSENSUS'] = 'NA'; distances_sample_df['WINDOW'] = 50;
+    # add id
+    distances_sample_df['ID'] = distances_sample_df['READ_NAME'].str.cat(distances_sample_df['REGION'], sep='_')
+    # add sample name in a column
+    distances_sample_df['SAMPLE_NAME'] = sample_interest
+    # merge trf dataframe and reads dataframes
+    complete_df = pd.merge(distances_sample_df, df, left_on = 'ID', right_on = 'ID', how = 'outer')
+    print("**** done with %s                               " %(sample_interest), end = '\r')
+    return complete_df
 
 # Read strategy file for assembly
 def AsmStrategy(ass_type, reads_fasta, out_dir):
@@ -1459,6 +1482,35 @@ def realignFasta(fasta_files, threads, reference):
         os.system("pbmm2 align --preset CCS %s -j %s --log-level FATAL --sort %s %s" %(reference_mmi, threads, fasta_files[i], output_aligned[i]))       # command for alignment
         print('**** %s/%s alignment done' %(fasta_files.index(fasta_files[i]) + 1, len(fasta_files)), end = '\r')
     return output_aligned
+
+# Function to make assembly with otter and produce fasta files suitable for TRF
+def assembly_otter(s, output_directory, ref_fasta, bed_file):
+    # define output name with the right directory
+    outname = s.split('/')[-1].replace('.bam', '.fa')
+    # run otter
+    cmd = '/project/holstegelab/Software/nicco/bin/otter/build/otter assemble -b %s -r %s %s > %s/otter_local_asm/%s' %(bed_file, ref_fasta, s, output_directory, outname)
+    os.system(cmd)
+    # collect otter sequences
+    f_open = [x.rstrip() for x in open('%s/otter_local_asm/%s' %(output_directory, outname), 'r').readlines()]
+    # define padding size and output results list
+    padd_size = 50
+    tmp_res = {outname.replace('.fa', '') : []}
+    # also define the new fasta output containing only the repetitive sequence for TRF
+    trf_input = open('%s/otter_local_asm/%s' %(output_directory, outname.replace('.fa', '_trf.fa')), 'w')
+    for x in f_open:
+        if x.startswith('>'):
+            region = x.split()[0].replace('>', '')
+            read_id = x.replace(' ', '_')
+        else:
+            seq = x; seq_len_with_paddings = len(seq); seq_no_paddings = x[(padd_size-1):len(x)-(padd_size+1)]; seq_len_no_paddings = len(seq_no_paddings)
+            # save hit at this point
+            tmp_res[outname.replace('.fa', '')].append([region, read_id, seq, seq_len_with_paddings, seq_no_paddings, seq_len_no_paddings])
+            # then write the sequence without paddings
+            trf_input.write('%s;%s;%s;%s\n' %(read_id, region, seq_len_with_paddings, seq_len_no_paddings))
+            trf_input.write('%s\n' %(seq_no_paddings))
+    trf_input.close()
+    return tmp_res
+
 
 # --------------------------------------------------------------------- #
 # functions deleted or modified -- put here for reference

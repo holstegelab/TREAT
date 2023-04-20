@@ -457,7 +457,7 @@ elif anal_type == 'reads_spanning_trf':
     # combine results together: this will give a list for each sample
     reads_info = [x[-2] for x in extract_results]; reads_bam = [x[0] for x in extract_results]; reads_fasta = [x[1] for x in extract_results]; reads_fasta_padding = [x[2] for x in extract_results]; reads_ids = [x[-1] for x in extract_results]
     # separately do the reference genome
-    dist_reference, reads_ids_reference, fasta_ref, fasta_withPadd_ref = measureDistance_reference(bed_regions, window_size, ref_fasta, output_directory)
+    dist_reference, reads_ids_reference, fasta_ref, fasta_withPadd_ref = measureDistance_reference(bed_regions, window_size, ref_fasta, output_directory, 'rs')
     # combine reads_ids into a single dictionary
     reads_ids.append(reads_ids_reference)
     reads_ids_combined = {}
@@ -473,7 +473,7 @@ elif anal_type == 'reads_spanning_trf':
     print('** 3. tandem repeat finder on the single-reads')
     trf_out_dir = '%s/trf_reads' %(output_directory); os.system('mkdir %s' %(trf_out_dir));
     pool = multiprocessing.Pool(processes=number_threads)
-    trf_fun = partial(run_trf, out_dir = trf_out_dir, motif = motif, polished = 'False', distances = reads_info, reads_ids_combined = reads_ids_combined, all_bam_files = all_bam_files)
+    trf_fun = partial(run_trf, out_dir = trf_out_dir, motif = motif, polished = 'False', distances = reads_info, reads_ids_combined = reads_ids_combined, all_bam_files = all_bam_files, type = 'rs')
     ts = time.time()
     trf_results = pool.map(trf_fun, reads_fasta)
     te = time.time()
@@ -589,7 +589,7 @@ elif anal_type == 'assembly_trf':
         # combine results together: this will give a list for each sample
         reads_info = [x[-2] for x in extract_results]; reads_bam = [x[0] for x in extract_results]; reads_fasta = [x[1] for x in extract_results]; reads_fasta_padding = [x[2] for x in extract_results]; reads_ids = [x[-1] for x in extract_results]
         # separately do the reference genome
-        dist_reference, reads_ids_reference, fasta_ref, fasta_withPadd_ref = measureDistance_reference(bed_regions, window_size, ref_fasta, output_directory)
+        dist_reference, reads_ids_reference, fasta_ref, fasta_withPadd_ref = measureDistance_reference(bed_regions, window_size, ref_fasta, output_directory, 'asm')
         # combine reads_ids into a single dictionary
         reads_ids.append(reads_ids_reference)
         reads_ids_combined = {}
@@ -605,7 +605,7 @@ elif anal_type == 'assembly_trf':
         print('** 3. tandem repeat finder on the single-reads')
         trf_out_dir = '%s/trf_reads' %(output_directory); os.system('mkdir %s' %(trf_out_dir));
         pool = multiprocessing.Pool(processes=number_threads)
-        trf_fun = partial(run_trf, out_dir = trf_out_dir, motif = motif, polished = 'False', distances = reads_info, reads_ids_combined = reads_ids_combined, all_bam_files = files_to_process)
+        trf_fun = partial(run_trf, out_dir = trf_out_dir, motif = motif, polished = 'False', distances = reads_info, reads_ids_combined = reads_ids_combined, all_bam_files = files_to_process, type = 'asm')
         ts = time.time()
         trf_results = pool.map(trf_fun, reads_fasta)
         te = time.time()
@@ -629,33 +629,57 @@ elif anal_type == 'assembly_trf':
         os.system("Rscript %s/call_haplotypes_v2.R --asm %s/assembly_trf_phasing.txt --out %s --cpu %s" %(file_path, output_directory, output_directory, number_threads))
     else:
         print("\n** 1. run otter")
+        # create output directory for otter
         os.system('mkdir %s/otter_local_asm' %(output_directory))
-        # run otter for all samples and regions
-        for s in all_bam_files:
-            outname = s.split('/')[-1].replace('.bam', '.fa')
-            cmd = '/project/holstegelab/Software/nicco/bin/otter/build/otter assemble -b %s -r %s %s > %s/otter_local_asm/%s' %(bed_file, ref_fasta, s, output_directory, outname)
-            os.system(cmd)
-        # collect otter sequences
-        otter_files = [x.rstrip() for x in os.popen('ls %s/otter_local_asm/' %(output_directory))]
-        res = {}
-        for f in otter_files:
-            f_open = [x.rstrip() for x in open('%s/otter_local_asm/%s' %(output_directory, f), 'r').readlines()]
-            for x in f_open:
-                if x.startswith('>'):
-                    region = x.split()[0].replace('>', '')
-                else:
-                    seq = x; seq_len = len(seq)
-                    # save hit at this point
-                    if f in res.keys():
-                        res[f].append([region, seq, seq_len])
-                    else:
-                        res[f] = [[region, seq, seq_len]]
-        # at the end, save the output
-        outf = open('%s/otter_local_asm/otter_sizes.txt' %(output_directory), 'w')
-        for s in res.keys():
-            for r in res[s]:
-                outf.write('%s\t%s\t%s\t%s\n' %(s, r[0], r[1], r[2]))
-        outf.close()
+        # run in multiprocessing
+        pool = multiprocessing.Pool(processes=number_threads)
+        otter_fun = partial(assembly_otter, output_directory = output_directory, ref_fasta = ref_fasta, bed_file = bed_file)
+        ts = time.time()
+        extract_results = pool.map(otter_fun, all_bam_files)
+        te = time.time()
+        time_otter = te-ts
+        # combine all dictionaries into a single one
+        combined_dict = {k: v for d in extract_results for k, v in d.items()}
+        print('**** Otter local assembly done in %s seconds                                 ' %(round(time_otter, 0)))
+        # separately do the reference genome
+        dist_reference, reads_ids_reference, fasta_ref, fasta_withPadd_ref = measureDistance_reference(bed = bed_regions, window = window_size, ref = ref_fasta, output_directory = '%s/otter_local_asm' %(output_directory), type = 'otter')
+        # rearrange reference object and add it to the combined dictionary
+        combined_dict['reference'] = []
+        for x in dist_reference:
+            tmp = [x[1], x[0], x[-4], x[-2], x[-5], x[-3]]
+            combined_dict['reference'].append(tmp)
+
+        # 2. TRF on single-reads
+        print('** 2. tandem repeat finder on the assembled contigs')
+        trf_out_dir = '%s/trf_reads' %(output_directory); os.system('mkdir %s' %(trf_out_dir));
+        # list fasta files to do analysis on
+        reads_fasta = [x.rstrip() for x in os.popen('ls %s/otter_local_asm/*_trf.fa' %(output_directory))]
+        # add the reference as well
+        reads_fasta.append('%s/otter_local_asm/reference__rawReads.fasta' %(output_directory))
+        # then run trf in multiple processors
+        pool = multiprocessing.Pool(processes=number_threads)
+        trf_fun = partial(run_trf, out_dir = trf_out_dir, motif = motif, polished = 'False', distances = combined_dict, reads_ids_combined = 'None', all_bam_files = 'None', type = 'otter')
+        ts = time.time()
+        trf_results = pool.map(trf_fun, reads_fasta)
+        te = time.time()
+        time_trf = te-ts
+        # combine df from different samples together
+        df_trf_combined = pd.concat(trf_results)
+        print('**** TRF estimation done in %s seconds                                 ' %(round(time_trf, 0)))
+        os.system('rm -rf %s/trf_reads' %(output_directory))
+        # add haplotag column
+        combined_haplotags_df = pd.DataFrame(columns=['READ_NAME', 'HAPLOTAG'])
+        
+        # 6. combine these results and make output
+        df_trf_phasing_combined = pd.merge(df_trf_combined, combined_haplotags_df, left_on = 'READ_NAME', right_on = 'READ_NAME', how = 'outer')
+        outf = '%s/assembly_trf_phasing.txt' %(output_directory)
+        df_trf_phasing_combined.to_csv(outf, sep = "\t", index=False, na_rep='NA')
+
+        # 11. haplotyping
+        print("** 11. haplotype calling on reads-spanning and eventually phasing")
+        file_path = os.path.realpath(__file__)
+        file_path = '/'.join(file_path.split('/')[:-1])
+        os.system("Rscript %s/call_haplotypes_v2.R --asm %s/assembly_trf_phasing.txt --out %s --cpu %s" %(file_path, output_directory, output_directory, number_threads))
 
 ## Check whether to keep or delete temporary files
 if (store_temporary == 'False' and anal_type not in ['reads_spanning_trf', 'assembly_trf', 'haplotyping', 'extract_reads', 'coverage_profile', 'complete']):
