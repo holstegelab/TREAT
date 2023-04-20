@@ -742,7 +742,6 @@
     
     # Function to compare reads-spanning and assembly-based approached based on multiple processing -- in use
     comparison_faster = function(s, all_regions, all_haplo, deviation){
-        print(s)
         # initialize container
         comparison = list()
         # main loop over regions

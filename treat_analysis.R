@@ -12,7 +12,17 @@
       # Disable warnings
       defaultW <- getOption("warn"); options(warn = -1)
       # Read VCF
-      vcf = readVCF(rs_vcf, region)
+      vcf = data.frame()
+      for (v in rs_vcf){
+        tmp = readVCF(v, region)
+        if (nrow(vcf) == 0){
+          vcf = tmp
+        } else {
+          columns_to_select = c('ID', colnames(tmp)[10:ncol(tmp)])
+          tmp = tmp[, ..columns_to_select]
+          vcf = merge(vcf, tmp, by = 'ID', all=T)
+        }
+      }
       # Identify the regions to be plotted
       all_regions = unique(vcf$ID)
       # Create an empty dataframe for the results
@@ -54,7 +64,7 @@
         cat('\n********************')
         cat('\n** TREAT analysis **')
         cat('\n*** Arguments:')
-        cat(paste0('\n*** Input VCF: ', rs_vcf))
+        cat(paste0('\n*** Input VCF: ', paste(rs_vcf, collapse = ',')))
         cat(paste0('\n*** Region(s): ', paste(region, collapse = ', ')))
         cat(paste0('\n*** MAD threshold: ', mad_thr))
         cat(paste0('\n*** Output directory: ', out_dir))
@@ -201,7 +211,7 @@
 
 # Check arguments and stop if no input data is provided
     run = 'false'
-    if (rs_vcf == 'None'){ stop("Input error: Missing input file(s)!!") } else if (!is.numeric(mad_thr)){ "The --madThr should be numeric" } else { run = 'true'}
+    if ((length(rs_vcf) == 1) && (rs_vcf == 'None')){ stop("Input error: Missing input file(s)!!") } else if (!is.numeric(mad_thr)){ "The --madThr should be numeric" } else { run = 'true'}
 # Main
 if (run == 'true'){
     # Split regions if it is not all
