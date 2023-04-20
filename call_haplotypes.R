@@ -746,6 +746,7 @@
         comparison = list()
         # main loop over regions
         for (r in all_regions){
+            print(r)
             # extract data of the sample in the region of interest
             tmp = all_haplo[which(all_haplo$SAME_NAME == s & all_haplo$REGION == r),]
             # split assembly and reads-spanning
@@ -1203,7 +1204,7 @@
                 data$DATA_TYPE = 'assembly'
                 all_trf[[(length(all_trf) + 1)]] = data
             }
-            all_trf = rbindlist(all_trf)
+            all_trf = rbindlist(all_trf, use.names=TRUE)
         }
   
     # 2. Let's adjust the motifs -- generate a consensus -- essentially merging the same motifs together at the single read level -- this for both analyses
@@ -1276,7 +1277,17 @@
     # 10. finally call haplotypes -- implemented parallel computing
         cat('****** Haplotype calling\n')
         all_samples = unique(motif_res$sample); all_regions = unique(motif_res$REGION)
-        all_haplo = rbindlist(mclapply(all_samples, callHaplo_mp, all_regions = all_regions, data = motif_res, mc.cores = n_cpu))
+        # haplotype calling should be done in reads-spanning and assembly separately, otherwise if the haplotypes are different there will be problems
+        if (anal_type == 'reads-spanning + assembly + comparison'){
+            # reads spanning
+            all_haplo_rs = rbindlist(mclapply(all_samples, callHaplo_mp, all_regions = all_regions, data = motif_res[which(motif_res$DATA_TYPE == 'reads-spanning'),], mc.cores = n_cpu))
+            # assembly
+            all_haplo_asm = rbindlist(mclapply(all_samples, callHaplo_mp, all_regions = all_regions, data = motif_res[which(motif_res$DATA_TYPE == 'assembly'),], mc.cores = n_cpu))
+            # combine them
+            all_haplo = rbind(all_haplo_rs, all_haplo_asm)
+        } else {
+            all_haplo = rbindlist(mclapply(all_samples, callHaplo_mp, all_regions = all_regions, data = motif_res, mc.cores = n_cpu))
+        }
         # add a unique identifier to match samples reads-spanning and assembly results
         all_haplo$SAME_NAME = str_split_fixed(all_haplo$SAMPLE, '__', 2)[, 1]
         # exclude reference

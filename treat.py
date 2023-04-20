@@ -202,9 +202,6 @@ asm_file, ref_fasta, thr_mad, number_threads_asm_aln, window_asm, ass_tool = arg
 # window for phasing should be larger
 window_for_phasing = 2500
 
-## Store arguments (for debugging only)
-#bed_file, anal_type, var_file, bam_directory, output_directory, store_temporary, window_size, assembly_type, assembly_ploidy, number_threads, polishing, snp_dir, snp_data_ids, step, target_reads = '/project/holstegelab/Share/nicco/workspaces/20211013_target_approach/automatic_pipeline/DMPK/dmpk.bed', '', '', '/project/holstegelab/Share/nicco/workspaces/20211013_target_approach/automatic_pipeline/DMPK/extract_reads/case/DNA15-20132_2.haplotagged_step1_hifi.bam', '/project/holstegelab/Share/nicco/workspaces/20211013_target_approach/automatic_pipeline/DMPK/phase_reads/case', 'True', 100000, '', 2, 4, 'True', '/project/holstegelab/Share/pacbio/radbound_rfc1_cases/DNA15-20132-DMPK/Analyzed/GRCh38_20220408/SNVCalling_20220411_deepvariant//DNA15-20132_2.phased.pvar', '/project/holstegelab/Share/nicco/workspaces/20211013_target_approach/automatic_pipeline/DMPK/phase_reads/case/map.txt', 500, '/project/holstegelab/Share/nicco/workspaces/20211013_target_approach/automatic_pipeline/RFC1/subreads/c7_all_reads.txt'
-
 ## Check whether output directory exists otherwise create it
 print("** checking directories")
 print(checkOutDir(output_directory, anal_type))
@@ -437,7 +434,9 @@ elif anal_type == 'complete':
         pool = multiprocessing.Pool(processes=number_threads)
         otter_fun = partial(assembly_otter, output_directory = output_directory, ref_fasta = ref_fasta, bed_file = bed_file)
         ts = time.time()
-        extract_results = pool.map(otter_fun, all_bam_files)
+        # for this analysis, exclude the reference
+        bam_files_no_ref = all_bam_files; bam_files_no_ref.remove('reference')
+        extract_results = pool.map(otter_fun, bam_files_no_ref)
         te = time.time()
         time_otter = te-ts
         # combine all dictionaries into a single one
