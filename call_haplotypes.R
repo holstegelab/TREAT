@@ -49,6 +49,8 @@
 
     # Function to perform guided haplotyping using phasing information using the sizes -- in use
     PhasingBased_haplotyping_size <- function(reads_df, sample_name, thr_mad){
+        # exclude reads with NA at length
+        reads_df = reads_df[!is.na(reads_df$LENGTH_SEQUENCE),]
         # split cn with haplotypes from those without
         phased = reads_df[!is.na(reads_df$HAPLOTYPE),]; nonPhased = reads_df[is.na(reads_df$HAPLOTYPE),]
         # if we're dealing with reference (only 1 haplotype), treat it differently -- the final df is all_res
@@ -399,18 +401,19 @@
 
     # Function to do haplotyping based on multiple processing -- in use
     haplotyping_mp = function(s, reads_span, all_regions, type, thr_mad){
-        print(paste0('** processing sample --> ', s))
         # initialize dataframe for results
         tmp_res = data.frame()
         for (r in all_regions){
             # get data of the sample and the region of interest -- depending on type (reads_spanning or asm)
             tmp_data = reads_span[which(reads_span$SAMPLE_NAME == s & reads_span$REGION == r),]
+            # good idea to exclude NAs here
+            tmp_data = tmp_data[!is.na(tmp_data$LENGTH_SEQUENCE),]
             if (nrow(tmp_data) >0){
                 reads_df = tmp_data[, c('COPIES_TRF', 'HAPLOTYPE', 'UNIFORM_MOTIF', 'REGION', 'PASSES', 'READ_QUALITY', 'LENGTH_SEQUENCE', 'READ_NAME', 'START_TRF', 'END_TRF', 'TRF_PERC_MATCH', 'TRF_PERC_INDEL')]
                 if (type == 'reads_spanning'){
                     phased_data = PhasingBased_haplotyping_size(reads_df, sample_name = s, thr_mad)
                 } else {
-                    phased_data = assemblyBased_size(reads_df, sample_name = s, region = r, thr_mad)
+                    phased_data = assemblyBased_size(data = reads_df, sample_name = s, region = r, thr_mad)
                 }
                 polished_data = polishHaplo_afterPhasing_size(phased_data, thr_mad)
                 tmp_res = rbind.fill(tmp_res, polished_data)
@@ -626,7 +629,6 @@
             motif_res[[(length(motif_res) + 1)]] = tmp_res
         }
         motif_res = rbindlist(motif_res, use.names = T)
-        print(paste0('** done with ', s))
         return(motif_res)
     }
     
@@ -735,7 +737,6 @@
             }
         }
         all_haplo = rbindlist(all_haplo)
-        print(paste0('** done with ', s))
         return(all_haplo)
     }
     
@@ -1132,7 +1133,7 @@
     args <- parser$parse_args()
     inp_trf = args$reads_spanning; inp_trf = unlist(strsplit(inp_trf, ','))
     inp_asm = args$asm; inp_asm = unlist(strsplit(inp_asm, ','))
-    inp_pha = args$phase; inp_pha = unlist(strsplit(inp_pha, ','))
+    #inp_pha = args$phase; inp_pha = unlist(strsplit(inp_pha, ','))
     out_dir = args$out
     n_cpu = as.numeric(args$cpu)
     thr_mad = as.numeric(args$deviation)
@@ -1153,7 +1154,7 @@
         #cat('\n** Haplotyping Tandem Repeats\n\n')
         cat(paste0('**** input TRF (reads-spanning) selected -> ', inp_trf, '\n'))
         cat(paste0('**** input TRF (assembly-based) selected -> ', inp_asm, '\n'))
-        cat(paste0('**** input PHASING selected -> ', inp_pha, '\n'))
+        #cat(paste0('**** input PHASING selected -> ', inp_pha, '\n'))
         cat(paste0('**** analysis type based on input(s) --> ', anal_type, '\n'))
         cat(paste0('**** output directory -> ', out_dir, '\n'))
     }
@@ -1204,54 +1205,33 @@
             }
             all_trf = rbindlist(all_trf)
         }
-
-    # 2. Read and combine all input PHASING files
-        if (inp_pha[1] != 'None'){
-            cat('****** Reading PHASING input\n')
-            all_pha = list()
-            for (i in 1:length(inp_pha)){
-                # load trf datasets
-                data = fread(inp_pha[i], h=T, stringsAsFactors = F)
-                data$BATCH_PHASING = i
-                all_pha[[(length(all_pha) + 1)]] = data
-            }
-            all_pha = rbindlist(all_pha)
-        } else {
-            cat('** PHASING file not provided. This could lead to loss of accuracy.\n')
-            all_pha = data.frame(SAMPLE = as.character(), READ_ID = as.character(), HAPLOTYPE = as.character())
-        }
-
-    # 3. Merge trf and phases -- exclude reference before -- this in case reads-spanning are available
-        reference = all_trf[which(all_trf$SAMPLE_NAME == 'reference'),]
-        all_trf = all_trf[which(all_trf$SAMPLE_NAME != 'reference'),]
-        trf_pha = merge(all_trf, all_pha, by.x = 'READ_NAME', by.y = 'READ_ID', all.x = T)
-        trf_pha = rbind.fill(trf_pha, reference)
   
-    # 4. Let's adjust the motifs -- generate a consensus -- essentially merging the same motifs together at the single read level -- this for both analyses
+    # 2. Let's adjust the motifs -- generate a consensus -- essentially merging the same motifs together at the single read level -- this for both analyses
         cat('****** Merging similar motifs together\n')
-        all_motifs = data.frame(motif = unique(trf_pha$TRF_MOTIF), stringsAsFactors = F)
+        all_motifs = data.frame(motif = unique(all_trf$TRF_MOTIF), stringsAsFactors = F)
         all_motifs = all_motifs[!is.na(all_motifs$motif),]
-        # manage the reference
-        trf_pha$READ_NAME[is.na(trf_pha$READ_NAME)] <- 'reference'
         # alternative way using multiprocessing
         main_motifs = unlist(mclapply(all_motifs, mergeMotif_mp, mc.cores = n_cpu))
         all_motifs = data.frame(motif = all_motifs, UNIFORM_MOTIF = main_motifs)
-        trf_pha = merge(trf_pha, all_motifs, by.x = 'TRF_MOTIF', by.y = 'motif', all.x = T)
+        all_trf = merge(all_trf, all_motifs, by.x = 'TRF_MOTIF', by.y = 'motif', all.x = T)
         # to make sure there are no conflicts, change the read name
-        trf_pha$UNIQUE_NAME = paste(trf_pha$READ_NAME, trf_pha$SAMPLE_NAME, trf_pha$REGION, sep = "___")
+        all_trf$UNIQUE_NAME = paste(all_trf$READ_NAME, all_trf$SAMPLE_NAME, all_trf$REGION, sep = "___")
 
-    # 5. add the TR size
-        trf_pha$TR_LENGHT = trf_pha$LENGTH_SEQUENCE
+    # 3. add the TR size
+        # change two colnames
+        colnames(all_trf)[which(colnames(all_trf) == 'HAPLOTAG')] = 'HAPLOTYPE'
+        colnames(all_trf)[which(colnames(all_trf) == 'LEN_SEQUENCE_FOR_TRF')] = 'LENGTH_SEQUENCE'
+        all_trf$TR_LENGHT = all_trf$LENGTH_SEQUENCE
 
-    # 6. good to exclude duplicated reads otherwise results would be biased towards sequences with more complex motifs (where TRF finds multiple matches)
-        trf_pha_nodup = trf_pha[!duplicated(trf_pha$UNIQUE_NAME),]; dups = trf_pha[duplicated(trf_pha$UNIQUE_NAME),]
+    # 4. good to exclude duplicated reads otherwise results would be biased towards sequences with more complex motifs (where TRF finds multiple matches)
+        all_trf_nodup = all_trf[!duplicated(all_trf$UNIQUE_NAME),]; dups = all_trf[duplicated(all_trf$UNIQUE_NAME),]
 
-    # 7. we do genotyping on the sizes
+    # 5. we do genotyping on the sizes
         cat('****** Genotyping TRs\n')
         # temporarily disable warnings
         defaultW <- getOption("warn"); options(warn = -1)
         # split reads-spanning and assembly-based
-        reads_span = trf_pha_nodup[which(trf_pha_nodup$DATA_TYPE == 'reads-spanning'),]; asm = trf_pha_nodup[which(trf_pha_nodup$DATA_TYPE == 'assembly'),]
+        reads_span = all_trf_nodup[which(all_trf_nodup$DATA_TYPE == 'reads-spanning'),]; asm = all_trf_nodup[which(all_trf_nodup$DATA_TYPE == 'assembly'),]
         # haplotyping is done with multiple processors (1 for each sample)
         if (anal_type %in% c('reads-spanning', 'reads-spanning + assembly + comparison')){
             cat(paste0('******** Processing reads-spanning data\n'))
@@ -1290,7 +1270,7 @@
         motif_res = rbindlist(mclapply(all_samples[which(all_samples != 'reference')], generateConsens_mp, all_regions = all_regions, all_res = all_res_combined, motif_res_reference = motif_res_reference, mc.cores = n_cpu), use.names=TRUE)
         motif_res = rbind(motif_res, motif_res_reference)
         # add actual sequence to motif_res
-        raw_seqs = trf_pha[, c('READ_NAME', 'SEQUENCE_WITH_PADDING')]; raw_seqs = raw_seqs[!duplicated(raw_seqs$READ_NAME),]
+        raw_seqs = all_trf[, c('READ_NAME', 'SEQUENCE_WITH_PADDINGS')]; raw_seqs = raw_seqs[!duplicated(raw_seqs$READ_NAME),]
         motif_res = merge(motif_res, raw_seqs, by = 'READ_NAME')
 
     # 10. finally call haplotypes -- implemented parallel computing

@@ -98,112 +98,53 @@ def checkBAM(bam_dir):
     return all_bams
 
 # Extract sequence of interest precisely through CIGAR string
-def findPositionOfInterest(cigar, positions_of_interest, positions_of_interest_end, positions_of_interest_with_padding, positions_of_interest_with_padding_end):
-   # define counter of the reference and the raw sequences
-   counter_ref = 0
-   counter_raw = 0
-   counter_raw_padd = 0
-   # define positions of interest
-   pos_interest = 0
-   pos_interest_padd = 0
-   pos_interest_end = 0
-   pos_interest_padd_end = 0
-   # make a list of 1 cigar element per position
-   cigar_per_base = [x for cse in cigar for x in [cse[0]] * cse[1]]
-   # Then loop on this list
-   for x in cigar_per_base:
-      # Parse cigar types: 
-      if (x == 7) or (x == 0):   # 7 --> =
-         counter_raw += 1
-         counter_ref += 1
-         counter_raw_padd += 1
-      elif x == 8:   # 8 --> X
-         counter_raw += 1
-         counter_ref += 1
-         counter_raw_padd += 1
-      elif x == 1:   # 1 --> I
-         counter_raw +=1
-         counter_raw_padd += 1
-      elif x == 2:   # 2 --> D
-         counter_ref += 1
-      elif x == 4:  # 4 --> S
-         counter_raw += 1
-         counter_raw_padd += 1
-      elif x == 5:  # 5 --> H
-         counter_raw += 1
-         counter_raw_padd += 1
-         print("!!! Alignments are hard clipped. Impossible to take actual sequence!")
-      else:
-         print("!!! Unknown term in cigar string --> %s" % (x))
-         break
-      # Then check if we reached the start/end position without padding
-      if pos_interest == 0 and counter_ref == (positions_of_interest-1):
-         pos_interest = counter_raw
-      if pos_interest_end == 0 and counter_ref == (positions_of_interest_end-1):
-         pos_interest_end = counter_raw
-      # Then check if we reached the start/end position with padding
-      if pos_interest_padd == 0 and counter_ref == (positions_of_interest_with_padding-1):
-         pos_interest_padd = counter_raw_padd
-      if pos_interest_padd_end == 0 and counter_ref == (positions_of_interest_with_padding_end-1):
-         pos_interest_padd_end = counter_raw_padd
-   return pos_interest, pos_interest_end, pos_interest_padd, pos_interest_padd_end
-# Alternative version of the above to use a while loop: the advantage should be if the repeat is short, it doesn't need to go through all cigar elements
-def findPositionOfInterestWhile(cigar, positions_of_interest, positions_of_interest_end, positions_of_interest_with_padding, positions_of_interest_with_padding_end):
-   # define counter of the reference and the raw sequences
-   counter_ref = 0
-   counter_raw = 0
-   counter_raw_padd = 0
-   # define positions of interest
-   pos_interest = 0
-   pos_interest_padd = 0
-   pos_interest_end = 0
-   pos_interest_padd_end = 0
-   # make a list of 1 cigar element per position
-   cigar_per_base = [x for cse in cigar for x in [cse[0]] * cse[1]]
-   # Then loop on this list
-   i = 0; run = True
-   while (run == True) and (i < len(cigar_per_base)):
-      x = cigar_per_base[i]
-      # Parse cigar types: 
-      if (x == 7) or (x == 0):   # 7 --> =
-         counter_raw += 1
-         counter_ref += 1
-         counter_raw_padd += 1
-      elif x == 8:   # 8 --> X
-         counter_raw += 1
-         counter_ref += 1
-         counter_raw_padd += 1
-      elif x == 1:   # 1 --> I
-         counter_raw +=1
-         counter_raw_padd += 1
-      elif x == 2:   # 2 --> D
-         counter_ref += 1
-      elif x == 4:  # 4 --> S
-         counter_raw += 1
-         counter_raw_padd += 1
-      elif x == 5:  # 5 --> H
-         counter_raw += 1
-         counter_raw_padd += 1
-         print("!!! Alignments are hard clipped. Impossible to take actual sequence!")
-      else:
-         print("!!! Unknown term in cigar string --> %s" % (x))
-         break
-      # Then check if we reached the start/end position without padding
-      if pos_interest == 0 and counter_ref == (positions_of_interest-1):
-         pos_interest = counter_raw
-      if pos_interest_end == 0 and counter_ref == (positions_of_interest_end-1):
-         pos_interest_end = counter_raw
-      # Then check if we reached the start/end position with padding
-      if pos_interest_padd == 0 and counter_ref == (positions_of_interest_with_padding-1):
-         pos_interest_padd = counter_raw_padd
-      if pos_interest_padd_end == 0 and counter_ref == (positions_of_interest_with_padding_end-1):
-         pos_interest_padd_end = counter_raw_padd
-      # Finally check if we need to loop again
-      if 0 in [pos_interest, pos_interest_end, pos_interest_padd, pos_interest_padd_end]:
-        run = True; i += 1
-      else:
-        run = False
-   return pos_interest, pos_interest_end, pos_interest_padd, pos_interest_padd_end
+def findPositionOfInterest(cigar, positions_of_interest):
+    # define counter of the reference and the raw
+    counter_ref = 0
+    counter_raw = 0
+    pos_interest = 0
+    # make a list of 1 cigar element per position
+    cigar_per_base = []
+    for cse in cigar:
+        cse_type = cse[0]
+        cse_len = cse[1]
+        for x in range(cse_len):
+            cigar_per_base.append(cse_type)
+    # then loop on this list
+    for x in cigar_per_base:
+    # parse cigar types: 7 --> =
+        if (x == 7) or (x == 0):
+            counter_raw = counter_raw + 1
+            counter_ref = counter_ref + 1
+    # type 8 --> X
+        elif x == 8:
+            counter_raw = counter_raw + 1
+            counter_ref = counter_ref + 1
+    # type 1 --> I
+        elif x == 1:
+            counter_raw = counter_raw + 1
+    # type 2 --> D
+        elif x == 2:
+            counter_ref = counter_ref + 1
+    # type 4 --> S
+        elif x == 4:
+            counter_raw = counter_raw + 1
+    # type 5 --> H
+        elif x == 5:
+            counter_raw = counter_raw + 1
+            print('!!! hard-clipping found, your sequence could be trimmed!')
+    # if other types, notify:
+        else:
+            print("!!! new term in cigar string --> %s" %(x))
+            break
+    # then check the number
+        if counter_ref == (positions_of_interest-1):
+    # take position in counter_raw
+            pos_interest = counter_raw
+            break
+        else:
+            pass
+    return(pos_interest)
 
 # Extract reads mapping the the location of interest
 def extractReads(all_bams, bed, out_dir, window):
@@ -239,48 +180,33 @@ def extractReads(all_bams, bed, out_dir, window):
 
 # Extract reads mapping the the location of interest
 def extractReads_MP(bam, bed, out_dir, window, all_bams):
-    # dictionary of fasta sequences
     fasta_seqs = {}
-    # set object to remember seen reads
-    read_ids_list = set()
-    # define output names of bam and fasta files
-    outname = out_dir + '/' + os.path.basename(bam)[:-4] + '__rawReads.bam'
-    outname_fasta = out_dir + '/' + os.path.basename(bam)[:-4] + '__rawReads.fasta'
-    # open bam files
-    with open(outname_fasta, 'w') as outf:
-        with pysam.AlignmentFile(bam, 'rb', check_sq=False) as inBam:
-            with pysam.AlignmentFile(outname, "wb", template=inBam) as outBam:
-                for chrom in bed.keys():
-                    for region in bed[chrom]:
-                        start, end = int(region[0]) - window, int(region[1]) + window
-                        for read in inBam.fetch(chrom, start, end):
-                            read_name = read.query_name
-                            if read_name not in read_ids_list:
-                                read_ids_list.add(read_name)
-                                outf.write('>%s\n%s\n' %(read_name, str(read.query_sequence)))
-                                outBam.write(read)                              # write to new bam file
+    read_ids_list = []
+    outname = out_dir + '/' + bam.split('/')[-1][:-4] + '__rawReads.bam'
+    outname_fasta = out_dir + '/' + bam.split('/')[-1][:-4] + '__rawReads.fasta'
+    inBam = pysam.AlignmentFile(bam, 'rb', check_sq=False)
+    outBam = pysam.AlignmentFile(outname, "wb", template=inBam)
+    for chrom in bed.keys():
+        for region in bed[chrom]:
+            start, end = int(region[0]) - window, int(region[1]) + window
+            for read in inBam.fetch(chrom, start, end):
+                read_name = read.query_name
+                if read_name not in read_ids_list:
+                    read_ids_list.append(read_name)
+                    sequence_interest = str(read.query_sequence)    # save fasta sequences
+                    fasta_seqs[read_name] = sequence_interest
+                    outBam.write(read)                              # write to new bam file
+    outBam.close()
+    inBam.close()
+    outf = open(outname_fasta, 'w')
+    for read in fasta_seqs.keys():
+        outf.write('>%s\n%s\n' %(read, fasta_seqs[read]))
+    outf.close()
+    os.system('samtools sort %s > %s' %(outname, outname + '_sorted'))
+    os.system('mv %s %s' %(outname + '_sorted', outname))
+    os.system('samtools index %s' %(outname))
     print("**** done with %s          " %(bam.split('/')[-1]), end = '\r')
     return outname, outname_fasta
-
-# Extract reads mapping to the location of interest for assembly
-def extractReadsAssembly(bam, bed, out_dir, window, all_bams):
-    # set object to remember seen reads
-    read_ids_list = set()
-    # define output names of fasta files
-    outname_fasta = out_dir + '/' + os.path.basename(bam)[:-4] + '__rawReads.fasta'
-    # open bam files
-    with open(outname_fasta, 'w') as outf:
-        with pysam.AlignmentFile(bam, 'rb', check_sq=False) as inBam:
-            for chrom in bed.keys():
-                for region in bed[chrom]:
-                    start, end = int(region[0]) - window, int(region[1]) + window
-                    for read in inBam.fetch(chrom, start, end):
-                        read_name = read.query_name
-                        if read_name not in read_ids_list:
-                            read_ids_list.add(read_name)
-                            outf.write('>%s\n%s\n' %(read_name, str(read.query_sequence)))
-    print("**** done with %s          " %(bam.split('/')[-1]), end = '\r')
-    return outname_fasta
 
 # Polish reads using Alex's script
 def polishReads(bed, distances, out_dir):
@@ -451,49 +377,9 @@ def measureDistance_MP(reads_bam, bed, window):
     print('**** done measuring %s                   ' %(bam_name), end = '\r')
     return distances
 
-# Function to measure distance
-def measureDist(read, chrom, start, end, window):
-   # region identifier
-   region_id = '%s:%s-%s' %(chrom, start + window, end - window)
-   # read identifier
-   read_id = str(read.query_name)
-   # take reference start position and end position
-   ref_start = int(read.reference_start)
-   ref_end = int(read.reference_end)
-   # check if read is spanning the region of interest 
-   if (ref_end != "NA") and (int(ref_start) <= start) and (int(ref_end) >= end):
-      # calculate distance between start/end position and position of interest, with and without the paddings on the sides
-      start_poi_dist_with_padding = start - int(ref_start)
-      end_poi_dist_with_padding = end - int(ref_start)
-      start_poi_dist = (start + window) - int(ref_start)
-      end_poi_dist = (end - window) - int(ref_start)
-      # take cigar string
-      cigar = read.cigartuples
-      # find start/end positions of interest for the sequence with and witout paddings
-      pos_interest, pos_interest_end, pos_interest_padd, pos_interest_padd_end = findPositionOfInterestWhile(cigar, start_poi_dist, end_poi_dist, start_poi_dist_with_padding, end_poi_dist_with_padding)
-      # then extract the sequence in the region of interest, with and without padding
-      sequence_interest = str(read.query_sequence)[pos_interest : pos_interest_end]
-      sequence_interest_len = len(sequence_interest)
-      sequence_interest_with_padding = str(read.query_sequence)[pos_interest_padd : pos_interest_padd_end]
-      sequence_interest_with_padding_len = len(sequence_interest_with_padding)
-      # also look into tags: number of passes, read quality, mapping consensus
-      info = read.tags
-      np, rq, mc = 'NA', 'NA', 'NA'
-      for x in info:
-         if x[0] == "np":
-            np = "NP:%s" %(x[1])
-         elif x[0] == "rq":
-            rq = "RQ:%s" %(x[1])
-         elif x[0] == "mc":
-            mc = "MC:%s" %(x[1])
-   else:
-      np, rq, mc, sequence_interest, sequence_interest_with_padding, sequence_interest_len, sequence_interest_with_padding_len = "NA", "NA", "NA", "NA", "NA", "NA", "NA"
-   return [read_id, region_id, np, rq, mc, sequence_interest, sequence_interest_with_padding, sequence_interest_len, sequence_interest_with_padding_len, window]
-
 # Measure the distance in the reference genome
-def measureDistance_reference(bed, window, ref, output_directory, type):
-    distances = []
-    reads_ids = {'reference' : []}
+def measureDistance_reference(bed, window, ref):
+    distances = {}
     for chrom in bed.keys():
         for region in bed[chrom]:
             region_id = chrom + ':' + region[0] + '-' + region[1]
@@ -503,25 +389,11 @@ def measureDistance_reference(bed, window, ref, output_directory, type):
             sequence_in_reference = [x.rstrip() for x in list(os.popen('samtools faidx %s %s:%s-%s' %(ref, chrom, start, end)))]        # sequence without padding
             seq_merged = ''.join(sequence_in_reference[1:])
             seq_merged_with_padding = ''.join(sequence_in_reference_with_padding[1:])
-            distances.append(['reference', region_id, 'NA', 'NA', 'NA', seq_merged, seq_merged_with_padding, len(seq_merged), len(seq_merged_with_padding), window])
-            reads_ids['reference'].append(region_id)
-    # then we write the fasta
-    if type != 'otter':
-        outfasta = '%s/raw_reads/reference__rawReads.fasta' %(output_directory)
-        outf = open(outfasta, 'w')
-        outfasta_withPad = '%s/raw_reads/reference__rawReads_withPaddings.fasta' %(output_directory)
-        outf_withPad = open(outfasta_withPad, 'w')
-    else:
-        outfasta = '%s/reference__rawReads.fasta' %(output_directory)
-        outf = open(outfasta, 'w')
-        outfasta_withPad = '%s/reference__rawReads_withPaddings.fasta' %(output_directory)
-        outf_withPad = open(outfasta_withPad, 'w')
-    # then write
-    for x in distances:
-        read_id, region_id, np, rq, mc, sequence_interest_len, sequence_interest, sequence_interest_with_padding_len, sequence_interest_with_padding = x[0], x[1], x[2], x[3], x[4], x[-3], x[5], x[-2], x[-4]
-        outf.write('>%s;%s;%s;%s;%s;%s\n%s\n' %(read_id, region_id, np, rq, mc, sequence_interest_len, sequence_interest))
-        outf_withPad.write('>%s;%s;%s;%s;%s;%s;%s\n%s\n' %(read_id, region_id, np, rq, mc, window, sequence_interest_with_padding_len, sequence_interest_with_padding))
-    return distances, reads_ids, outfasta, outfasta_withPad
+            if 'reference' in distances.keys():
+                distances['reference'].append([region_id, 'NA', 'NA', 'NA', 'NA', seq_merged, seq_merged_with_padding, len(seq_merged), len(seq_merged_with_padding), window])
+            else:
+                distances['reference'] = [[region_id, 'NA', 'NA', 'NA', 'NA', seq_merged, seq_merged_with_padding, len(seq_merged), len(seq_merged_with_padding), window]]
+    return distances
 
 # Run TRF given a sequence
 def trf(distances, out_dir, motif, polished):
@@ -729,61 +601,55 @@ def trf_MP_old(bam, out_dir, motif, polished, distances):
     return trf_info
 
 # Run TRF given a sequence
-def run_trf(fasta, out_dir, motif, polished, distances, reads_ids_combined, all_bam_files, type):
+def trf_MP(bam, out_dir, motif, polished, distances):
+    # create a fasta file containing all sequences to be submitted to TRF search
+    tmp_name = out_dir + '/tmp_trf_' + str(random()).replace('.', '') + '.fasta'            # create fasta file for running trf
+    tmp_out = open(tmp_name, 'w')
+    seq_dict = {}
+    for read in distances[bam]:                 # then loop on each read, that is, every read on every region
+        seq = read[-2] if polished == 'True' else read[-5]
+        if bam == 'reference' and polished == 'True':
+            seq = read[-5]
+        elif bam == 'reference' and polished != 'True':
+            seq = read[-5]
+        region, read_id, passes, qual, cons, seq_size, seq_with_padding = read[0], read[1], read[2], read[3], read[4], len(seq), read[-4]
+        motif_type = motif[region]              # get the correspondin motif
+        seq_dict[read_id] = [seq_with_padding, bam, region, passes, qual, cons, seq_size]
+        tmp_out.write('>%s;%s;%s;%s;%s;%s\n%s\n' %(read_id, region, passes, qual, cons, seq_size, seq))
+    tmp_out.close()
     # then run tandem repeat finder
-    cmd = 'trf4.10.0-rc.2.linux64.exe %s 2 7 7 80 10 50 200 -ngs -h' %(fasta)
+    cmd = 'trf4.10.0-rc.2.linux64.exe ' + tmp_name + ' 2 7 7 80 10 50 200 -ngs -h'
+    #cmd = 'trf4.10.0-rc.2.linux64.exe ' + out_dir + '/tmp.fasta 2 7 7 80 10 50 200 -ngs -h'
     trf = [x for x in os.popen(cmd).read().split('\n') if x != '']
     # loop on trf results and save them into a list of lists
-    x = 0; trf_matches = []; read_found = []
-    sample_interest = fasta.split('/')[-1].replace('_trf.fa','')
+    x = 0; trf_matches = []
+    read_found = []
     while x < len(trf):
-        # check if the line is the header of an entry
         if trf[x].startswith('@'):
-            # if so, save the corresponding information depending on the type of input
-            if type != 'otter' or sample_interest == 'reference__rawReads.fasta':
-                read_id, region, passes, qual, cons, seq_size = trf[x].split(';')
-                read_found.append(read_id.replace('@', ''))
-            else:
-                read_id, region, seq_size_with_padding, seq_size = trf[x].split(';')
-                read_id = '@>' + read_id
+            read_id, region, passes, qual, cons, seq_size = trf[x].split(';')
+            read_found.append(read_id)
+            seq_with_padding = seq_dict[read_id.replace('@', '')][0]
             x += 1
-        while x < len(trf) and not trf[x].startswith('@'):
-            motif_type = motif[region]              # get the correspondin motif
-            tmp_trf_match = [read_id.replace('@', '') + '_' + region, motif_type] + trf[x].split()
-            trf_matches.append(tmp_trf_match)
-            x += 1
+            while x < len(trf) and not trf[x].startswith('@'):
+                motif_type = motif[region]              # get the correspondin motif
+                tmp_trf_match = [bam, read_id, region, passes, qual, cons, motif_type, seq_size, seq_with_padding] + trf[x].split()
+                trf_matches.append(tmp_trf_match)
+                x += 1
+    # here, we need to check all read ids, as maybe some were missed because no trf match was found
+    for read in seq_dict.keys():
+        if read not in read_found:
+            tmp = [seq_dict[read][1], read.replace('@', ''), seq_dict[read][2], seq_dict[read][3], seq_dict[read][4], seq_dict[read][5], motif[seq_dict[read][2]], seq_dict[read][6], seq_dict[read][0]] + ["NA" for x in range(17)]
+            trf_matches.append(tmp)
+    # loop on results agains and check the motif: do NOT see the point of doing this anymore --> remove it
+    # finally remove temporary file
+    os.system('rm ' + tmp_name)
+    print('**** done TRF on %s                                       ' %(bam), end = '\r') 
     # finally create pandas df and assign column names
     if len(trf_matches) == 0:
-        trf_matches = [['NA' for i in range(19)]] 
+        trf_matches = [['NA' for i in range(28)]] 
     df = pd.DataFrame(trf_matches)
-    df.columns = ['ID', 'EXPECTED_MOTIF', 'START_TRF', 'END_TRF', 'LENGTH_MOTIF_TRF', 'COPIES_TRF', 'TRF_CONSENSUS_SIZE', 'TRF_PERC_MATCH', 'TRF_PERC_INDEL', 'TRF_SCORE', 'TRF_A_PERC', 'TRF_C_PERC', 'TRF_G_PERC', 'TRF_T_PERC', 'TRF_ENTROPY', 'TRF_MOTIF', 'TRF_REPEAT_SEQUENCE', 'TRF_PADDING_BEFORE', 'TRF_PADDING_AFTER']
-    # finally, we need to add the reads where trf didn't find any motif
-    if type != 'otter':
-        sample_interest = os.path.basename(fasta).replace('__rawReads.fasta', '')
-        all_samples = [os.path.basename(x).replace('.bam', '') for x in all_bam_files]
-        sample_interest_index = all_samples.index(sample_interest)
-        distances_sample = distances[sample_interest_index]
-        # convert distances to dataframe
-        distances_sample_df = pd.DataFrame(distances_sample)
-        distances_sample_df.columns = ['READ_NAME', 'REGION', 'PASSES', 'READ_QUALITY', 'MAPPING_CONSENSUS', 'SEQUENCE_FOR_TRF', 'SEQUENCE_WITH_PADDINGS', 'LEN_SEQUENCE_FOR_TRF', 'LEN_SEQUENCE_WITH_PADDINGS', 'WINDOW']
-    else:
-        if sample_interest == 'reference__rawReads.fasta':
-            sample_interest = 'reference'
-        distances_sample = distances[sample_interest]
-        distances_sample_df = pd.DataFrame(distances_sample)
-        distances_sample_df.columns = ['REGION', 'READ_NAME', 'SEQUENCE_WITH_PADDINGS', 'LEN_SEQUENCE_WITH_PADDINGS', 'SEQUENCE_FOR_TRF', 'LEN_SEQUENCE_FOR_TRF']
-        # make same identifier
-        #distances_sample_df['ID'] = distances_sample_df['REGION'] + '_' + #distances_sample_df['LEN_SEQUENCE_WITH_PADDINGS'].astype(str) + '_' + #distances_sample_df['LEN_SEQUENCE_FOR_TRF'].astype(str)
-        # add other columns and put NA
-        distances_sample_df['PASSES'] = 'NA'; distances_sample_df['READ_QUALITY'] = 'NA'; distances_sample_df['MAPPING_CONSENSUS'] = 'NA'; distances_sample_df['WINDOW'] = 50;
-    # add id
-    distances_sample_df['ID'] = distances_sample_df['READ_NAME'].str.cat(distances_sample_df['REGION'], sep='_')
-    # add sample name in a column
-    distances_sample_df['SAMPLE_NAME'] = sample_interest
-    # merge trf dataframe and reads dataframes
-    complete_df = pd.merge(distances_sample_df, df, left_on = 'ID', right_on = 'ID', how = 'outer')
-    print("**** done with %s                               " %(sample_interest), end = '\r')
-    return complete_df
+    df.columns = ['SAMPLE_NAME', 'READ_NAME', 'REGION', 'PASSES', 'READ_QUALITY', 'MAPPING_CONSENSUS', 'EXPECTED_MOTIF', 'LENGTH_SEQUENCE', 'SEQUENCE_WITH_PADDING', 'START_TRF', 'END_TRF', 'LENGTH_MOTIF_TRF', 'COPIES_TRF', 'TRF_CONSENSUS_SIZE', 'TRF_PERC_MATCH', 'TRF_PERC_INDEL', 'TRF_SCORE', 'TRF_A_PERC', 'TRF_C_PERC', 'TRF_G_PERC', 'TRF_T_PERC', 'TRF_ENTROPY', 'TRF_MOTIF', 'TRF_REPEAT_SEQUENCE', 'TRF_PADDING_BEFORE', 'TRF_PADDING_AFTER']
+    return df
 
 # Read strategy file for assembly
 def AsmStrategy(ass_type, reads_fasta, out_dir):
@@ -799,7 +665,7 @@ def AsmStrategy(ass_type, reads_fasta, out_dir):
     else:
         print('**** using default settings for assembly, that is, one per .bam')
         for x in reads_fasta:
-            x_name = os.path.basename(x).replace('__rawReads.fasta', '')
+            x_name = x.split('/')[-1].replace('__rawReads.fasta', '')
             strategy[x_name] = [x]
     return strategy
 
@@ -868,6 +734,14 @@ def alignAssembly(outname_list, thread, reference):
 
 # Align assembly
 def alignAssembly_MP(asm, outname_list, thread, reference):
+    #if reference == 'chm13':
+    #    ref_hifi = '/project/holstegelab/Share/asalazar/data/chm13/assembly/v2_0/chm13v2.0_hifi.mmi'
+    #    outname_prefix = '_haps_chm13.bam'
+    #    outname_primary_prefix = '_p_ctg_chm13.bam'
+    #else:
+    #    ref_hifi = '/project/holstegelab/Share/pacbio/resources/h38_ccs.mmi'
+    #    outname_prefix = '_haps_hg38.bam'
+    #    outname_primary_prefix = '_p_ctg_hg38.bam'
     ref_hifi = reference
     outname_prefix = '_haps_aln.bam'
     outname_primary_prefix = '_p_ctg_aln.bam'
@@ -1187,136 +1061,58 @@ def phase_reads(reads_bam, snps_to_keep, output_directory, SNPs_data_directory, 
     return(phasing_info)
 
 # Function that uses whatshap to assign a haplotype to reads given a vcf file to take snps -- this uses whatshap haplotag
-def phase_reads_MP(f, output_directory, SNPs_data_directory, ref_path, bed_file, window):
-   # extract info
-   tmp_rand, tmp_bam, tmp_sample, sample_name = f[0], f[3], f[4], f[2]
-   # write vcf for each sample keeping the snps of interest
-   vcf_out = '%s/phasing/sample_snps_%s' %(output_directory, tmp_rand)
-   cmd = 'plink2 --pfile %s --extract bed1 %s --bed-border-bp %s --keep %s --recode vcf --out %s >/dev/null 2>&1' %(SNPs_data_directory.replace('.pvar', ''), bed_file, window, tmp_sample, vcf_out)
-   os.system(cmd)
-   # check if file was created, otherwise skip
-   if os.path.isfile('%s.vcf' %(vcf_out)):
-      # sort bam file
-      os.system('samtools sort %s > %s' %(tmp_bam, tmp_bam + '_sorted'))
-      os.system('mv %s %s' %(tmp_bam + '_sorted', tmp_bam))
-      os.system('samtools index %s' %(tmp_bam))
-      # add chr notation for chromosome to vcf
-      os.system('bcftools annotate --rename-chrs %s %s.vcf | bgzip > %s.vcf.gz' %('/'.join(abspath(getsourcefile(lambda:0)).split('/')[:-1]) + '/test_data/chr_name_conv.txt', vcf_out, vcf_out))
-      # index vcf
-      os.system('tabix %s.vcf.gz' %(vcf_out))
-      # create a phased vcf with whatshap
-      whathap_out = os.path.basename(tmp_bam).replace('__rawReads.bam', '__phased.vcf.gz')
-      haplotag_out = os.path.basename(tmp_bam).replace('__rawReads.bam', '__haplotag.bam')
-      os.system('whatshap phase -o %s/phasing/%s --reference=%s %s.vcf.gz %s --ignore-read-groups --internal-downsampling 5 >/dev/null 2>&1' %(output_directory, whathap_out, ref_path, vcf_out, tmp_bam))
-      # index the phased vcf
-      os.system('tabix %s/phasing/%s' %(output_directory, whathap_out))
-      # then tag the haplotypes in the bam file
-      os.system('whatshap haplotag -o %s/phasing/%s --reference=%s %s/phasing/%s %s --ignore-read-groups --skip-missing-contigs >/dev/null 2>&1' %(output_directory, haplotag_out, ref_path, output_directory, whathap_out, tmp_bam))
-      # also index so that everything is ok
-      os.system('samtools index %s/phasing/%s >/dev/null 2>&1' %(output_directory, haplotag_out))
-      # read haplotags
-      haplotags = []
-      inBam = pysam.AlignmentFile('%s/phasing/%s' %(output_directory, haplotag_out), 'rb', check_sq=False)
-      for read in inBam:
-         info = read.tags
-         haplo = 'NA'
-         for x in info:
-            if x[0] == 'HP':
-               haplotags.append([read.query_name, x[1]])
-      # clean environment
-      os.system('rm %s/phasing/*_%s.*' %(output_directory, tmp_rand))
-      print('**** done phasing for %s                                     ' %(sample_name), end = '\r')
-   else:
-      haplotags = [["NA", "NA"]]
-   return haplotags
-
-# Function to find SNPs from GWAS data in the regions of interest given data of interest
-def find_SNPs_Samples_plink(SNPs_data_directory, output_directory, snp_data_ids, reads_bam):
-   # read GWAS data depending on data_type
-   snps_interest = {}
-   all_regions = []
-   # if a folder was submitted, then look for the chrAll* file
-   if os.path.isdir(SNPs_data_directory):
-      inpf_path = os.popen('ls ' + SNPs_data_directory + '/chrAll*pvar').readlines()[0].replace('\n', '').replace('.pvar', '')
-   else:
-      inpf_path = SNPs_data_directory.replace('.pvar', '')
-   # define output file
-   outf = '%s/phasing/snps_samples_selected' %(output_directory)
-   # now check samples
-   map_ids = pd.read_csv(snp_data_ids, sep = " |\t", engine = 'python') if snp_data_ids != 'False' else False
-   # find gwas id for the corresponding sample
-   id_gwas = []
-   for x in reads_bam:
-      fname = os.path.basename(x).replace('__rawReads.bam', '.bam')
-      tmp_match = list(map_ids['ID_GWAS'][map_ids['ID_PACBIO'] == fname]) if isinstance(map_ids, pd.DataFrame) == True else [fname.replace('.bam', '')]
-      if tmp_match != []:
-          id_gwas.append([tmp_match[0], fname, x])
-   # generate as many random numbers as the number of samples to phase
-   rand_num = [str(random()).replace('.', '') for x in range(len(id_gwas))]
-   # loop to write VCF files for each sample keeping SNPs in the interval of the bed file
-   samples_phasing_info = []
-   for i in range(len(rand_num)):
-      # write sample
-      samples_path = '%s/phasing/tmp_sample_%s.txt' %(output_directory, rand_num[i])
-      tmp_samples = open(samples_path, 'w')
-      header = 'IID\n'; tmp_samples.write(header)
-      tmp_samples.write('%s\n' %(id_gwas[i][0]))
-      tmp_samples.close()
-      samples_phasing_info.append([rand_num[i], id_gwas[i][0], id_gwas[i][1], id_gwas[i][2], samples_path])
-   return samples_phasing_info
-
-# Extract reads mapping the the location of interest
-def extract_sequences_nowrite_nosort(bam, bed, out_dir, window):
-   # dictionary of fasta sequences
-   reads_info = []
-   reads_ids = {}
-   reads_ids_list = []
-   # define output names of fasta files with and without padding
-   outname_fasta = out_dir + '/' + os.path.basename(bam)[:-4] + '__rawReads.fasta'
-   outname_fasta_with_padding = out_dir + '/' + os.path.basename(bam)[:-4] + '__rawReads_withPadding.fasta'
-   outname_bam = out_dir + '/' + os.path.basename(bam)[:-4] + '__rawReads.bam'
-   # open output fasta with padding
-   with open(outname_fasta_with_padding, 'w') as outf_with_padding:
-      # open output fasta without padding for TRF
-      with open(outname_fasta, 'w') as outf:
-         # open bam file
-         with pysam.AlignmentFile(bam, 'rb', check_sq=False) as inBam:
-            # open output bam file
-            with pysam.AlignmentFile(outname_bam, "wb", template=inBam) as outBam:
-               # loop over the sorted regions
-               for chrom in bed.keys():
-                  for region in bed[chrom]:
-                     # set object to remember seen reads
-                     read_ids_list = set()
-                     # reads will be extracted if they encompass the repeat + padding
-                     start, end = int(region[0]) - window, int(region[1]) + window
-                     # loop over the reads that map there
-                     for read in inBam.fetch(chrom, start, end):
-                        # extract read name for checking duplicated reads
-                        read_name = read.query_name
-                        # exclude secondary and supplementary alignments and if read was already processed for this region
-                        if (not read.is_secondary) and (not read.is_supplementary) and (read_name not in read_ids_list):
-                           # add the read name to the processed ones
-                           read_ids_list.add(read_name)
-                           # process read
-                           res = measureDist(read, chrom, start, end, window)
-                           read_id, region_id, np, rq, mc, sequence_interest, sequence_interest_with_padding, sequence_interest_len, sequence_interest_with_padding_len, window = res
-                           # write raw fasta read if there were valid results
-                           if len(res) >0:
-                              # save results
-                              reads_ids_list.append('%s;%s' %(read_id, region_id))
-                              reads_info.append(res)
-                              outf.write('>%s;%s;%s;%s;%s;%s\n%s\n' %(read_id, region_id, np, rq, mc, sequence_interest_len, sequence_interest))
-                              outf_with_padding.write('>%s;%s;%s;%s;%s;%s;%s\n%s\n' %(read_id, region_id, np, rq, mc, window, sequence_interest_with_padding_len, sequence_interest_with_padding))
-                              outBam.write(read)
-   # close open files
-   outf_with_padding.close()
-   outf.close()
-   inBam.close()
-   outBam.close()
-   reads_ids[os.path.basename(bam)[:-4]] = reads_ids_list
-   print("**** done with %s                               " %(os.path.basename(bam)), end = '\r')
-   return outname_bam, outname_fasta, outname_fasta_with_padding, reads_info, reads_ids
+def phase_reads_MP(f, reads_bam, snps_to_keep, output_directory, SNPs_data_directory, snp_data_ids, ref_path):
+    map_ids = pd.read_csv(snp_data_ids, sep = " |\t", engine = 'python') if snp_data_ids != 'False' else False
+    phasing_info = {}
+    fname = f.split('/')[-1].replace('__rawReads.bam', '.bam')
+    id_gwas = list(map_ids['ID_GWAS'][map_ids['ID_PACBIO'] == fname]) if isinstance(map_ids, pd.DataFrame) == True else [f.split('/')[-1].split('_')[0]]          # find gwas id for the corresponding sample
+    # throw error in case no match is found here
+    if id_gwas == []:
+        print('!! Error while mapping SNPs and Sequencing IDs for sample %s. Phasing for %s skipped. Check documentation for help!' %(fname, fname))
+        phasing_info[f.split('/')[-1]] = ['NA']
+    else:
+        # make random number for the sample
+        rand_num = str(random()).replace('.', '')
+        # prepare files for phasing
+        tmp_snps = open('%s/tmp_snps_interest_%s.txt' %(output_directory, rand_num), 'w')
+        for x in snps_to_keep: to_write = '%s\n' %(x); tmp_snps.write(to_write)
+        tmp_snps.close()
+        tmp_samples = open('%s/tmp_samples_interest_%s.txt' %(output_directory, rand_num), 'w')
+        header = 'IID\n'; tmp_samples.write(header)
+        for x in id_gwas: to_write = '%s\n' %(x); tmp_samples.write(to_write)
+        tmp_samples.close()
+        # make subset of snps and sample of interest -- one sample at the time
+        os.system('plink2 --pfile %s --extract %s/tmp_snps_interest_%s.txt --keep %s/tmp_samples_interest_%s.txt --recode vcf --out %s/tmp_genotypes_%s >/dev/null 2>&1' %(SNPs_data_directory[:-5], output_directory, rand_num, output_directory, rand_num, output_directory, rand_num))
+        # check if file was created, otherwise skip
+        if os.path.isfile('%s/tmp_genotypes_%s.vcf' %(output_directory, rand_num)):
+            # add chr notation for chromosome to vcf
+            os.system('bcftools annotate --rename-chrs %s %s/tmp_genotypes_%s.vcf | bgzip > %s/tmp_genotypes_%s.vcf.gz' %('/'.join(abspath(getsourcefile(lambda:0)).split('/')[:-1]) + '/test_data/chr_name_conv.txt', output_directory, rand_num, output_directory, rand_num))
+            os.system('tabix %s/tmp_genotypes_%s.vcf.gz' %(output_directory, rand_num))
+            # create a phased vcf with whatshap
+            #print('**** %s: phasing snps...   ' %(fname), end = '\r')
+            os.system('whatshap phase -o %s/%s --reference=%s %s/tmp_genotypes_%s.vcf.gz %s --ignore-read-groups --internal-downsampling 5 >/dev/null 2>&1' %(output_directory, fname.replace('.bam', '__Phased.vcf.gz'), ref_path, output_directory, rand_num, f))
+            # for haplotag command, need a phased vcf
+            os.system('tabix %s/%s' %(output_directory, fname.replace('.bam', '__Phased.vcf.gz')))
+            #print('**** %s: tagging reads...   ' %(fname), end = '\r')
+            os.system('whatshap haplotag -o %s/tmp_haplotag_%s.bam --reference=%s %s/%s %s --ignore-read-groups >/dev/null 2>&1' %(output_directory, rand_num, ref_path, output_directory, fname.replace('.bam', '__Phased.vcf.gz'), f))
+            # also index so that everything is ok
+            os.system('samtools index %s/tmp_haplotag_%s.bam >/dev/null 2>&1' %(output_directory, rand_num))
+            # read haplotags
+            haplotags = {}
+            inBam = pysam.AlignmentFile('%s/tmp_haplotag_%s.bam' %(output_directory, rand_num), 'rb', check_sq=False)
+            for read in inBam:
+                info = read.tags
+                haplo = 'NA'
+                for x in info:
+                    if x[0] == 'HP': haplo = x[1]
+                haplotags[read.query_name] = haplo
+            # clean environment
+            os.system('rm %s/*_%s.*' %(output_directory, rand_num))
+            phasing_info[f.split('/')[-1]] = haplotags
+        else:
+            phasing_info[f.split('/')[-1]] = ['NA']
+    print('**** done phasing for %s                                 ' %(fname), end = '\r')
+    return(phasing_info)
 
 # Function to generate a coverage profile given a bam file and a bed file -- just counting the number of reads
 def generateCoverageProfile(bed, all_bams, window_size, step, output_directory):
@@ -1483,62 +1279,3 @@ def realignFasta(fasta_files, threads, reference):
         print('**** %s/%s alignment done' %(fasta_files.index(fasta_files[i]) + 1, len(fasta_files)), end = '\r')
     return output_aligned
 
-# Function to make assembly with otter and produce fasta files suitable for TRF
-def assembly_otter(s, output_directory, ref_fasta, bed_file):
-    # define output name with the right directory
-    outname = s.split('/')[-1].replace('.bam', '.fa')
-    # run otter
-    cmd = '/project/holstegelab/Software/nicco/bin/otter/build/otter assemble -b %s -r %s %s > %s/otter_local_asm/%s' %(bed_file, ref_fasta, s, output_directory, outname)
-    os.system(cmd)
-    # collect otter sequences
-    f_open = [x.rstrip() for x in open('%s/otter_local_asm/%s' %(output_directory, outname), 'r').readlines()]
-    # define padding size and output results list
-    padd_size = 50
-    tmp_res = {outname.replace('.fa', '') : []}
-    # also define the new fasta output containing only the repetitive sequence for TRF
-    trf_input = open('%s/otter_local_asm/%s' %(output_directory, outname.replace('.fa', '_trf.fa')), 'w')
-    for x in f_open:
-        if x.startswith('>'):
-            region = x.split()[0].replace('>', '')
-            read_id = x.replace(' ', '_')
-        else:
-            seq = x; seq_len_with_paddings = len(seq); seq_no_paddings = x[(padd_size-1):len(x)-(padd_size+1)]; seq_len_no_paddings = len(seq_no_paddings)
-            # save hit at this point
-            tmp_res[outname.replace('.fa', '')].append([region, read_id, seq, seq_len_with_paddings, seq_no_paddings, seq_len_no_paddings])
-            # then write the sequence without paddings
-            trf_input.write('%s;%s;%s;%s\n' %(read_id, region, seq_len_with_paddings, seq_len_no_paddings))
-            trf_input.write('%s\n' %(seq_no_paddings))
-    trf_input.close()
-    return tmp_res
-
-
-# --------------------------------------------------------------------- #
-# functions deleted or modified -- put here for reference
-def extractReads_MP(bam, bed, out_dir, window, all_bams):
-    fasta_seqs = {}
-    read_ids_list = []
-    outname = out_dir + '/' + bam.split('/')[-1][:-4] + '__rawReads.bam'
-    outname_fasta = out_dir + '/' + bam.split('/')[-1][:-4] + '__rawReads.fasta'
-    inBam = pysam.AlignmentFile(bam, 'rb', check_sq=False)
-    outBam = pysam.AlignmentFile(outname, "wb", template=inBam)
-    for chrom in bed.keys():
-        for region in bed[chrom]:
-            start, end = int(region[0]) - window, int(region[1]) + window
-            for read in inBam.fetch(chrom, start, end):
-                read_name = read.query_name
-                if read_name not in read_ids_list:
-                    read_ids_list.append(read_name)
-                    sequence_interest = str(read.query_sequence)    # save fasta sequences
-                    fasta_seqs[read_name] = sequence_interest
-                    outBam.write(read)                              # write to new bam file
-    outBam.close()
-    inBam.close()
-    outf = open(outname_fasta, 'w')
-    for read in fasta_seqs.keys():
-        outf.write('>%s\n%s\n' %(read, fasta_seqs[read]))
-    outf.close()
-    os.system('samtools sort %s > %s' %(outname, outname + '_sorted'))
-    os.system('mv %s %s' %(outname + '_sorted', outname))
-    os.system('samtools index %s' %(outname))
-    print("**** done with %s          " %(bam.split('/')[-1]), end = '\r')
-    return outname, outname_fasta
