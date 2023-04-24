@@ -216,6 +216,8 @@
 if (run == 'true'){
     # Split regions if it is not all
     if (region != 'all'){ region = unlist(strsplit(region, ',')) }
+    # Create directory if not present
+    if (!dir.exists(out_dir)){ system(paste0('mkdir ', out_dir)) }
     # Print summary of the run
     x = summaryRun(rs_vcf, out_dir, out_name, region, mad_thr)
 
