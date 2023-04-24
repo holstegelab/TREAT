@@ -388,6 +388,8 @@
   if (run == 'true'){
     # Define the automatic variables: output name
     if (out_name == 'None'){ out_name = 'repeats' }
+    # Create directory if not present
+    if (!dir.exists(out_dir)){ system(paste0('mkdir ', out_dir)) }
     # Split regions
     region = unlist(strsplit(region, ','))
     # Print summary of the run
