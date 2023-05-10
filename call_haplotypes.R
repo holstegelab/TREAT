@@ -65,7 +65,7 @@
                 # if so, check if all reads are not phased
                 if (nrow(phased) == 0){
                     # if so, we run the kmeans-based haplotyping
-                    res = KMeansBased_haplotyping(reads = nonPhased$LENGTH_SEQUENCE, thr = 2, min_support = 2, thr_mad_orig = thr_mad, type = 'single_sample')
+                    res = KMeansBased_haplotyping(reads = nonPhased$LENGTH_SEQUENCE, thr = 2, min_support = 2, thr_mad_orig = thr_mad, type = 'single_sample', region = region)
                     # then polish with the polisher without phasing
                     res_polished = polishHaplo_noPhasing(res, thr_mad)
                     # extract polished reads
@@ -373,7 +373,7 @@
             # flag cases when there are multiple data (>2 contigs)
             if (nrow(data) >2){
                 # in this case run the normal kmean function
-                res = KMeansBased_haplotyping(reads = data$LENGTH_SEQUENCE, thr = 2, min_support = 1, thr_mad_orig = thr_mad, type = 'single_sample')
+                res = KMeansBased_haplotyping(reads = data$LENGTH_SEQUENCE, thr = 2, min_support = 1, thr_mad_orig = thr_mad, type = 'single_sample', region = region)
                 # then polish with the polisher without phasing
                 res_polished = polishHaplo_noPhasing(res, thr_mad)
                 # extract polished reads
