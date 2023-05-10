@@ -572,7 +572,7 @@ elif anal_type == 'reads_spanning_trf':
     print("** 11. haplotype calling on reads-spanning and eventually phasing")
     file_path = os.path.realpath(__file__)
     file_path = '/'.join(file_path.split('/')[:-1])
-    os.system("Rscript %s/call_haplotypes.R --reads_spanning %s/spanning_reads_trf_phasing.txt --out %s --cpu %s" %(file_path, output_directory, output_directory, number_threads))
+    os.system("Rscript %s/call_haplotypes.R --reads_spanning %s/spanning_reads_trf_phasing.txt --out %s --cpu %s --deviation %s" %(file_path, output_directory, output_directory, number_threads, thr_mad))
 elif anal_type == 'assembly_trf':
     # 1. read bed regions
     print("**** reading bed file")
