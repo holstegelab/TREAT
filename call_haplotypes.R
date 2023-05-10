@@ -48,9 +48,12 @@
     }
 
     # Function to perform guided haplotyping using phasing information using the sizes -- in use
-    PhasingBased_haplotyping_size <- function(reads_df, sample_name, thr_mad){
+    PhasingBased_haplotyping_size <- function(reads_df, sample_name, thr_mad, region){
         # exclude reads with NA at length
         reads_df = reads_df[!is.na(reads_df$LENGTH_SEQUENCE),]
+        # if we are dealing with a Y chromosome entry, it is already phased and it's 1 haplotype
+        chrom = str_replace_all(str_split_fixed(region, ':', 2)[, 1], 'chr', '')
+        if (chrom == 'Y' || chrom == 'y'){ reads_df$HAPLOTYPE = as.character(reads_df$HAPLOTYPE); reads_df$HAPLOTYPE = 1 }
         # split cn with haplotypes from those without
         phased = reads_df[!is.na(reads_df$HAPLOTYPE),]; nonPhased = reads_df[is.na(reads_df$HAPLOTYPE),]
         # if we're dealing with reference (only 1 haplotype), treat it differently -- the final df is all_res
@@ -141,9 +144,12 @@
     }
 
     # Function to fit K-means clustering to the data to find haplotypes when no phasing information is available -- in use
-    KMeansBased_haplotyping = function(reads, thr, min_support, thr_mad_orig, type){
+    KMeansBased_haplotyping = function(reads, thr, min_support, thr_mad_orig, type, region){
         # define ploidy depending on the analysis type
         ploidy = ifelse(type %in% c("single_tissue", "single_sample"), 2, 3)
+        # if we are dealing with a Y chromosome entry, it is already phased and it's 1 haplotype
+        chrom = str_replace_all(str_split_fixed(region, ':', 2)[, 1], 'chr', '')
+        if (chrom == 'Y' || chrom == 'y'){ ploidy = 1 }
         # perform clustering and polishing until condition is met
         isOK = FALSE; isNA = FALSE; deleted = c()
         # main loop, condition --> isOK == TRUE
@@ -411,7 +417,7 @@
             if (nrow(tmp_data) >0){
                 reads_df = tmp_data[, c('COPIES_TRF', 'HAPLOTYPE', 'UNIFORM_MOTIF', 'REGION', 'PASSES', 'READ_QUALITY', 'LENGTH_SEQUENCE', 'READ_NAME', 'START_TRF', 'END_TRF', 'TRF_PERC_MATCH', 'TRF_PERC_INDEL')]
                 if (type == 'reads_spanning'){
-                    phased_data = PhasingBased_haplotyping_size(reads_df, sample_name = s, thr_mad)
+                    phased_data = PhasingBased_haplotyping_size(reads_df, sample_name = s, thr_mad, region = r)
                 } else {
                     phased_data = assemblyBased_size(data = reads_df, sample_name = s, region = r, thr_mad)
                 }
@@ -908,7 +914,7 @@
     }
 
     # Function to create VCF file -- in use
-    createVCFfile = function(data, reference, type){
+    createVCFfile = function(data, reference, type, all_trf_nodup_coverage){
         # Create a data frame with the variant information -- this will be different for certain regions (also whether based on reads-spanning only or assembly only) and uncertain regions
         if (type == 'comparison'){
             # However, some info are common to all regions
@@ -1237,6 +1243,8 @@
 
     # 4. good to exclude duplicated reads otherwise results would be biased towards sequences with more complex motifs (where TRF finds multiple matches)
         all_trf_nodup = all_trf[!duplicated(all_trf$UNIQUE_NAME),]; dups = all_trf[duplicated(all_trf$UNIQUE_NAME),]
+        # also extract the number of reads per sample, per region, per data type
+        all_trf_nodup_coverage = data.frame(table(all_trf_nodup$SAMPLE_NAME, all_trf_nodup$REGION, all_trf_nodup$DATA_TYPE)); colnames(all_trf_nodup_coverage) = c('SAMPLE_NAME', 'REGION', 'DATA_TYPE', 'COVERAGE')
 
     # 5. we do genotyping on the sizes
         cat('****** Genotyping TRs\n')
@@ -1263,7 +1271,7 @@
         # re-assign the unique identifier after haplotype calling
         all_res$UNIQUE_NAME = paste(all_res$READ_NAME, all_res$sample, all_res$REGION, sep = "___")
 
-    # 8. now let's bring the duplicates in again and assign the correct haplotype based on the other duplicate
+    # 6. now let's bring the duplicates in again and assign the correct haplotype based on the other duplicate
         # this is also now done using multiple processors
         dups_name = unique(dups$UNIQUE_NAME)
         tmp_df_dups = data.frame(COPIES_TRF = dups$COPIES_TRF, UNIFORM_MOTIF = dups$UNIFORM_MOTIF, REGION = dups$REGION, PASSES = dups$PASSES, READ_QUALITY = dups$READ_QUALITY, LENGTH_SEQUENCE = dups$LENGTH_SEQUENCE, READ_NAME = dups$READ_NAME, START_TRF = dups$START_TRF, END_TRF = dups$END_TRF, TRF_PERC_MATCH = dups$TRF_PERC_MATCH, TRF_PERC_INDEL = dups$TRF_PERC_INDEL, DATA_TYPE = dups$DATA_TYPE, UNIQUE_NAME = dups$UNIQUE_NAME)
@@ -1274,7 +1282,7 @@
         all_res_combined = rbind(all_res, tmp_df_dups)
         #saved_all = all_res_combined
 
-    # 9. now we should look at the motifs -- implemented parallel computing
+    # 7. now we should look at the motifs -- implemented parallel computing
         cat('****** Generating consensus motifs\n')
         all_samples = unique(all_res$sample); all_regions = unique(all_res$REGION); motif_res = list()
         # first run on the reference genome
@@ -1285,7 +1293,7 @@
         raw_seqs = all_trf[, c('READ_NAME', 'SEQUENCE_WITH_PADDINGS')]; raw_seqs = raw_seqs[!duplicated(raw_seqs$READ_NAME),]
         motif_res = merge(motif_res, raw_seqs, by = 'READ_NAME')
 
-    # 10. finally call haplotypes -- implemented parallel computing
+    # 8. finally call haplotypes -- implemented parallel computing
         cat('****** Haplotype calling\n')
         all_samples = unique(motif_res$sample); all_regions = unique(motif_res$REGION)
         # haplotype calling should be done in reads-spanning and assembly separately, otherwise if the haplotypes are different there will be problems
@@ -1304,7 +1312,7 @@
         # exclude reference
         reference = all_haplo[which(all_haplo$SAME_NAME == 'reference'),]; all_haplo = all_haplo[which(all_haplo$SAME_NAME != 'reference'),]
 
-    # 11. if both reads-spanning and assembly were submitted, we should compare them and make a unified call
+    # 9. if both reads-spanning and assembly were submitted, we should compare them and make a unified call
         if (anal_type == 'reads-spanning + assembly + comparison'){
             cat('****** Comparing reads-spanning with assembly\n')
             # run multiprocessing for each sample independently
@@ -1314,7 +1322,7 @@
             all_haplo_final = makeDecision_faster(all_haplo_annotated, n_cpu)
             cat('****** Generating tables\n')
             # finally we need to make VCFs for compatibility
-            vcf = createVCFfile(all_haplo_final, reference, type='comparison')
+            vcf = createVCFfile(all_haplo_final, reference, type='comparison', all_trf_nodup_coverage)
             # finally also save this dataset
             out_dir = str_replace_all(out_dir, '/$', ''); if (!dir.exists(out_dir)){ system(paste0('mkdir ', out_dir)) }
             write.table(vcf, paste0(out_dir, '/samples_genotypes.vcf'), quote=F, row.names = F, col.names = F, sep = '\t')
@@ -1335,7 +1343,7 @@
             all_haplo$H2_REFERENCE_MOTIF_CN[is.na(all_haplo$H2_REFERENCE_MOTIF_CN)] = all_haplo$H1_REFERENCE_MOTIF_CN[is.na(all_haplo$H2_REFERENCE_MOTIF_CN)]
             # set the right columns
             colnames(all_haplo) = c('SAMPLE', 'REGION', 'H1_COPIE_FINAL', 'H2_COPIE_FINAL', 'H1_MOTIF_FINAL', 'H2_MOTIF_FINAL', 'H1_HAPLO_FINAL', 'H2_HAPLO_FINAL', 'H1_SPECIFIC_MOTIF', 'H2_SPECIFIC_MOTIF', 'H1_ADDITIONAL_MOTIF', 'H2_ADDITIONAL_MOTIF', 'REFERENCE_MOTIF', 'H1_REFCOPY_FINAL', 'H2_REFCOPY_FINAL', 'EXCLUDED', 'EXCLUDED_LEN', 'DATA_TYPE', 'SAME_NAME', 'DECISION')
-            vcf = createVCFfile(all_haplo, reference, type='single')
+            vcf = createVCFfile(all_haplo, reference, type='single', all_trf_nodup_coverage)
             # write outputs
             write.table(vcf, paste0(out_dir, '/samples_genotypes.vcf'), quote=F, row.names = F, col.names = F, sep = '\t')
             write.table(motif_res, paste0(out_dir, '/haplotyping_single_reads.txt'), quote=F, row.names = F, sep = '\t')
