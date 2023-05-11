@@ -170,6 +170,7 @@
                 } else {
                     # check if there are exactly 2 haplotypes otherwise kmeans with k=3 will throw an error (in case k=3 is selected), otherwise this has no effect
                     if (length(unique(reads)) == 2){ ploidy = 2 }
+                    if (chrom == 'Y' | chrom == 'y'){ ploidy = 1 }
                     # additional check here: in case we have 2 reads with non-homozygous genotype, doing k-means with k=2 will throw and error. In these cases, manually force the two alleles
                     if (length(reads) == 2){
                         centers_kmeans = reads; tmp_df = data.frame(reads = reads, cluster = c(1, 2))
