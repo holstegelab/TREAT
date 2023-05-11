@@ -728,7 +728,7 @@ elif anal_type == 'assembly_trf':
     print("** 11. haplotype calling on reads-spanning and eventually phasing")
     file_path = os.path.realpath(__file__)
     file_path = '/'.join(file_path.split('/')[:-1])
-    os.system("Rscript %s/call_haplotypes.R --asm %s/assembly_trf_phasing.txt --out %s --cpu %s" %(file_path, output_directory, output_directory, number_threads))
+    os.system("Rscript %s/call_haplotypes.R --asm %s/assembly_trf_phasing.txt --out %s --cpu %s --deviation %s" %(file_path, output_directory, output_directory, number_threads, thr_mad))
 
 ## Check whether to keep or delete temporary files
 if (store_temporary == 'False' and anal_type not in ['reads_spanning_trf', 'assembly_trf', 'haplotyping', 'extract_reads', 'coverage_profile', 'complete']):
