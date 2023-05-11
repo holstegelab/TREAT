@@ -393,6 +393,8 @@
                     # heterozygous call
                     data$HAPLOTYPE = c(1, 2)
                     data$type = 'assembly'
+                    chrom = str_replace_all(str_split_fixed(region, ':', 2)[, 1], 'chr', '')
+                    if (chrom == 'Y' | chrom == 'y'){ data$HAPLOTYPE = c(1, 1) }
                 }
             }
         }
