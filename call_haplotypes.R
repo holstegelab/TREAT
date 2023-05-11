@@ -149,7 +149,7 @@
         ploidy = ifelse(type %in% c("single_tissue", "single_sample"), 2, 3)
         # if we are dealing with a Y chromosome entry, it is already phased and it's 1 haplotype
         chrom = str_replace_all(str_split_fixed(region, ':', 2)[, 1], 'chr', '')
-        if (chrom == 'Y' || chrom == 'y'){ ploidy = 1 }
+        if (chrom == 'Y' | chrom == 'y'){ ploidy = 1 }
         # perform clustering and polishing until condition is met
         isOK = FALSE; isNA = FALSE; deleted = c()
         # main loop, condition --> isOK == TRUE
