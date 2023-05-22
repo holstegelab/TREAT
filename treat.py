@@ -7,7 +7,7 @@
 
 ## Libraries
 import os; from inspect import getsourcefile; from os.path import abspath; import sys; import pathlib; import time; import itertools
-from functions_treat import *; import argparse; import os.path; import pysam; from Bio.Seq import Seq
+from functions_treat import *; import argparse; import os.path; import pysam; from Bio.Seq import Seq; import pickle
 from Bio import SeqIO; from random import random; import gzip; import subprocess; import json; import pandas as pd
 from datetime import datetime; from functools import partial; from itertools import repeat; import multiprocessing
 
@@ -697,6 +697,10 @@ elif anal_type == 'assembly_trf':
         for x in dist_reference:
             tmp = [x[1], x[0], x[-4], x[-2], x[-5], x[-3]]
             combined_dict['reference'].append(tmp)
+        # save combined dictionary
+        outenv = '%s/environment.pkl' %(output_directory)
+        with open(outenv, "wb") as f:
+            pickle.dump([combined_dict, motif, output_directory], f)
 
         # 2. TRF on single-reads
         print('** 2. tandem repeat finder on the assembled contigs')
