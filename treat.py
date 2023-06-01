@@ -697,10 +697,6 @@ elif anal_type == 'assembly_trf':
         for x in dist_reference:
             tmp = [x[1], x[0], x[-4], x[-2], x[-5], x[-3]]
             combined_dict['reference'].append(tmp)
-        # save combined dictionary
-        outenv = '%s/environment.pkl' %(output_directory)
-        with open(outenv, "wb") as f:
-            pickle.dump([combined_dict, motif, output_directory], f)
 
         # 2. TRF on single-reads
         print('** 2. tandem repeat finder on the assembled contigs')
@@ -710,12 +706,22 @@ elif anal_type == 'assembly_trf':
         # add the reference as well
         reads_fasta.append('%s/otter_local_asm/reference__rawReads.fasta' %(output_directory))
         # then run trf in multiple processors
-        pool = multiprocessing.Pool(processes=number_threads)
-        trf_fun = partial(run_trf, out_dir = trf_out_dir, motif = motif, polished = 'False', distances = combined_dict, reads_ids_combined = 'None', all_bam_files = 'None', type = 'otter')
-        ts = time.time()
-        trf_results = pool.map(trf_fun, reads_fasta)
-        te = time.time()
-        time_trf = te-ts
+        try:
+            pool = multiprocessing.Pool(processes=number_threads)
+            trf_fun = partial(run_trf, out_dir = trf_out_dir, motif = motif, polished = 'False', distances = distances, reads_ids_combined = 'None', all_bam_files = 'None', type = 'otter')
+            ts = time.time()
+            trf_results = pool.map(trf_fun, [reads_fasta[0]])
+            te = time.time()
+            time_trf = te-ts
+        except:
+            trf_results = []
+            ts = time.time()
+            for s in reads_fasta:
+                tmp_res = run_trf(fasta = s, out_dir = trf_out_dir, motif = motif, polished = 'False', distances = combined_dict, reads_ids_combined = 'None', all_bam_files = 'None', type = 'otter')
+                trf_results.append(tmp_res)
+            te = time.time()
+            time_trf = te-ts
+
         # combine df from different samples together
         df_trf_combined = pd.concat(trf_results)
         print('**** TRF estimation done in %s seconds                                 ' %(round(time_trf, 0)))

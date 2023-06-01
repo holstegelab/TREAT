@@ -413,6 +413,7 @@
         # initialize dataframe for results
         tmp_res = data.frame()
         for (r in all_regions){
+            print(r)
             # get data of the sample and the region of interest -- depending on type (reads_spanning or asm)
             tmp_data = reads_span[which(reads_span$SAMPLE_NAME == s & reads_span$REGION == r),]
             # good idea to exclude NAs here
@@ -429,6 +430,24 @@
             }
         }
         return(tmp_res)
+    }
+
+    # Function to do haplotyping based on multiple processing on the regions -- in use
+    haplotyping_mp_regions = function(r, s, reads_span, type, thr_mad){
+        # get data of the sample and the region of interest -- depending on type (reads_spanning or asm)
+        tmp_data = reads_span[which(reads_span$SAMPLE_NAME == s & reads_span$REGION == r),]
+        # good idea to exclude NAs here
+        tmp_data = tmp_data[!is.na(tmp_data$LENGTH_SEQUENCE),]
+        if (nrow(tmp_data) >0){
+            reads_df = tmp_data[, c('COPIES_TRF', 'HAPLOTYPE', 'UNIFORM_MOTIF', 'REGION', 'PASSES', 'READ_QUALITY', 'LENGTH_SEQUENCE', 'READ_NAME', 'START_TRF', 'END_TRF', 'TRF_PERC_MATCH', 'TRF_PERC_INDEL')]
+            if (type == 'reads_spanning'){
+                phased_data = PhasingBased_haplotyping_size(reads_df, sample_name = s, thr_mad, region = r)
+            } else {
+                phased_data = assemblyBased_size(data = reads_df, sample_name = s, region = r, thr_mad)
+            }
+            polished_data = polishHaplo_afterPhasing_size(phased_data, thr_mad)
+            return(polished_data)
+        }
     }
 
     # Function to align motifs and take only one -- in use
@@ -639,6 +658,61 @@
         }
         motif_res = rbindlist(motif_res, use.names = T)
         return(motif_res)
+    }
+
+    # Function to generate consensus motif for each sample and region based on multiple processing on the regions -- in use
+    generateConsens_mp_regions = function(r, s, all_res, motif_res_reference){
+        # take all reads
+        tmp = all_res[which(all_res$sample == s & all_res$REGION == r),]
+        # check number of haplotypes
+        n_haplo = unique(tmp$HAPLOTYPE)
+        # treat haplotypes independently from each other
+        if (1 %in% tmp$HAPLOTYPE & 2 %in% tmp$HAPLOTYPE){
+            h1 = tmp[which(tmp$HAPLOTYPE == 1),]
+            h2 = tmp[which(tmp$HAPLOTYPE == 2),]
+            #h1_consensus_motif = consensusMotif_conscious(h1); h2_consensus_motif = consensusMotif_conscious(h2)
+            # calculate consensus motif using the majority rule consensus
+            h1_consensus_motif = motif_generalization(h1)
+            h2_consensus_motif = motif_generalization(h2)
+            # calculate copy number estimation wrt reference genome -- uniform for associations altough not exactly correct
+            reference_motif = unique(motif_res_reference$CONSENSUS_MOTIF[which(motif_res_reference$REGION == r)])
+            h1_consensus_motif$CONSENSUS_MOTIF_REF = reference_motif; h2_consensus_motif$CONSENSUS_MOTIF_REF = reference_motif
+            h1_consensus_motif$CONSENSUS_MOTIF_REF_EST_COPIES = h1_consensus_motif$polished_haplo_values / nchar(reference_motif); h2_consensus_motif$CONSENSUS_MOTIF_REF_EST_COPIES = h2_consensus_motif$polished_haplo_values /nchar(reference_motif)
+            tmp_res = rbind(h1_consensus_motif, h2_consensus_motif)
+        } else if (1 %in% tmp$HAPLOTYPE){
+            h1 = tmp[which(tmp$HAPLOTYPE == 1),]
+            #tmp_res = consensusMotif_conscious(h1)
+            # calculate consensus motif using the majority rule consensus
+            tmp_res = motif_generalization(h1)
+            # calculate copy number estimation wrt reference genome -- uniform for associations altough not exactly correct
+            if (s == 'reference'){
+                tmp_res$CONSENSUS_MOTIF_REF = NA
+                tmp_res$CONSENSUS_MOTIF_REF_EST_COPIES = NA
+            } else {
+                reference_motif = unique(motif_res_reference$CONSENSUS_MOTIF[which(motif_res_reference$REGION == r)])
+                tmp_res$CONSENSUS_MOTIF_REF = reference_motif
+                tmp_res$CONSENSUS_MOTIF_REF_EST_COPIES = tmp_res$polished_haplo_values / nchar(reference_motif)
+            }
+        } else if (2 %in% tmp$HAPLOTYPE){
+            h2 = tmp[which(tmp$HAPLOTYPE == 2),]
+            #tmp_res = consensusMotif_conscious(h2)
+            # calculate consensus motif using the majority rule consensus
+            tmp_res = motif_generalization(h2)
+            # calculate copy number estimation wrt reference genome -- uniform for associations altough not exactly correct
+            if (s == 'reference'){
+                tmp_res$CONSENSUS_MOTIF_REF = NA
+                tmp_res$CONSENSUS_MOTIF_REF_EST_COPIES = NA
+            } else {
+                reference_motif = unique(motif_res_reference$CONSENSUS_MOTIF[which(motif_res_reference$REGION == r)])
+                tmp_res$CONSENSUS_MOTIF_REF = reference_motif
+                tmp_res$CONSENSUS_MOTIF_REF_EST_COPIES = tmp_res$polished_haplo_values / nchar(reference_motif)
+            }
+        } else {
+            # in this case the clustering did not work, can be because the number of reads/contigs is too low
+            tmp_res = tmp; tmp_res$COVERAGE_TR = NA; tmp_res$CONSENSUS_MOTIF = NA; tmp_res$CONSENSUS_MOTIF_EST_COPIES = NA; tmp_res$CONSENSUS_MOTIF_ALT_MOTIFS = NA
+            tmp_res$CONSENSUS_MOTIF_REF = NA; tmp_res$CONSENSUS_MOTIF_REF_EST_COPIES = NA; tmp_res$SPECIFIC_MOTIF = NA
+        }
+        return(tmp_res)
     }
     
     # Function to call haplotypes and combine information -- in use
@@ -1242,7 +1316,6 @@
         # change two colnames
         colnames(all_trf)[which(colnames(all_trf) == 'HAPLOTAG')] = 'HAPLOTYPE'
         colnames(all_trf)[which(colnames(all_trf) == 'LEN_SEQUENCE_FOR_TRF')] = 'LENGTH_SEQUENCE'
-        all_trf$TR_LENGHT = all_trf$LENGTH_SEQUENCE
 
     # 4. good to exclude duplicated reads otherwise results would be biased towards sequences with more complex motifs (where TRF finds multiple matches)
         all_trf_nodup = all_trf[!duplicated(all_trf$UNIQUE_NAME),]; dups = all_trf[duplicated(all_trf$UNIQUE_NAME),]
@@ -1254,7 +1327,7 @@
         # temporarily disable warnings
         defaultW <- getOption("warn"); options(warn = -1)
         # split reads-spanning and assembly-based
-        reads_span = all_trf_nodup[which(all_trf_nodup$DATA_TYPE == 'reads-spanning'),]; asm = all_trf_nodup[which(all_trf_nodup$DATA_TYPE == 'assembly'),]
+        reads_span = all_trf_nodup[DATA_TYPE == 'reads-spanning']; asm = all_trf_nodup[DATA_TYPE == 'assembly']
         # haplotyping is done with multiple processors (1 for each sample)
         if (anal_type %in% c('reads-spanning', 'reads-spanning + assembly + comparison')){
             cat(paste0('******** Processing reads-spanning data\n'))
@@ -1265,7 +1338,12 @@
         if (anal_type %in% c('assembly', 'reads-spanning + assembly + comparison')){
             cat(paste0('******** Processing assembly-based data\n'))
             all_samples = unique(asm$SAMPLE_NAME); all_regions = unique(asm$REGION)
-            res_asm = rbindlist(mclapply(all_samples, haplotyping_mp, reads_span = asm, all_regions = all_regions, type = 'asm', thr_mad = thr_mad, mc.cores = n_cpu), fill = T)
+            #res_asm = rbindlist(mclapply(all_samples, haplotyping_mp, reads_span = asm, all_regions = all_regions, type = 'asm', thr_mad = thr_mad, mc.cores = n_cpu), fill = T)
+            res_asm = data.frame()
+            for (s in all_samples[1:5]){
+                tmp_res = rbindlist(mclapply(all_regions[1:100], haplotyping_mp_regions, s, reads_span = asm, type = 'asm', thr_mad = thr_mad, mc.cores=6))
+                res_asm = rbind(res_asm, tmp_res)
+            }
             res_asm$DATA_TYPE = 'assembly'
         }
         # Merge all results together
@@ -1290,7 +1368,12 @@
         all_samples = unique(all_res$sample); all_regions = unique(all_res$REGION); motif_res = list()
         # first run on the reference genome
         motif_res_reference = generateConsens_mp(s = 'reference', all_regions, all_res = all_res_combined, motif_res_reference = NA)
-        motif_res = rbindlist(mclapply(all_samples[which(all_samples != 'reference')], generateConsens_mp, all_regions = all_regions, all_res = all_res_combined, motif_res_reference = motif_res_reference, mc.cores = n_cpu), use.names=TRUE)
+        #motif_res = rbindlist(mclapply(all_samples[which(all_samples != 'reference')], generateConsens_mp, all_regions = all_regions, all_res = all_res_combined, motif_res_reference = motif_res_reference, mc.cores = n_cpu), use.names=TRUE)
+        motif_res = data.frame()
+        for (s in all_samples){
+            tmp_res = rbindlist(mclapply(all_regions, generateConsens_mp_regions, s = s, all_res = all_res_combined, motif_res_reference = motif_res_reference, mc.cores = n_cpu), use.names=TRUE)
+            motif_res = rbind(motif_res, tmp_res)
+        }
         motif_res = rbind(motif_res, motif_res_reference)
         # add actual sequence to motif_res
         raw_seqs = all_trf[, c('READ_NAME', 'SEQUENCE_WITH_PADDINGS')]; raw_seqs = raw_seqs[!duplicated(raw_seqs$READ_NAME),]
