@@ -1340,8 +1340,8 @@
             all_samples = unique(asm$SAMPLE_NAME); all_regions = unique(asm$REGION)
             #res_asm = rbindlist(mclapply(all_samples, haplotyping_mp, reads_span = asm, all_regions = all_regions, type = 'asm', thr_mad = thr_mad, mc.cores = n_cpu), fill = T)
             res_asm = data.frame()
-            for (s in all_samples[1:5]){
-                tmp_res = rbindlist(mclapply(all_regions[1:100], haplotyping_mp_regions, s, reads_span = asm, type = 'asm', thr_mad = thr_mad, mc.cores=6))
+            for (s in all_samples){
+                tmp_res = rbindlist(mclapply(all_regions, haplotyping_mp_regions, s, reads_span = asm, type = 'asm', thr_mad = thr_mad, mc.cores=6))
                 res_asm = rbind(res_asm, tmp_res)
             }
             res_asm$DATA_TYPE = 'assembly'

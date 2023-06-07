@@ -682,7 +682,7 @@ elif anal_type == 'assembly_trf':
         os.system('mkdir %s/otter_local_asm' %(output_directory))
         # run in multiprocessing
         pool = multiprocessing.Pool(processes=number_threads)
-        otter_fun = partial(assembly_otter, output_directory = output_directory, ref_fasta = ref_fasta, bed_file = bed_file)
+        otter_fun = partial(assembly_otter, output_directory = output_directory, ref_fasta = ref_fasta, bed_file = bed_file, number_threads = number_threads)
         ts = time.time()
         extract_results = pool.map(otter_fun, all_bam_files)
         te = time.time()
@@ -691,7 +691,11 @@ elif anal_type == 'assembly_trf':
         combined_dict = {k: v for d in extract_results for k, v in d.items()}
         print('**** Otter local assembly done in %s seconds                                 ' %(round(time_otter, 0)))
         # separately do the reference genome
-        dist_reference, reads_ids_reference, fasta_ref, fasta_withPadd_ref = measureDistance_reference(bed = bed_regions, window = window_size, ref = ref_fasta, output_directory = '%s/otter_local_asm' %(output_directory), type = 'otter')
+        ts = time.time()
+        dist_reference, reads_ids_reference, fasta_ref, fasta_withPadd_ref = measureDistance_reference_faster(bed_file = bed_file, window = window_size, ref = ref_fasta, output_directory = '%s/otter_local_asm' %(output_directory), type = 'otter')
+        te = time.time()
+        time_ref = te-ts
+        print('**** Reference sequences retrieved in %s seconds                                 ' %(round(time_ref, 0)))
         # rearrange reference object and add it to the combined dictionary
         combined_dict['reference'] = []
         for x in dist_reference:
@@ -708,9 +712,9 @@ elif anal_type == 'assembly_trf':
         # then run trf in multiple processors
         try:
             pool = multiprocessing.Pool(processes=number_threads)
-            trf_fun = partial(run_trf, out_dir = trf_out_dir, motif = motif, polished = 'False', distances = distances, reads_ids_combined = 'None', all_bam_files = 'None', type = 'otter')
+            trf_fun = partial(run_trf, out_dir = trf_out_dir, motif = motif, polished = 'False', distances = combined_dict, reads_ids_combined = 'None', all_bam_files = 'None', type = 'otter')
             ts = time.time()
-            trf_results = pool.map(trf_fun, [reads_fasta[0]])
+            trf_results = pool.map(trf_fun, reads_fasta)
             te = time.time()
             time_trf = te-ts
         except:
@@ -718,6 +722,13 @@ elif anal_type == 'assembly_trf':
             ts = time.time()
             for s in reads_fasta:
                 tmp_res = run_trf(fasta = s, out_dir = trf_out_dir, motif = motif, polished = 'False', distances = combined_dict, reads_ids_combined = 'None', all_bam_files = 'None', type = 'otter')
+                read_ids = list(tmp_res['READ_NAME'])
+                if read_ids[0] == 'reference':
+                    tmp_res['HAPLOTAG'] = 1
+                else:
+                    read_haplo = [x.split('_')[-1] for x in read_ids]
+                    haplotag_df = pd.DataFrame({"READ_NAME": read_ids, "HAPLOTAG": read_haplo})
+                    tmp_res = pd.merge(tmp_res, haplotag_df, on='READ_NAME', how = 'left')
                 trf_results.append(tmp_res)
             te = time.time()
             time_trf = te-ts
@@ -726,11 +737,8 @@ elif anal_type == 'assembly_trf':
         df_trf_combined = pd.concat(trf_results)
         print('**** TRF estimation done in %s seconds                                 ' %(round(time_trf, 0)))
         os.system('rm -rf %s/trf_reads' %(output_directory))
-        # add haplotag column
-        combined_haplotags_df = pd.DataFrame(columns=['READ_NAME', 'HAPLOTAG'])
         
         # 6. combine these results and make output
-        df_trf_phasing_combined = pd.merge(df_trf_combined, combined_haplotags_df, left_on = 'READ_NAME', right_on = 'READ_NAME', how = 'outer')
         outf = '%s/assembly_trf_phasing.txt' %(output_directory)
         df_trf_phasing_combined.to_csv(outf, sep = "\t", index=False, na_rep='NA')
 
@@ -738,7 +746,8 @@ elif anal_type == 'assembly_trf':
     print("** 11. haplotype calling on reads-spanning and eventually phasing")
     file_path = os.path.realpath(__file__)
     file_path = '/'.join(file_path.split('/')[:-1])
-    os.system("Rscript %s/call_haplotypes.R --asm %s/assembly_trf_phasing.txt --out %s --cpu %s --deviation %s" %(file_path, output_directory, output_directory, number_threads, thr_mad))
+    #os.system("Rscript %s/call_haplotypes.R --asm %s/assembly_trf_phasing.txt --out %s --cpu %s --deviation %s" %(file_path, output_directory, output_directory, number_threads, thr_mad))
+    os.system("python %s/call_haplotypes.py %s/assembly_trf_phasing.txt %s %s %s" %(file_path, output_directory, output_directory, number_threads, thr_mad))
 
 ## Check whether to keep or delete temporary files
 if (store_temporary == 'False' and anal_type not in ['reads_spanning_trf', 'assembly_trf', 'haplotyping', 'extract_reads', 'coverage_profile', 'complete']):

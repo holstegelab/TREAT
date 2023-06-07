@@ -11,6 +11,7 @@ import gzip
 import subprocess
 import json
 import pandas as pd
+import subprocess
 from datetime import datetime
 from contextlib import contextmanager
 from inspect import getsourcefile
@@ -505,6 +506,43 @@ def measureDistance_reference(bed, window, ref, output_directory, type):
             seq_merged_with_padding = ''.join(sequence_in_reference_with_padding[1:])
             distances.append(['reference', region_id, 'NA', 'NA', 'NA', seq_merged, seq_merged_with_padding, len(seq_merged), len(seq_merged_with_padding), window])
             reads_ids['reference'].append(region_id)
+    # then we write the fasta
+    if type != 'otter':
+        outfasta = '%s/raw_reads/reference__rawReads.fasta' %(output_directory)
+        outf = open(outfasta, 'w')
+        outfasta_withPad = '%s/raw_reads/reference__rawReads_withPaddings.fasta' %(output_directory)
+        outf_withPad = open(outfasta_withPad, 'w')
+    else:
+        outfasta = '%s/reference__rawReads.fasta' %(output_directory)
+        outf = open(outfasta, 'w')
+        outfasta_withPad = '%s/reference__rawReads_withPaddings.fasta' %(output_directory)
+        outf_withPad = open(outfasta_withPad, 'w')
+    # then write
+    for x in distances:
+        read_id, region_id, np, rq, mc, sequence_interest_len, sequence_interest, sequence_interest_with_padding_len, sequence_interest_with_padding = x[0], x[1], x[2], x[3], x[4], x[-3], x[5], x[-2], x[-4]
+        outf.write('>%s;%s;%s;%s;%s;%s\n%s\n' %(read_id, region_id, np, rq, mc, sequence_interest_len, sequence_interest))
+        outf_withPad.write('>%s;%s;%s;%s;%s;%s;%s\n%s\n' %(read_id, region_id, np, rq, mc, window, sequence_interest_with_padding_len, sequence_interest_with_padding))
+    return distances, reads_ids, outfasta, outfasta_withPad
+
+# Measure the distance in the reference genome
+def measureDistance_reference_faster(bed_file, window, ref, output_directory, type):
+    # sequence with paddings
+    awk_command = """awk '{print $1":"$2-%s"-"$3+%s}' %s > %s/bed_file_reformatted.txt""" %(window, window, bed_file, output_directory)
+    os.system(awk_command)
+    sequence_in_reference_with_padding = [x.rstrip() for x in list(os.popen('samtools faidx -r %s/bed_file_reformatted.txt %s' %(output_directory, ref)))]        # sequence without padding
+    # then store these results
+    distances = []
+    reads_ids = {'reference' : []}
+    for x in sequence_in_reference_with_padding:
+        if x.startswith('>'):
+            chrom = x.replace('>', '').split(':')[0]
+            start = int(x.replace('>', '').split(':')[1].split('-')[0])
+            end = int(x.replace('>', '').split(':')[1].split('-')[1])
+            region = chrom + ':' + str(start + window) + '-' + str(end - window)
+        else:
+            sequence_with_paddings, sequence = x, x[window:-window]
+            distances.append(['reference', region, 'NA', 'NA', 'NA', sequence, sequence_with_paddings, len(sequence), len(sequence_with_paddings), window])
+            reads_ids['reference'].append(region)
     # then we write the fasta
     if type != 'otter':
         outfasta = '%s/raw_reads/reference__rawReads.fasta' %(output_directory)
@@ -1484,11 +1522,11 @@ def realignFasta(fasta_files, threads, reference):
     return output_aligned
 
 # Function to make assembly with otter and produce fasta files suitable for TRF
-def assembly_otter(s, output_directory, ref_fasta, bed_file):
+def assembly_otter(s, output_directory, ref_fasta, bed_file, number_threads):
     # define output name with the right directory
     outname = s.split('/')[-1].replace('.bam', '.fa')
     # run otter
-    cmd = '/project/holstegelab/Software/nicco/bin/otter/build/otter assemble -b %s -r %s %s > %s/otter_local_asm/%s' %(bed_file, ref_fasta, s, output_directory, outname)
+    cmd = '/project/holstegelab/Software/nicco/bin/otter/build/otter assemble -b %s -r %s %s -t %s > %s/otter_local_asm/%s' %(bed_file, ref_fasta, s, number_threads, output_directory, outname)
     os.system(cmd)
     # collect otter sequences
     f_open = [x.rstrip() for x in open('%s/otter_local_asm/%s' %(output_directory, outname), 'r').readlines()]
@@ -1497,10 +1535,12 @@ def assembly_otter(s, output_directory, ref_fasta, bed_file):
     tmp_res = {outname.replace('.fa', '') : []}
     # also define the new fasta output containing only the repetitive sequence for TRF
     trf_input = open('%s/otter_local_asm/%s' %(output_directory, outname.replace('.fa', '_trf.fa')), 'w')
+    prev_region = ''
     for x in f_open:
         if x.startswith('>'):
             region = x.split()[0].replace('>', '')
-            read_id = x.replace(' ', '_')
+            read_id = x.replace(' ', '_') + '_1' if region != prev_region else x.replace(' ', '_') + '_2'
+            prev_region = region
         else:
             seq = x; seq_len_with_paddings = len(seq); seq_no_paddings = x[(padd_size-1):len(x)-(padd_size+1)]; seq_len_no_paddings = len(seq_no_paddings)
             # save hit at this point
