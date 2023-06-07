@@ -23,7 +23,7 @@ def permutMotif(motif):
 # function to guide haplotyping
 def haplotyping(r, s, thr_mad, data_nodup, type, dup_df, reference_motif_dic, intervals):
     if r in intervals:
-        print('****** done %s%% of the regions' %(intervals.index(r)*5+5))
+        print('****** done %s%% of the regions' %(intervals.index(r)*5+5), end='\r')
     # data of interest
     sbs = data_nodup[data_nodup['REGION'] == r]
     # exclude nas
@@ -114,7 +114,7 @@ def assignHaplotag_asm(h1_size, h2_size, target):
 # function to look at reference motifs
 def referenceMotifs(r, ref, intervals):
     if r in intervals:
-        print('****** done %s%% of the regions' %(intervals.index(r)*5+5))
+        print('****** done %s%% of the regions' %(intervals.index(r)*5+5), end='\r')
     # subset of reference data
     sbs = ref[ref['REGION'] == r].copy()
     # if there's only 1 motif, we are done
@@ -332,7 +332,7 @@ data = pd.merge(data, motifs_df, left_on='TRF_MOTIF', right_on='motif', how='lef
 data['UNIQUE_NAME'] = data.apply(lambda row: row['READ_NAME'] + '___' + row['SAMPLE_NAME'] + '___' + row['REGION'] + '___' + str(row['LEN_SEQUENCE_FOR_TRF']), axis = 1)
 
 # 4. extract the reference and work on the motifs
-print('** Reference motifs')
+print('** Reference motifs                                     ')
 ref = data[data['SAMPLE_NAME'] == 'reference'].copy()
 all_regions = list(ref['REGION'].dropna().unique())
 intervals = prepareIntervals(all_regions)
@@ -351,7 +351,7 @@ data_nodup = data.drop_duplicates(subset = 'UNIQUE_NAME')
 dup_df = data[data.duplicated(subset = 'UNIQUE_NAME', keep=False)]
 
 # 6. genotyping on the sizes
-print('** Genotyping')
+print('** Genotyping                                         ')
 all_samples = data_nodup['SAMPLE_NAME'].dropna().unique()
 all_regions = list(data_nodup['REGION'].dropna().unique())
 intervals = prepareIntervals(all_regions)
@@ -368,7 +368,7 @@ for s in all_samples:
 sample_res = pd.concat(sample_res, axis=0)
 
 # 7. write outputs: vcf file and raw sequences
-print('** Producing outputs: VCF file and table with sequences')
+print('** Producing outputs: VCF file and table with sequences                        ')
 seq_file = '%s/sample.seq.txt' %(outd)
 vcf_file = '%s/sample.vcf' %(outd)
 writeOutputs(sample_res, seq_file, vcf_file, reference_motif_dic)
