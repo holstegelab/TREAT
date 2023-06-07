@@ -181,32 +181,37 @@ def combineMotifs(haplo_data, r):
             if best_motif == tmp_motif:
                 # here the simple case: motif is the same
                 best_motif_index = range(min(best_motif_index.start, tmp_motif_index.start), max(best_motif_index.stop, tmp_motif_index.stop))
-                copies = len(list(upd_motif_index))/len(best_motif)
+                best_motif_copies = len(list(best_motif_index))/len(best_motif)
             else:
                 # here the more tricky case: motifs are different
                 not_in_best = [x for x in tmp_motif_index if x not in best_motif_index]
-                # check if these are consecutive numbers
-                if is_consecutive(not_in_best) == True:
-                    not_in_best_copies = len(not_in_best)/len(tmp_motif)
-                    best_motif = '%s+%s' %(best_motif, tmp_motif)
-                    copies = '%s+%s' %(best_motif_copies, not_in_best_copies)
-                    best_motif_index = range(min(best_motif_index.start, tmp_motif_index.start), max(best_motif_index.stop, tmp_motif_index.stop))
-                else:
-                    print(r)
-                    copies = best_motif_copies
-                    best_motif_index = best_motif_index
+                # find list of consecutive numbers
+                consecutive_seq = is_consecutive(not_in_best)
+                # iterate over each subsequence: if a motif can be fit, add it, otherwise skip
+                for subs in consecutive_seq:
+                    if len(subs) > len(tmp_motif):
+                        sub_copies = len(subs)/len(tmp_motif)
+                        best_motif = '%s+%s' %(best_motif, tmp_motif)
+                        best_motif_copies = '%s+%s' %(best_motif_copies, sub_copies)
+                        best_motif_index = range(min(best_motif_index.start, subs[0]), max(best_motif_index.stop, subs[-1]))
         else:
-            copies = best_motif_copies; best_motif_index = best_motif_index
-    return best_motif, copies, best_motif_index
+            best_motif_index = best_motif_index
+    return best_motif, best_motif_copies, best_motif_index
 
-# function to check whether a sequence is consecutive
-def is_consecutive(nums):
-    # check if the list is empty or has a single element
-    if len(nums) <= 1:
-        return True    
-    # check if the difference between the maximum and minimum element
-    # is equal to the length of the list minus 1
-    return max(nums) - min(nums) == len(nums) - 1 and set(nums) == set(range(min(nums), max(nums)+1))
+# function to find sequences of consecutive integers
+def is_consecutive(numbers):
+    current_seq = []
+    sequences = []
+    # iterate over numbers and find consecutive sequences
+    for i, n in enumerate(numbers):
+        if i == 0 or n != numbers[i-1]+1:
+            # start new sequence
+            current_seq = [n]
+            sequences.append(current_seq)
+        else:
+            # continue current sequence
+            current_seq.append(n)
+    return sequences
 
 # function to look at the motif of the samples
 def sampleMotifs(r, all_sbs, reference_motif_dic, haplo):
@@ -367,6 +372,8 @@ for s in all_samples:
     sample_res.append(haplo_results_combined)
 sample_res = pd.concat(sample_res, axis=0)
 
+for r in all_regions[24546::]:
+    x = haplotyping(r, s, thr_mad, data_nodup, 'asm', dup_df, reference_motif_dic, intervals)
 # 7. write outputs: vcf file and raw sequences
 print('** Producing outputs: VCF file and table with sequences                        ')
 seq_file = '%s/sample.seq.txt' %(outd)
