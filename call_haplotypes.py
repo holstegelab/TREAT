@@ -23,7 +23,7 @@ def permutMotif(motif):
 # function to guide haplotyping
 def haplotyping(r, s, thr_mad, data_nodup, type, dup_df, reference_motif_dic, intervals):
     if r in intervals:
-        print('****** done %s%% of the regions' %(intervals.index(r)*5+5))
+        print('****** done %s%% of the regions' %(intervals.index(r)*5+5), end = '\r')
     # data of interest
     sbs = data_nodup[data_nodup['REGION'] == r]
     # exclude nas
@@ -32,9 +32,9 @@ def haplotyping(r, s, thr_mad, data_nodup, type, dup_df, reference_motif_dic, in
     if sbs.shape[0] >0:
         if type == 'asm':
             # identify haplotypes
-            phased_sbs = assemblyBased_size(sbs)
+            phased_sbs = assemblyBased_size(sbs, r)
             # polish haplotypes
-            pol_sbs = polishHaplo_asm(phased_sbs)
+            pol_sbs = polishHaplo_asm(phased_sbs, r)
             # add duplicates
             all_sbs = addDups(pol_sbs, dup_df, s, r)
             # finally look at the motif
@@ -46,7 +46,7 @@ def haplotyping(r, s, thr_mad, data_nodup, type, dup_df, reference_motif_dic, in
             return None
 
 # function to call haplotypes for assembly
-def assemblyBased_size(sbs):
+def assemblyBased_size(sbs, r):
     n_contigs = sbs.shape[0]
     # check number of contigs
     if n_contigs == 1:
@@ -56,11 +56,11 @@ def assemblyBased_size(sbs):
         # heterozygous call
         sbs['HAPLOTAG'] = [1, 2]; sbs['type'] = 'assembly'
     elif sbs.shape[0] >2:
-        print('more than 2 haps')
+        print('\n!! More than 2 haps for --> %s' %(r))
     return sbs
 
 # function to polish haplotypes
-def polishHaplo_asm(phased_sbs):
+def polishHaplo_asm(phased_sbs, r):
     # find haplotypes
     n_haplo = len(list(phased_sbs['HAPLOTAG'].dropna().unique()))
     n_contigs = phased_sbs.shape[0]
@@ -71,7 +71,7 @@ def polishHaplo_asm(phased_sbs):
         pol_sbs = phased_sbs
         pol_sbs['POLISHED_HAPLO'] = pol_sbs['LEN_SEQUENCE_FOR_TRF']
     elif n_haplo >1 and n_contigs >2:
-        print('more than 1 haplo and more than 2 contigs')
+        print('\n!! More than 1 haplo and more than 2 contigs for %s' %(r))
     return pol_sbs
 
 # function to add duplicates back
@@ -114,7 +114,7 @@ def assignHaplotag_asm(h1_size, h2_size, target):
 # function to look at reference motifs
 def referenceMotifs(r, ref, intervals):
     if r in intervals:
-        print('****** done %s%% of the regions' %(intervals.index(r)*5+5))
+        print('****** done %s%% of the regions' %(intervals.index(r)*5+5), end = '\r')
     # subset of reference data
     sbs = ref[ref['REGION'] == r].copy()
     # if there's only 1 motif, we are done
@@ -372,8 +372,6 @@ for s in all_samples:
     sample_res.append(haplo_results_combined)
 sample_res = pd.concat(sample_res, axis=0)
 
-for r in all_regions[24546::]:
-    x = haplotyping(r, s, thr_mad, data_nodup, 'asm', dup_df, reference_motif_dic, intervals)
 # 7. write outputs: vcf file and raw sequences
 print('** Producing outputs: VCF file and table with sequences                        ')
 seq_file = '%s/sample.seq.txt' %(outd)
