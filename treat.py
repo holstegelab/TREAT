@@ -710,28 +710,26 @@ elif anal_type == 'assembly_trf':
         # add the reference as well
         reads_fasta.append('%s/otter_local_asm/reference__rawReads.fasta' %(output_directory))
         # then run trf in multiple processors
-        try:
-            pool = multiprocessing.Pool(processes=number_threads)
-            trf_fun = partial(run_trf, out_dir = trf_out_dir, motif = motif, polished = 'False', distances = combined_dict, reads_ids_combined = 'None', all_bam_files = 'None', type = 'otter')
-            ts = time.time()
-            trf_results = pool.map(trf_fun, reads_fasta)
-            te = time.time()
-            time_trf = te-ts
-        except:
-            trf_results = []
-            ts = time.time()
-            for s in reads_fasta:
-                tmp_res = run_trf(fasta = s, out_dir = trf_out_dir, motif = motif, polished = 'False', distances = combined_dict, reads_ids_combined = 'None', all_bam_files = 'None', type = 'otter')
-                read_ids = list(tmp_res['READ_NAME'])
-                if read_ids[0] == 'reference':
-                    tmp_res['HAPLOTAG'] = 1
-                else:
-                    read_haplo = [x.split('_')[-1] for x in read_ids]
-                    haplotag_df = pd.DataFrame({"READ_NAME": read_ids, "HAPLOTAG": read_haplo})
-                    tmp_res = pd.merge(tmp_res, haplotag_df, on='READ_NAME', how = 'left')
-                trf_results.append(tmp_res)
-            te = time.time()
-            time_trf = te-ts
+        #pool = multiprocessing.Pool(processes=number_threads)
+        #trf_fun = partial(run_trf, out_dir = trf_out_dir, motif = motif, polished = 'False', distances = combined_dict, reads_ids_combined = 'None', all_bam_files = 'None', type = 'otter')
+        #ts = time.time()
+        #trf_results = pool.map(trf_fun, reads_fasta)
+        #te = time.time()
+        #time_trf = te-ts
+        trf_results = []
+        ts = time.time()
+        for s in reads_fasta:
+            tmp_res = run_trf(fasta = s, out_dir = trf_out_dir, motif = motif, polished = 'False', distances = combined_dict, reads_ids_combined = 'None', all_bam_files = 'None', type = 'otter')
+            read_ids = list(tmp_res['READ_NAME'])
+            if read_ids[0] == 'reference':
+                tmp_res['HAPLOTAG'] = 1
+            else:
+                read_haplo = [x.split('_')[-1] for x in read_ids]
+                haplotag_df = pd.DataFrame({"READ_NAME": read_ids, "HAPLOTAG": read_haplo})
+                tmp_res = pd.merge(tmp_res, haplotag_df, on='READ_NAME', how = 'left')
+            trf_results.append(tmp_res)
+        te = time.time()
+        time_trf = te-ts
 
         # combine df from different samples together
         df_trf_combined = pd.concat(trf_results)
