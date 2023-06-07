@@ -8,7 +8,7 @@
 #########################################
 
 # Libraries
-    list.of.packages <- c("plyr", "data.table", "argparse", "stringr", "parallel", "spgs", "seqinr")
+    list.of.packages <- c("plyr", "data.table", "argparse", "stringr", "parallel", "spgs")
     new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[, "Package"])]
     if(length(new.packages)) install.packages(new.packages)
     library(plyr)
@@ -1341,7 +1341,8 @@
             #res_asm = rbindlist(mclapply(all_samples, haplotyping_mp, reads_span = asm, all_regions = all_regions, type = 'asm', thr_mad = thr_mad, mc.cores = n_cpu), fill = T)
             res_asm = data.frame()
             for (s in all_samples){
-                tmp_res = rbindlist(mclapply(all_regions, haplotyping_mp_regions, s, reads_span = asm, type = 'asm', thr_mad = thr_mad, mc.cores=6))
+                print(s)
+                tmp_res = rbindlist(mclapply(all_regions, haplotyping_mp_regions, s, reads_span = asm, type = 'asm', thr_mad = thr_mad, mc.cores=n_cpu))
                 res_asm = rbind(res_asm, tmp_res)
             }
             res_asm$DATA_TYPE = 'assembly'
@@ -1370,7 +1371,7 @@
         motif_res_reference = generateConsens_mp(s = 'reference', all_regions, all_res = all_res_combined, motif_res_reference = NA)
         #motif_res = rbindlist(mclapply(all_samples[which(all_samples != 'reference')], generateConsens_mp, all_regions = all_regions, all_res = all_res_combined, motif_res_reference = motif_res_reference, mc.cores = n_cpu), use.names=TRUE)
         motif_res = data.frame()
-        for (s in all_samples){
+        for (s in all_samples[which(all_samples != 'reference')){
             tmp_res = rbindlist(mclapply(all_regions, generateConsens_mp_regions, s = s, all_res = all_res_combined, motif_res_reference = motif_res_reference, mc.cores = n_cpu), use.names=TRUE)
             motif_res = rbind(motif_res, tmp_res)
         }
