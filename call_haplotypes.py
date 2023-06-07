@@ -23,7 +23,7 @@ def permutMotif(motif):
 # function to guide haplotyping
 def haplotyping(r, s, thr_mad, data_nodup, type, dup_df, reference_motif_dic, intervals):
     if r in intervals:
-        print('** done %s%% of the regions' %(intervals.index(r)*5+5))
+        print('****** done %s%% of the regions' %(intervals.index(r)*5+5))
     # data of interest
     sbs = data_nodup[data_nodup['REGION'] == r]
     # exclude nas
@@ -114,7 +114,7 @@ def assignHaplotag_asm(h1_size, h2_size, target):
 # function to look at reference motifs
 def referenceMotifs(r, ref, intervals):
     if r in intervals:
-        print('** done %s%% of the regions' %(intervals.index(r)*5+5))
+        print('****** done %s%% of the regions' %(intervals.index(r)*5+5))
     # subset of reference data
     sbs = ref[ref['REGION'] == r].copy()
     # if there's only 1 motif, we are done
@@ -346,7 +346,6 @@ motif_ref = pd.concat(motif_res, axis=0)
 reference_motif_dic = {row["REGION"]: [row["CONSENSUS_MOTIF"], row["POLISHED_HAPLO"], row['CONSENSUS_MOTIF_COPIES']] for _, row in motif_ref.iterrows()}
 
 # 5. add TR size
-print('exclude duplicates')
 data = data[data['SAMPLE_NAME'] != 'reference']
 data_nodup = data.drop_duplicates(subset = 'UNIQUE_NAME')
 dup_df = data[data.duplicated(subset = 'UNIQUE_NAME', keep=False)]
@@ -371,6 +370,6 @@ sample_res = pd.concat(sample_res, axis=0)
 # 7. write outputs: vcf file and raw sequences
 print('** Producing outputs: VCF file and table with sequences')
 seq_file = '%s/sample.seq.txt' %(outd)
-vcf_file = '%s/hg002.vcf' %(outd)
+vcf_file = '%s/sample.vcf' %(outd)
 writeOutputs(sample_res, seq_file, vcf_file, reference_motif_dic)
 
