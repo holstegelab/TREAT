@@ -732,7 +732,7 @@ elif anal_type == 'assembly_trf':
         time_trf = te-ts
 
         # combine df from different samples together
-        df_trf_combined = pd.concat(trf_results)
+        df_trf_phasing_combined = pd.concat(trf_results)
         print('**** TRF estimation done in %s seconds                                 ' %(round(time_trf, 0)))
         os.system('rm -rf %s/trf_reads' %(output_directory))
         
