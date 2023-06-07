@@ -551,6 +551,9 @@ def measureDistance_reference_faster(bed_file, window, ref, output_directory, ty
         else:
             total_sequence = total_sequence + x
             i += 1
+    sequence_with_paddings, sequence = total_sequence, total_sequence[window:-window]
+    distances.append(['reference', region, 'NA', 'NA', 'NA', sequence, sequence_with_paddings, len(sequence), len(sequence_with_paddings), window])
+    reads_ids['reference'].append(region)
     # then we write the fasta
     if type != 'otter':
         outfasta = '%s/raw_reads/reference__rawReads.fasta' %(output_directory)
