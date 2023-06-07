@@ -23,7 +23,7 @@ def permutMotif(motif):
 # function to guide haplotyping
 def haplotyping(r, s, thr_mad, data_nodup, type, dup_df, reference_motif_dic, intervals):
     if r in intervals:
-        print('****** done %s%% of the regions' %(intervals.index(r)*5+5), end='\r')
+        print('****** done %s%% of the regions' %(intervals.index(r)*5+5))
     # data of interest
     sbs = data_nodup[data_nodup['REGION'] == r]
     # exclude nas
@@ -114,7 +114,7 @@ def assignHaplotag_asm(h1_size, h2_size, target):
 # function to look at reference motifs
 def referenceMotifs(r, ref, intervals):
     if r in intervals:
-        print('****** done %s%% of the regions' %(intervals.index(r)*5+5), end='\r')
+        print('****** done %s%% of the regions' %(intervals.index(r)*5+5))
     # subset of reference data
     sbs = ref[ref['REGION'] == r].copy()
     # if there's only 1 motif, we are done
