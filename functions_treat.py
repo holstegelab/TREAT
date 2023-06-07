@@ -533,16 +533,24 @@ def measureDistance_reference_faster(bed_file, window, ref, output_directory, ty
     # then store these results
     distances = []
     reads_ids = {'reference' : []}
-    for x in sequence_in_reference_with_padding:
+    i = 0
+    total_sequence = ''
+    while i<len(sequence_in_reference_with_padding):
+        x = sequence_in_reference_with_padding[i]
         if x.startswith('>'):
+            if total_sequence != '':
+                sequence_with_paddings, sequence = total_sequence, total_sequence[window:-window]
+                total_sequence = ''
+                distances.append(['reference', region, 'NA', 'NA', 'NA', sequence, sequence_with_paddings, len(sequence), len(sequence_with_paddings), window])
+                reads_ids['reference'].append(region)
             chrom = x.replace('>', '').split(':')[0]
             start = int(x.replace('>', '').split(':')[1].split('-')[0])
             end = int(x.replace('>', '').split(':')[1].split('-')[1])
             region = chrom + ':' + str(start + window) + '-' + str(end - window)
+            i += 1
         else:
-            sequence_with_paddings, sequence = x, x[window:-window]
-            distances.append(['reference', region, 'NA', 'NA', 'NA', sequence, sequence_with_paddings, len(sequence), len(sequence_with_paddings), window])
-            reads_ids['reference'].append(region)
+            total_sequence = total_sequence + x
+            i += 1
     # then we write the fasta
     if type != 'otter':
         outfasta = '%s/raw_reads/reference__rawReads.fasta' %(output_directory)
