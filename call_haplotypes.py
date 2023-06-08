@@ -41,9 +41,34 @@ def haplotyping(r, s, thr_mad, data_nodup, type, dup_df, reference_motif_dic, in
             final_sbs_h1 = sampleMotifs(r, all_sbs, reference_motif_dic, 1)
             final_sbs_h2 = sampleMotifs(r, all_sbs, reference_motif_dic, 2)
             final_sbs = pd.concat([final_sbs_h1, final_sbs_h2], axis=0)
-            return final_sbs
+            # prepare for file writing
+            tmp_vcf, tmp_seq = prepareOutputs(final_sbs, reference_motif_dic, r)
+            return tmp_vcf, tmp_seq
         elif type == 'reads_spanning':
             return None
+
+# function to make data for vcf writing
+def prepareOutputs(final_sbs, reference_motif_dic, r):
+    # prepare data for VCF
+    chrom, start, end = [r.split(':')[0]] + r.split(':')[-1].split('-')
+    ref_motif, ref_len, ref_copies = reference_motif_dic[r]
+    info_field = '%s;%s' %(ref_motif, ref_copies)
+    format_field = 'QC;GT;MOTIF;CN;CN_REF;DP'
+    sam_gt = '|'.join(list(final_sbs['POLISHED_HAPLO'].map(str))) if final_sbs.shape[0] >1 else list(final_sbs["POLISHED_HAPLO"].map(str).apply(lambda x: x + "|" + x))[0]
+    sam_mot = '|'.join(list(final_sbs['CONSENSUS_MOTIF'].map(str))) if final_sbs.shape[0] >1 else list(final_sbs["CONSENSUS_MOTIF"].map(str).apply(lambda x: x + "|" + x))[0]
+    sam_cop = '|'.join(list(final_sbs['CONSENSUS_MOTIF_COPIES'].map(str))) if final_sbs.shape[0] >1 else list(final_sbs["CONSENSUS_MOTIF_COPIES"].map(str).apply(lambda x: x + "|" + x))[0]
+    sam_cop_ref = '|'.join(list(final_sbs['REFERENCE_MOTIF_COPIES'].map(str))) if final_sbs.shape[0] >1 else list(final_sbs["REFERENCE_MOTIF_COPIES"].map(str).apply(lambda x: x + "|" + x))[0]
+    sam_depth = '|'.join(list(final_sbs["READ_NAME"].str.split("_").str[1])) if final_sbs.shape[0] >1 else list(final_sbs["READ_NAME"].str.split("_").str[1].apply(lambda x: x + "|" + x))[0]
+    sample_field = '%s;%s;%s;%s;%s;%s' %('PASS_ASM', sam_gt, sam_mot, sam_cop, sam_cop_ref, sam_depth)
+    res_vcf = [chrom, start, r, ref_len, '.', '.', 'PASS', info_field, format_field, sample_field]
+    # then prepare the sequence output
+    final_sbs['DEPTH'] = final_sbs["READ_NAME"].str.split("_").str[1]
+    final_sbs['MOTIF_REF'] = ref_motif
+    keep_cols = ['READ_NAME', 'HAPLOTAG', 'REGION', 'PASSES', 'READ_QUALITY', 'LEN_SEQUENCE_FOR_TRF', 'START_TRF', 'END_TRF', 'type', 'SAMPLE_NAME', 'POLISHED_HAPLO', 'DEPTH', 'CONSENSUS_MOTIF', 'CONSENSUS_MOTIF_COPIES', 'MOTIF_REF', 'REFERENCE_MOTIF_COPIES', 'SEQUENCE_WITH_PADDINGS', 'SEQUENCE_FOR_TRF']
+    # subset dataframe to keep only selected columns
+    df_subset = final_sbs.loc[:, keep_cols]
+    res_seq = df_subset.values.tolist()
+    return res_vcf, res_seq
 
 # function to call haplotypes for assembly
 def assemblyBased_size(sbs, r):
@@ -125,7 +150,9 @@ def referenceMotifs(r, ref, intervals):
         # first align motifs
         sbs = sbs[sbs['HAPLOTAG'] == 1].copy()
         sbs = motif_generalization(sbs, r)
-    return sbs
+    # in the end, take only what we need to bring along
+    tmp_dic = {row["REGION"]: [row["CONSENSUS_MOTIF"], row["POLISHED_HAPLO"], row['CONSENSUS_MOTIF_COPIES']] for _, row in sbs.iterrows()}
+    return tmp_dic
 
 # function to generate consensus motif using majority rule
 def motif_generalization(haplo_data, r):
@@ -236,38 +263,6 @@ def sampleMotifs(r, all_sbs, reference_motif_dic, haplo):
         haplo_data['REFERENCE_MOTIF_COPIES'] = 'nan'
     return haplo_data
 
-# function to write vcf file
-def writeVcf(sam_info, ref_info, outf, r, samples):
-    # prepare data
-    chrom, start, end = [r.split(':')[0]] + r.split(':')[-1].split('-')
-    ref_motif, ref_len, ref_copies = ref_info
-    info_field = '%s;%s' %(ref_motif, ref_copies)
-    format_field = 'QC;GT;MOTIF;CN;CN_REF;DP'
-    outf.write('%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s' %(chrom, start, r, ref_len, '.', '.', 'PASS', info_field, format_field))
-    for s in samples:
-        outf.write('\t')
-        s_info = sam_info[sam_info['SAMPLE_NAME'] == s]
-        sam_gt = '|'.join(list(sam_info['POLISHED_HAPLO'].map(str))) if sam_info.shape[0] >1 else list(sam_info["POLISHED_HAPLO"].map(str).apply(lambda x: x + "|" + x))[0]
-        sam_mot = '|'.join(list(sam_info['CONSENSUS_MOTIF'].map(str))) if sam_info.shape[0] >1 else list(sam_info["CONSENSUS_MOTIF"].map(str).apply(lambda x: x + "|" + x))[0]
-        sam_cop = '|'.join(list(sam_info['CONSENSUS_MOTIF_COPIES'].map(str))) if sam_info.shape[0] >1 else list(sam_info["CONSENSUS_MOTIF_COPIES"].map(str).apply(lambda x: x + "|" + x))[0]
-        sam_cop_ref = '|'.join(list(sam_info['REFERENCE_MOTIF_COPIES'].map(str))) if sam_info.shape[0] >1 else list(sam_info["REFERENCE_MOTIF_COPIES"].map(str).apply(lambda x: x + "|" + x))[0]
-        sam_depth = '|'.join(list(sam_info["READ_NAME"].str.split("_").str[1])) if sam_info.shape[0] >1 else list(sam_info["READ_NAME"].str.split("_").str[1].apply(lambda x: x + "|" + x))[0]
-        sample_field = '%s;%s;%s;%s;%s;%s' %('PASS_ASM', sam_gt, sam_mot, sam_cop, sam_cop_ref, sam_depth)
-        outf.write('%s' %(sample_field))
-    outf.write('\n')
-    return 
-
-# function to write sequence file
-def writeSeq(sam_info, outf, ref_info):
-    # add depth and reference motif
-    sam_info['DEPTH'] = sam_info["READ_NAME"].str.split("_").str[1]
-    sam_info['MOTIF_REF'] = ref_info[0]
-    keep_cols = ['READ_NAME', 'HAPLOTAG', 'REGION', 'PASSES', 'READ_QUALITY', 'LEN_SEQUENCE_FOR_TRF', 'START_TRF', 'END_TRF', 'type', 'SAMPLE_NAME', 'POLISHED_HAPLO', 'DEPTH', 'CONSENSUS_MOTIF', 'CONSENSUS_MOTIF_COPIES', 'MOTIF_REF', 'REFERENCE_MOTIF_COPIES', 'SEQUENCE_WITH_PADDINGS', 'SEQUENCE_FOR_TRF']
-    # subset dataframe to keep only selected columns
-    df_subset = sam_info.loc[:, keep_cols]
-    df_subset.to_csv(outf, index=False, header=False, sep="\t")
-    return
-
 # function to prepare intervals
 def prepareIntervals(all_regions):
     intervals = []
@@ -281,41 +276,18 @@ def writeVCFheader(vcf_file, samples):
     # open file
     outf = open(vcf_file, 'w')
     # write header
-    outf.write('##fileformat=VCFv4.2\n##INFO=<ID=REFERENCE_INFO,Number=2,Type=String,Description="Motif observed in the reference genome (GRCh38), and relative number of motif repetitions."\n##FORMAT=<ID=QC,Number=1,Type=String,Description="Quality summary of TREAT genotyping. PASS_BOTH: genotype agreed between reads-spanning and assembly. PASS_RSP: genotype from reads-spanning. PASS_ASM: genotype from assembly."\n##FORMAT=<ID=GT,Number=2,Type=String,Description="Phased size of the tandem repeats. H1_size | H2_size"\n##FORMAT=<ID=MOTIF,Number=2,Type=String,Description="Phased consensus motif found in the sample. H1_motif | H2_motif"\n##FORMAT=<ID=CN,Number=2,Type=String,Description="Phased number of copies of the motif found in the sample. H1_copies | H2_copies"\n##FORMAT=<ID=CN_REF,Number=2,Type=String,Description="Phased estimation of the reference motif as found in the sample. H1_motif_ref | H2_motif_ref"\n##FORMAT=<ID=DP,Number=1,Type=String,Description="Phased depth found in the sample. H1_depth | H2_depth"\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\t%s\n' %('\t'.join(samples)))
+    outf.write('##fileformat=VCFv4.2\n##INFO=<ID=REFERENCE_INFO,Number=2,Type=String,Description="Motif observed in the reference genome (GRCh38), and relative number of motif repetitions."\n##FORMAT=<ID=QC,Number=1,Type=String,Description="Quality summary of TREAT genotyping. PASS_BOTH: genotype agreed between reads-spanning and assembly. PASS_RSP: genotype from reads-spanning. PASS_ASM: genotype from assembly."\n##FORMAT=<ID=GT,Number=2,Type=String,Description="Phased size of the tandem repeats. H1_size | H2_size"\n##FORMAT=<ID=MOTIF,Number=2,Type=String,Description="Phased consensus motif found in the sample. H1_motif | H2_motif"\n##FORMAT=<ID=CN,Number=2,Type=String,Description="Phased number of copies of the motif found in the sample. H1_copies | H2_copies"\n##FORMAT=<ID=CN_REF,Number=2,Type=String,Description="Phased estimation of the reference motif as found in the sample. H1_motif_ref | H2_motif_ref"\n##FORMAT=<ID=DP,Number=1,Type=String,Description="Phased depth found in the sample. H1_depth | H2_depth"\n')
     outf.close()
     return    
 
-# function to write header of the sequence file
-def writeSeqheader(seq_file, samples):
-    # open file
-    outf = open(seq_file, 'w')
-    # write header
-    outf.write('READ_NAME\tHAPLOTYPE\tREGION\tPASSES\tREAD_QUALITY\tLENGTH_SEQUENCE\tSTART_TRF\tEND_TRF\tTYPE\tSAMPLE\tPOLISHED_HAPLO\tDEPTH\tCONSENSUS_MOTIF\tCONSENSUS_MOTIF_EST_COPIES\tCONSENSUS_MOTIF_REF\tCONSENSUS_MOTIF_REF_EST_COPIES\tSEQUENCE_WITH_PADDINGS\tSEQUENCE_FOR_TRF\n')
-    outf.close()
-    return
-
 # function to write outputs
-def writeOutputs(sample_res, seq_file, vcf_file, reference_motif_dic):
-    # extract regions
-    all_regions = list(sample_res['REGION'].dropna().unique())
-    all_samples = list(sample_res['SAMPLE_NAME'].dropna().unique())
+def writeOutputs(df_vcf, df_seq, seq_file, vcf_file):
     # write header of vcf file
     writeVCFheader(vcf_file, all_samples)
-    outvcf = open(vcf_file, 'a')
-    # write header of sequence file
-    writeSeqheader(seq_file, all_samples)
-    outseq = open(seq_file, 'a')
-    # loop across samples and regions
-    for r in all_regions:
-        # get reference info and sample info
-        ref_info = reference_motif_dic[r]
-        sam_info = sample_res[sample_res['REGION'] == r].copy()
-        # write to vcf
-        writeVcf(sam_info, ref_info, outvcf, r, all_samples)
-        # write to sequence file
-        writeSeq(sam_info, outseq, ref_info)
-    outvcf.close()
-    outseq.close()
+    with open(vcf_file, mode='a') as file:
+        df_vcf.to_csv(file, header=True, index=False, sep='\t')
+    # write sequence file
+    df_seq.to_csv(seq_file, header=True, index=False, sep='\t')
     return
 
 # 1. arguments
@@ -346,9 +318,8 @@ all_regions = list(ref['REGION'].dropna().unique())
 pool = multiprocessing.Pool(processes=n_cpu)
 motif_fun = partial(referenceMotifs, ref = ref, intervals = intervals)
 motif_res = pool.map(motif_fun, all_regions)
-motif_ref = pd.concat(motif_res, axis=0)
-# probably good to create a dictionary as well, will be faster to access it
-reference_motif_dic = {row["REGION"]: [row["CONSENSUS_MOTIF"], row["POLISHED_HAPLO"], row['CONSENSUS_MOTIF_COPIES']] for _, row in motif_ref.iterrows()}
+# combine dictionaries
+reference_motif_dic = {k: v for d in motif_res for k, v in d.items()}
 
 # 5. add TR size
 data = data[data['SAMPLE_NAME'] != 'reference']
@@ -368,13 +339,24 @@ for s in all_samples:
     pool = multiprocessing.Pool(processes=n_cpu)
     haplo_fun = partial(haplotyping, s = s, thr_mad = thr_mad, data_nodup = sbs, type = 'asm', dup_df = sbs_dups, reference_motif_dic = reference_motif_dic, intervals = intervals)
     haplo_results = pool.map(haplo_fun, all_regions)
-    haplo_results_combined = pd.concat(haplo_results, axis=0)
-    sample_res.append(haplo_results_combined)
-sample_res = pd.concat(sample_res, axis=0)
+    sample_res.append(haplo_results)
 
-# 7. write outputs: vcf file and raw sequences
+# 7. compose the vcf and seq dataframes
+df_vcf = pd.DataFrame([x[0] for x in sample_res[0]], columns=['#CHROM', 'POS', 'ID', 'REF', 'ALT', 'QUAL', 'FILTER', 'INFO', 'FORMAT', all_samples[0]])
+df_seq = pd.DataFrame([x for y in sample_res[0] for x in y[1]], columns=['READ_NAME', 'HAPLOTAG', 'REGION', 'PASSES', 'READ_QUALITY', 'LEN_SEQUENCE_FOR_TRF', 'START_TRF', 'END_TRF', 'type', 'SAMPLE_NAME', 'POLISHED_HAPLO', 'DEPTH', 'CONSENSUS_MOTIF', 'CONSENSUS_MOTIF_COPIES', 'MOTIF_REF', 'REFERENCE_MOTIF_COPIES', 'SEQUENCE_WITH_PADDINGS', 'SEQUENCE_FOR_TRF'])
+if len(sample_res) >1:
+    for i in range(1, len(sample_res)):
+        tmp = pd.DataFrame([[x[0][2], x[0][-1]] for x in sample_res[i]], columns=['ID', all_samples[i]])
+        # merge with main df
+        df_vcf = pd.merge(df_vcf, tmp, on='ID', how='outer')
+        # then compose the seq dataframe
+        tmp = pd.DataFrame([x for y in sample_res[i] for x in y[1]], columns=['READ_NAME', 'HAPLOTAG', 'REGION', 'PASSES', 'READ_QUALITY', 'LEN_SEQUENCE_FOR_TRF', 'START_TRF', 'END_TRF', 'type', 'SAMPLE_NAME', 'POLISHED_HAPLO', 'DEPTH', 'CONSENSUS_MOTIF', 'CONSENSUS_MOTIF_COPIES', 'MOTIF_REF', 'REFERENCE_MOTIF_COPIES', 'SEQUENCE_WITH_PADDINGS', 'SEQUENCE_FOR_TRF'])
+        # add to main df
+        df_seq = pd.concat([df_seq, tmp], axis=0)
+
+# 8. write outputs: vcf file and raw sequences
 print('** Producing outputs: VCF file and table with sequences                        ')
 seq_file = '%s/sample.seq.txt' %(outd)
 vcf_file = '%s/sample.vcf' %(outd)
-writeOutputs(sample_res, seq_file, vcf_file, reference_motif_dic)
+writeOutputs(df_vcf, df_seq, seq_file, vcf_file)
 
