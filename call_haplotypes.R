@@ -1315,7 +1315,9 @@
     # 3. add the TR size
         # change two colnames
         colnames(all_trf)[which(colnames(all_trf) == 'HAPLOTAG')] = 'HAPLOTYPE'
-        colnames(all_trf)[which(colnames(all_trf) == 'LEN_SEQUENCE_FOR_TRF')] = 'LENGTH_SEQUENCE'
+        #colnames(all_trf)[which(colnames(all_trf) == 'LEN_SEQUENCE_FOR_TRF')] = 'LENGTH_SEQUENCE'
+        # changed for forensics
+        all_trf$LENGTH_SEQUENCE = all_trf$LEN_SEQUENCE_WITH_PADDINGS
 
     # 4. good to exclude duplicated reads otherwise results would be biased towards sequences with more complex motifs (where TRF finds multiple matches)
         all_trf_nodup = all_trf[!duplicated(all_trf$UNIQUE_NAME),]; dups = all_trf[duplicated(all_trf$UNIQUE_NAME),]
