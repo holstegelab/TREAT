@@ -73,7 +73,7 @@
                     reads_df$type = NA
                     reads_df$HAPLOTYPE = as.character(reads_df$HAPLOTYPE)
                     # make the final df with reads and haplotypes (depending on how many alleles were found)
-                    if (reads_h2 == 'homozygous' && unique(!is.na(reads_h2))){
+                    if (reads_h2[1] == 'homozygous' && unique(!is.na(reads_h2))){
                         reads_df$type[which(reads_df$LENGTH_SEQUENCE %in% reads_h1)] = 'Assigned'
                         reads_df$HAPLOTYPE[which(reads_df$LENGTH_SEQUENCE %in% reads_h1)] = 1
                     } else if (unique(!is.na(reads_h2))){
@@ -1371,7 +1371,7 @@
         motif_res_reference = generateConsens_mp(s = 'reference', all_regions, all_res = all_res_combined, motif_res_reference = NA)
         #motif_res = rbindlist(mclapply(all_samples[which(all_samples != 'reference')], generateConsens_mp, all_regions = all_regions, all_res = all_res_combined, motif_res_reference = motif_res_reference, mc.cores = n_cpu), use.names=TRUE)
         motif_res = data.frame()
-        for (s in all_samples[which(all_samples != 'reference')){
+        for (s in all_samples[which(all_samples != 'reference')]){
             tmp_res = rbindlist(mclapply(all_regions, generateConsens_mp_regions, s = s, all_res = all_res_combined, motif_res_reference = motif_res_reference, mc.cores = n_cpu), use.names=TRUE)
             motif_res = rbind(motif_res, tmp_res)
         }
