@@ -746,7 +746,7 @@ elif anal_type == 'assembly_trf':
     file_path = '/'.join(file_path.split('/')[:-1])
     ts = time.time()
     #os.system("Rscript %s/call_haplotypes.R --asm %s/assembly_trf_phasing.txt --out %s --cpu %s --deviation %s" %(file_path, output_directory, output_directory, number_threads, thr_mad))
-    os.system("python %s/call_haplotypes.py %s/assembly_trf_phasing.txt %s %s %s" %(file_path, output_directory, output_directory, number_threads, thr_mad))
+    os.system("python %s/call_haplotypes.py %s/assembly_trf_phasing.txt %s %s %s %s %s" %(file_path, output_directory, output_directory, number_threads, thr_mad, 'assembly', 0))
     te = time.time()
     time_haplo = te-ts
     print('**** Haplotyping and data generation done in %s seconds                                 ' %(round(time_haplo, 0)))

@@ -1,3 +1,4 @@
+# libraries
 import pandas as pd
 import sys
 from Bio.Seq import reverse_complement
@@ -5,6 +6,10 @@ import multiprocessing
 from functools import partial
 import numpy as np
 import math
+import scipy.stats as stats
+import statistics
+from sklearn.cluster import KMeans
+import numpy as np
 
 # FUNCTIONS
 # function to make permutations
@@ -21,7 +26,7 @@ def permutMotif(motif):
     return sel_motif
 
 # function to guide haplotyping
-def haplotyping(r, s, thr_mad, data_nodup, type, dup_df, reference_motif_dic, intervals):
+def haplotyping(r, s, thr_mad, data_nodup, type, dup_df, reference_motif_dic, intervals, min_support):
     if r in intervals:
         print('****** done %s%% of the regions' %(intervals.index(r)*5+5), end = '\r')
     # data of interest
@@ -30,7 +35,7 @@ def haplotyping(r, s, thr_mad, data_nodup, type, dup_df, reference_motif_dic, in
     sbs = sbs.dropna(subset=['LEN_SEQUENCE_FOR_TRF'])
     # check if there are rows
     if sbs.shape[0] >0:
-        if type == 'asm':
+        if type == 'assembly':
             # identify haplotypes
             phased_sbs = assemblyBased_size(sbs, r)
             # polish haplotypes
@@ -44,8 +49,76 @@ def haplotyping(r, s, thr_mad, data_nodup, type, dup_df, reference_motif_dic, in
             # prepare for file writing
             tmp_vcf, tmp_seq = prepareOutputs(final_sbs, reference_motif_dic, r)
             return tmp_vcf, tmp_seq
-        elif type == 'reads_spanning':
+        elif type == 'reads':
+            # check minimum support: minimum support is for alleles --> 2*min_support is the total minimum coverage required for autosomal regions. For sex-regions, we will use min_support directly
+            # find chromosome to adapt coverage
+            chrom = r.split(':')[0]
+            minimum_coverage = min_support if chrom in ['chrY', 'Y'] else min_support*2
+            # check if there is minimum support
+            if sbs.shape[0] >= minimum_coverage:
+                # identify haplotypes
+                phased_sbs = readBased_size(sbs, r)
             return None
+
+# function to call haplotypes for reads
+def readBased_size(sbs, r):
+    # get phasing information
+    haplotag_list = [x for x in list(sbs['HAPLOTAG']) if not isinstance(x, float) or not math.isnan(x)]
+    if len(haplotag_list) == 0:
+        haplo_center, haplo_confint, haplo_id = kmeans_haplotyping(sbs, min_support, thr_mad, chrom, r)
+        sbs['HAPLOTAG'] = haplo_id
+        sbs['POLISHED_HAPLO'] = haplo_center
+        sbs['HAPLO_CONFINT'] = haplo_confint
+    else:
+        print('!! haplotags found at %s' %(r))
+
+# function to fit kmeans for finding haplotypes
+def kmeans_haplotyping(sbs, min_support, thr_mad, chrom, r):
+    # extract read lengths
+    read_lengths = [x for x in list(sbs['LEN_SEQUENCE_FOR_TRF']) if not isinstance(x, float) or not math.isnan(x)]
+    # define ploidy: for autosomal chromosomes and X it's 2, otherwise 1
+    ploidy = 1 if chrom in ['chrY', 'Y'] else 2
+    # define variables to control the loop
+    loop = True
+    # main loop
+    while loop == True:
+        # check if we have minimum support in terms of coverage
+        if len(read_lengths) >= min_support:
+            # check if we have a homozygous call (reads are similar in size)
+            # calculate median and thr_mad % value of the median
+            median_value = statistics.median(read_lengths)
+            median_value_boundary = median_value*thr_mad
+            # and distances from median
+            median_distances = [abs(x - median_value) for x in read_lengths]
+            # check if the most distant element is more different than the defined boundary
+            if max(median_distances) < median_value_boundary:
+                # then it's homozygous call
+                centers_kmeans = [median_value for x in range(len(read_lengths))]
+                centers_confint = ['_'.join([str(element) for element in list(stats.t.interval(0.95, len(read_lengths)-1, statistics.mean(read_lengths), statistics.stdev(read_lengths)/len(read_lengths)**0.5))]) for x in range(len(read_lengths))]
+                haplo_list = [1 for x in range(len(read_lengths))]
+            else:
+                # do kmeans with the ploidy as the number of clusters
+                my_array = np.array(read_lengths).reshape(-1, 1)
+                # perform k-means clustering with 2 clusters
+                kmeans = KMeans(n_clusters=ploidy, min_samples=min_support).fit(my_array)
+                centers_kmeans = [center for sublist in kmeans.cluster_centers_.tolist() for center in sublist]
+                haplo_list = kmeans.labels_.tolist()
+                # then check within each cluster for minimum support and deviation from median value
+                for haplo in list(set(haplo_list)):
+                    indexes = [i for i in range(len(haplo_list)) if haplo_list[i] == haplo]
+                    if len(haplo_count >= min_support):
+                        # get the reads, median, boundaries and distances
+                        reads_haplo = [read_lengths[i] for i in indexes]
+                        median_value = statistics.median(reads_haplo)
+                        median_value_boundary = median_value*thr_mad
+                        median_distances = [abs(x - median_value) for x in reads_haplo]
+                        if (max(median_distances) < median_value_boundary):
+                            # 
+
+        else:
+            centers_kmeans = []; centers_confint = []; haplo_list = []
+            loop = False
+    return centers_kmeans, centers_confint, haplo_list
 
 # function to make data for vcf writing
 def prepareOutputs(final_sbs, reference_motif_dic, r):
@@ -295,51 +368,58 @@ inpf = sys.argv[1]
 outd = sys.argv[2]
 n_cpu = int(sys.argv[3])
 thr_mad = float(sys.argv[4])
+type = sys.argv[5]
+min_support = sys.argv[6]
 
 # 2. read data
 print('** Read data')
-data = pd.read_csv(inpf, sep='\t')
+if type in ['reads', 'assembly']:
+    data = pd.read_csv(inpf, sep='\t')
 
 # 3. adjust the motif -- merge the same motifs
 print('** Adjust motifs')
-all_motifs = data['TRF_MOTIF'].dropna().unique()
-main_motifs = [permutMotif(motif) for motif in all_motifs]
-motifs_df = pd.DataFrame({'motif' : all_motifs, 'UNIFORM_MOTIF' : main_motifs})
-data = pd.merge(data, motifs_df, left_on='TRF_MOTIF', right_on='motif', how='left')
-data['UNIQUE_NAME'] = data.apply(lambda row: row['READ_NAME'] + '___' + row['SAMPLE_NAME'] + '___' + row['REGION'] + '___' + str(row['LEN_SEQUENCE_FOR_TRF']), axis = 1)
+if type in ['reads', 'assembly']:
+    all_motifs = data['TRF_MOTIF'].dropna().unique()
+    main_motifs = [permutMotif(motif) for motif in all_motifs]
+    motifs_df = pd.DataFrame({'motif' : all_motifs, 'UNIFORM_MOTIF' : main_motifs})
+    data = pd.merge(data, motifs_df, left_on='TRF_MOTIF', right_on='motif', how='left')
+    data['UNIQUE_NAME'] = data.apply(lambda row: row['READ_NAME'] + '___' + row['SAMPLE_NAME'] + '___' + row['REGION'] + '___' + str(row['LEN_SEQUENCE_FOR_TRF']), axis = 1)
 
 # 4. extract the reference and work on the motifs
 print('** Reference motifs                                     ')
-ref = data[data['SAMPLE_NAME'] == 'reference'].copy()
-all_regions = list(ref['REGION'].dropna().unique())
-intervals = prepareIntervals(all_regions)
-ref['HAPLOTAG'] = 1; ref['POLISHED_HAPLO'] = ref['LEN_SEQUENCE_FOR_TRF']
-all_regions = list(ref['REGION'].dropna().unique())
-pool = multiprocessing.Pool(processes=n_cpu)
-motif_fun = partial(referenceMotifs, ref = ref, intervals = intervals)
-motif_res = pool.map(motif_fun, all_regions)
-# combine dictionaries
-reference_motif_dic = {k: v for d in motif_res for k, v in d.items()}
+if type in ['reads', 'assembly']:
+    ref = data[data['SAMPLE_NAME'] == 'reference'].copy()
+    all_regions = list(ref['REGION'].dropna().unique())
+    intervals = prepareIntervals(all_regions)
+    ref['HAPLOTAG'] = 1; ref['POLISHED_HAPLO'] = ref['LEN_SEQUENCE_FOR_TRF']
+    all_regions = list(ref['REGION'].dropna().unique())
+    pool = multiprocessing.Pool(processes=n_cpu)
+    motif_fun = partial(referenceMotifs, ref = ref, intervals = intervals)
+    motif_res = pool.map(motif_fun, all_regions)
+    # combine dictionaries
+    reference_motif_dic = {k: v for d in motif_res for k, v in d.items()}
 
-# 5. add TR size
-data = data[data['SAMPLE_NAME'] != 'reference']
-data_nodup = data.drop_duplicates(subset = 'UNIQUE_NAME')
-dup_df = data[data.duplicated(subset = 'UNIQUE_NAME', keep=False)]
+# 5. add unique name and split duplicated from unique reads
+if type in ['reads', 'assembly']:
+    data = data[data['SAMPLE_NAME'] != 'reference']
+    data_nodup = data.drop_duplicates(subset = 'UNIQUE_NAME')
+    dup_df = data[data.duplicated(subset = 'UNIQUE_NAME', keep=False)]
 
 # 6. genotyping on the sizes
 print('** Genotyping                                         ')
-all_samples = data_nodup['SAMPLE_NAME'].dropna().unique()
-all_regions = list(data_nodup['REGION'].dropna().unique())
-intervals = prepareIntervals(all_regions)
-sample_res = []
-for s in all_samples:
-    print('**** %s' %(s))
-    sbs = data_nodup[(data_nodup['SAMPLE_NAME'] == s)]
-    sbs_dups = dup_df[(dup_df['SAMPLE_NAME'] == s)]
-    pool = multiprocessing.Pool(processes=n_cpu)
-    haplo_fun = partial(haplotyping, s = s, thr_mad = thr_mad, data_nodup = sbs, type = 'asm', dup_df = sbs_dups, reference_motif_dic = reference_motif_dic, intervals = intervals)
-    haplo_results = pool.map(haplo_fun, all_regions)
-    sample_res.append(haplo_results)
+if type in ['reads', 'assembly']:
+    all_samples = data_nodup['SAMPLE_NAME'].dropna().unique()
+    all_regions = list(data_nodup['REGION'].dropna().unique())
+    intervals = prepareIntervals(all_regions)
+    sample_res = []
+    for s in all_samples:
+        print('**** %s' %(s))
+        sbs = data_nodup[(data_nodup['SAMPLE_NAME'] == s)]
+        sbs_dups = dup_df[(dup_df['SAMPLE_NAME'] == s)]
+        pool = multiprocessing.Pool(processes=n_cpu)
+        haplo_fun = partial(haplotyping, s = s, thr_mad = thr_mad, data_nodup = sbs, type = type, dup_df = sbs_dups, reference_motif_dic = reference_motif_dic, intervals = intervals, min_support = )
+        haplo_results = pool.map(haplo_fun, all_regions)
+        sample_res.append(haplo_results)
 
 # 7. compose the vcf and seq dataframes
 df_vcf = pd.DataFrame([x[0] for x in sample_res[0]], columns=['#CHROM', 'POS', 'ID', 'REF', 'ALT', 'QUAL', 'FILTER', 'INFO', 'FORMAT', all_samples[0]])
