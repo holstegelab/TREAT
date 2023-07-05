@@ -121,6 +121,6 @@ else:
 # If all arguments are good, run the main script
 if RUN == True:
     # Run the script
-    main_script = './%s %s' %(script_path, ' '.join(arguments))
+    main_script = 'python3 %s %s' %(script_path, ' '.join(arguments))
     print(main_script)
     os.system(main_script)
