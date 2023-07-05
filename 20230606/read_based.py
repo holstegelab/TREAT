@@ -196,7 +196,7 @@ def extractSequences(bam, bed, window, cpu):
         # open bam file and iterate over reads
         with pysam.AlignmentFile(bam, 'rb', check_sq=False) as bamfile:
             for read in bamfile:
-                all_reads_info.append([read.reference_name, read.reference_start, read.reference_end, read.query_name, read.query_sequence, read.cigartuples, read.tags, read.is_supplementary, read.is_secondary])
+                all_reads_info.append([read.reference_name, int(read.reference_start), int(read.reference_end), read.query_name, read.query_sequence, read.cigartuples, read.tags, read.is_supplementary, read.is_secondary])
         bamfile.close()
         # then do multiprocessing
         pool = multiprocessing.Pool(processes=cpu)
