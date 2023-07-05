@@ -30,7 +30,7 @@ def haplotyping(r, s, thr_mad, data_nodup, type, dup_df, reference_motif_dic, in
     if r in intervals:
         print('****** done %s%% of the regions' %(intervals.index(r)*5+5), end = '\r')
     # data of interest
-    sbs = data_nodup[data_nodup['REGION'] == r]
+    sbs = data_nodup[data_nodup['REGION'] == r].copy()
     # exclude nas
     sbs = sbs.dropna(subset=['LEN_SEQUENCE_FOR_TRF'])
     # check if there are rows
@@ -47,7 +47,7 @@ def haplotyping(r, s, thr_mad, data_nodup, type, dup_df, reference_motif_dic, in
             final_sbs_h2 = sampleMotifs(r, all_sbs, reference_motif_dic, 2)
             final_sbs = pd.concat([final_sbs_h1, final_sbs_h2], axis=0)
             # prepare for file writing
-            tmp_vcf, tmp_seq = prepareOutputs(final_sbs, reference_motif_dic, r)
+            tmp_vcf, tmp_seq = prepareOutputs(final_sbs, reference_motif_dic, r, type, 'None')
             return tmp_vcf, tmp_seq
         elif type == 'reads':
             # check minimum support: minimum support is for alleles --> 2*min_support is the total minimum coverage required for autosomal regions. For sex-regions, we will use min_support directly
@@ -57,20 +57,119 @@ def haplotyping(r, s, thr_mad, data_nodup, type, dup_df, reference_motif_dic, in
             # check if there is minimum support
             if sbs.shape[0] >= minimum_coverage:
                 # identify haplotypes
-                phased_sbs = readBased_size(sbs, r)
-            return None
+                pol_sbs = readBased_size(sbs, r)
+                # add duplicates
+                all_sbs = addDups(pol_sbs, dup_df, s, r, type)
+                # finally look at the motif
+                final_sbs_h1, depth_h1 = sampleMotifs(r, all_sbs, reference_motif_dic, 0, type)
+                final_sbs_h2, depth_h2 = sampleMotifs(r, all_sbs, reference_motif_dic, 1, type)
+                final_sbs = pd.concat([final_sbs_h1, final_sbs_h2], axis=0)
+                # prepare for file writing
+                tmp_vcf, tmp_seq = prepareOutputs(final_sbs, reference_motif_dic, r, type, [depth_h1, depth_h2])
+                return tmp_vcf, tmp_seq
+            else:
+                tmp_vcf = [chrom, r.split(':')[1].split('-')[0], r, reference_motif_dic[r][1], '.', '.', 'LOW_COVERAGE', '%s;%s' %(reference_motif_dic[r][0], reference_motif_dic[r][2]), 'QC;GT;MOTIF;CN;CN_REF;DP', 'QC_ISSUE;NA|NA;NA|NA;NA|NA;NA|NA;%s|0' %(sbs.shape[0])]
+                tmp_seq = []
+                return tmp_vcf, tmp_seq
+    else:
+        chrom = r.split(':')[0]
+        tmp_vcf = [chrom, r.split(':')[1].split('-')[0], r, reference_motif_dic[r][1], '.', '.', 'LOW_COVERAGE', '%s;%s' %(reference_motif_dic[r][0], reference_motif_dic[r][2]), 'QC;GT;MOTIF;CN;CN_REF;DP', 'QC_ISSUE;NA|NA;NA|NA;NA|NA;NA|NA;%s|0' %(sbs.shape[0])]
+        tmp_seq = []
+        return tmp_vcf, tmp_seq
 
 # function to call haplotypes for reads
 def readBased_size(sbs, r):
     # get phasing information
     haplotag_list = [x for x in list(sbs['HAPLOTAG']) if not isinstance(x, float) or not math.isnan(x)]
     if len(haplotag_list) == 0:
-        haplo_center, haplo_confint, haplo_id = kmeans_haplotyping(sbs, min_support, thr_mad, chrom, r)
-        sbs['HAPLOTAG'] = haplo_id
-        sbs['POLISHED_HAPLO'] = haplo_center
-        sbs['HAPLO_CONFINT'] = haplo_confint
+        haplo_center, haplo_id, deleted = kmeans_haplotyping(sbs, min_support, thr_mad, chrom, r)
+        # check if there were excluded reads
+        if len(deleted) == 0:
+            #sbs['HAPLO_CONFINT'] = haplo_confint
+            sbs['HAPLOTAG'] = haplo_id
+            sbs['POLISHED_HAPLO'] = haplo_center
+        else:
+            deleted_rows = sbs[sbs['LEN_SEQUENCE_FOR_TRF'].isin(deleted)].copy()
+            deleted_rows['HAPLOTAG'] = 'NA'
+            deleted_rows['POLISHED_HAPLO'] = 'NA'
+            kept_rows = sbs[~sbs['LEN_SEQUENCE_FOR_TRF'].isin(deleted)].copy()
+            kept_rows['HAPLOTAG'] = haplo_id
+            kept_rows['POLISHED_HAPLOTAG'] = haplo_center
+            sbs = pd.concat([kept_rows, deleted_rows], axis=0)
+        return sbs
     else:
         print('!! haplotags found at %s' %(r))
+
+# function to check deviations within each haplotype
+def checkDeviation(read_lengths):
+    # calculate median and thr_mad % value of the median
+    median_value = statistics.median(read_lengths)
+    median_value_boundary = median_value*thr_mad
+    # and distances from median
+    median_distances = [abs(x - median_value) for x in read_lengths]
+    return median_value_boundary, median_distances
+
+# function to find median and confint for homozygous calls
+def findHaplo_homozygous(read_lengths, deleted, thr_mad):
+    # find haplotypes
+    centers_kmeans = [statistics.median(read_lengths) for x in range(len(read_lengths))]
+    # if there are deleted reads, then try to recover them
+    if len(deleted) >0:
+        median_value = list(set(centers_kmeans))[0]
+        keep = [x for x in deleted if abs(x - median_value) < median_value*thr_mad]
+        # if there are reads to keep, add them and recalculate
+        if len(keep) >0:
+            read_lengths = read_lengths + keep
+            deleted = [x for x in deleted if x not in keep]
+            centers_kmeans = [statistics.median(read_lengths) for x in range(len(read_lengths))]
+    # find confidence intervals
+    centers_confint = ['_'.join([str(element) for element in list(stats.t.interval(0.95, len(read_lengths)-1, statistics.mean(read_lengths), statistics.stdev(read_lengths)/len(read_lengths)**0.5))]) for x in range(len(read_lengths))]
+    # find haplotype assignment
+    haplo_list = [1 for x in range(len(read_lengths))]
+    return centers_kmeans, centers_confint, haplo_list, deleted
+
+# function to find median and confint for heterozygous calls
+def findHaplo_hetero(read_lengths, haplo_list, centers_kmeans):
+    # find haplotypes
+    centers = [centers_kmeans[x] for x in haplo_list]
+    # confidence intervals
+    reads_h1 = [read_lengths[i] for i, x in enumerate(haplo_list) if x == 0]
+    reads_h2 = [read_lengths[i] for i, x in enumerate(haplo_list) if x == 1]
+    #confint_h1 =  list(stats.t.interval(0.95, len(reads_h1)-1, statistics.mean(reads_h1), statistics.stdev(reads_h1)/len(reads_h1)**0.5))
+    #confint_h2 =  list(stats.t.interval(0.95, len(reads_h2)-1, statistics.mean(reads_h2), statistics.stdev(reads_h2)/len(reads_h2)**0.5))
+    return centers, haplo_list
+
+# function to do kmeans and give centers and haplotype lists
+def kmeans(read_lengths):
+    # do kmeans with the ploidy as the number of clusters
+    my_array = np.array(read_lengths).reshape(-1, 1)
+    # perform k-means clustering with 2 clusters
+    kmeans = KMeans(n_clusters=ploidy).fit(my_array)
+    centers_kmeans = [center for sublist in kmeans.cluster_centers_.tolist() for center in sublist]
+    haplo_list = kmeans.labels_.tolist()
+    return centers_kmeans, haplo_list
+
+# function to check whether there's support for haplotypes
+def checkSupport(read_lengths, haplo_list, min_support):
+    haplo_check = []
+    for haplo in list(set(haplo_list)):
+        indexes = [i for i in range(len(haplo_list)) if haplo_list[i] == haplo]
+        if len(indexes) >= min_support:
+            haplo_check.append('ok')
+        else:
+            haplo_check.append('delete')
+    # check if both haplotypes were ok
+    if 'delete' in haplo_check:
+        index_delete = haplo_check.index('delete')
+        # get index of the relative reads
+        index_delete_reads = [i for i in range(len(haplo_list)) if haplo_list[i] == index_delete]
+        # update reads
+        deleted = [x for i, x in enumerate(read_lengths) if i in index_delete_reads]
+        read_lengths = [x for i, x in enumerate(read_lengths) if i not in index_delete_reads]
+    else:
+        deleted = []
+    loop = True if len(deleted) >0 else False
+    return read_lengths, deleted, loop
 
 # function to fit kmeans for finding haplotypes
 def kmeans_haplotyping(sbs, min_support, thr_mad, chrom, r):
@@ -80,48 +179,36 @@ def kmeans_haplotyping(sbs, min_support, thr_mad, chrom, r):
     ploidy = 1 if chrom in ['chrY', 'Y'] else 2
     # define variables to control the loop
     loop = True
+    deleted = []
     # main loop
     while loop == True:
         # check if we have minimum support in terms of coverage
         if len(read_lengths) >= min_support:
             # check if we have a homozygous call (reads are similar in size)
-            # calculate median and thr_mad % value of the median
-            median_value = statistics.median(read_lengths)
-            median_value_boundary = median_value*thr_mad
-            # and distances from median
-            median_distances = [abs(x - median_value) for x in read_lengths]
-            # check if the most distant element is more different than the defined boundary
-            if max(median_distances) < median_value_boundary:
-                # then it's homozygous call
-                centers_kmeans = [median_value for x in range(len(read_lengths))]
-                centers_confint = ['_'.join([str(element) for element in list(stats.t.interval(0.95, len(read_lengths)-1, statistics.mean(read_lengths), statistics.stdev(read_lengths)/len(read_lengths)**0.5))]) for x in range(len(read_lengths))]
-                haplo_list = [1 for x in range(len(read_lengths))]
+            median_value_boundary, median_distances = checkDeviation(read_lengths)
+            # decide whether it's homozygous or heterozygous
+            call = 'homo' if (max(median_distances) < median_value_boundary or ploidy == 1) else 'hetero'
+            if call == 'homo':
+                # homozygous, we're done
+                centers_kmeans, centers_confint, haplo_list, deleted = findHaplo_homozygous(read_lengths, deleted, thr_mad)
+                loop = False
             else:
-                # do kmeans with the ploidy as the number of clusters
-                my_array = np.array(read_lengths).reshape(-1, 1)
-                # perform k-means clustering with 2 clusters
-                kmeans = KMeans(n_clusters=ploidy, min_samples=min_support).fit(my_array)
-                centers_kmeans = [center for sublist in kmeans.cluster_centers_.tolist() for center in sublist]
-                haplo_list = kmeans.labels_.tolist()
-                # then check within each cluster for minimum support and deviation from median value
-                for haplo in list(set(haplo_list)):
-                    indexes = [i for i in range(len(haplo_list)) if haplo_list[i] == haplo]
-                    if len(haplo_count >= min_support):
-                        # get the reads, median, boundaries and distances
-                        reads_haplo = [read_lengths[i] for i in indexes]
-                        median_value = statistics.median(reads_haplo)
-                        median_value_boundary = median_value*thr_mad
-                        median_distances = [abs(x - median_value) for x in reads_haplo]
-                        if (max(median_distances) < median_value_boundary):
-                            # 
-
+                # heterozygous, do kmeans
+                centers_kmeans, haplo_list = kmeans(read_lengths)
+            # now we need to check the support for the haplotypes (if not homozygous)
+            if loop == True:
+                read_lengths, deleted, loop = checkSupport(read_lengths, haplo_list, min_support)
+                # if no loop is required, find haplotype stats
+                if loop == False:
+                    centers_kmeans, haplo_list = findHaplo_hetero(read_lengths, haplo_list, centers_kmeans)
+                    centers_confint = []
         else:
-            centers_kmeans = []; centers_confint = []; haplo_list = []
+            centers_kmeans = []; centers_confint = []; haplo_list = []; deleted = []
             loop = False
-    return centers_kmeans, centers_confint, haplo_list
+    return centers_kmeans, haplo_list, deleted
 
 # function to make data for vcf writing
-def prepareOutputs(final_sbs, reference_motif_dic, r):
+def prepareOutputs(final_sbs, reference_motif_dic, r, type, depths):
     # prepare data for VCF
     chrom, start, end = [r.split(':')[0]] + r.split(':')[-1].split('-')
     ref_motif, ref_len, ref_copies = reference_motif_dic[r]
@@ -131,11 +218,18 @@ def prepareOutputs(final_sbs, reference_motif_dic, r):
     sam_mot = '|'.join(list(final_sbs['CONSENSUS_MOTIF'].map(str))) if final_sbs.shape[0] >1 else list(final_sbs["CONSENSUS_MOTIF"].map(str).apply(lambda x: x + "|" + x))[0]
     sam_cop = '|'.join(list(final_sbs['CONSENSUS_MOTIF_COPIES'].map(str))) if final_sbs.shape[0] >1 else list(final_sbs["CONSENSUS_MOTIF_COPIES"].map(str).apply(lambda x: x + "|" + x))[0]
     sam_cop_ref = '|'.join(list(final_sbs['REFERENCE_MOTIF_COPIES'].map(str))) if final_sbs.shape[0] >1 else list(final_sbs["REFERENCE_MOTIF_COPIES"].map(str).apply(lambda x: x + "|" + x))[0]
-    sam_depth = '|'.join(list(final_sbs["READ_NAME"].str.split("_").str[1])) if final_sbs.shape[0] >1 else list(final_sbs["READ_NAME"].str.split("_").str[1].apply(lambda x: x + "|" + x))[0]
+    if type == 'reads':
+        sam_depth = '|'.join([str(x) for x in depths])
+    else:
+        sam_depth = '|'.join(list(final_sbs["READ_NAME"].str.split("_").str[1])) if final_sbs.shape[0] >1 else list(final_sbs["READ_NAME"].str.split("_").str[1].apply(lambda x: x + "|" + x))[0]
     sample_field = '%s;%s;%s;%s;%s;%s' %('PASS_ASM', sam_gt, sam_mot, sam_cop, sam_cop_ref, sam_depth)
     res_vcf = [chrom, start, r, ref_len, '.', '.', 'PASS', info_field, format_field, sample_field]
     # then prepare the sequence output
-    final_sbs['DEPTH'] = final_sbs["READ_NAME"].str.split("_").str[1]
+    if type == 'reads':
+        final_sbs['DEPTH'] = [x for x in depths if x != 0]
+        final_sbs['type'] = type
+    else:
+        final_sbs['DEPTH'] = final_sbs["READ_NAME"].str.split("_").str[1]
     final_sbs['MOTIF_REF'] = ref_motif
     keep_cols = ['READ_NAME', 'HAPLOTAG', 'REGION', 'PASSES', 'READ_QUALITY', 'LEN_SEQUENCE_FOR_TRF', 'START_TRF', 'END_TRF', 'type', 'SAMPLE_NAME', 'POLISHED_HAPLO', 'DEPTH', 'CONSENSUS_MOTIF', 'CONSENSUS_MOTIF_COPIES', 'MOTIF_REF', 'REFERENCE_MOTIF_COPIES', 'SEQUENCE_WITH_PADDINGS', 'SEQUENCE_FOR_TRF']
     # subset dataframe to keep only selected columns
@@ -173,14 +267,15 @@ def polishHaplo_asm(phased_sbs, r):
     return pol_sbs
 
 # function to add duplicates back
-def addDups(pol_sbs, dup_df, s, r):
+def addDups(pol_sbs, dup_df, s, r, type):
+    pol_sbs['type'] = type
     # subset of the duplicates of that sample and that region
     sbs_dups = dup_df[(dup_df['SAMPLE_NAME'] == s) & (dup_df['REGION'] == r)].copy()
     if sbs_dups.shape[0] >0:
         n_haplo = len(list(pol_sbs['HAPLOTAG'].dropna().unique()))
         if n_haplo == 1:
             sbs_dups['HAPLOTAG'] = list(pol_sbs['HAPLOTAG'].dropna().unique())[0]
-            sbs_dups['type'] = 'assembly'
+            sbs_dups['type'] = type
             sbs_dups['POLISHED_HAPLO'] = list(pol_sbs['POLISHED_HAPLO'].dropna().unique())[0]
             return pd.concat([pol_sbs, sbs_dups], axis=0)
         else:
@@ -191,7 +286,7 @@ def addDups(pol_sbs, dup_df, s, r):
             for x in target:
                 tmp_haplo, tmp_size = assignHaplotag_asm(h1_size, h2_size, x)
                 haplo.append(tmp_haplo); size.append(tmp_size)
-            sbs_dups['type'] = 'assembly'
+            sbs_dups['type'] = type
             sbs_dups['POLISHED_HAPLO'] = [float(x) for x in size]
             sbs_dups['HAPLOTAG'] = [float(x) for x in haplo]
             combined = pd.concat([pol_sbs, sbs_dups], axis=0)
@@ -242,10 +337,10 @@ def motif_generalization(haplo_data, r):
     elif high_coverage.shape[0] >1:
         high_coverage['MOTIF_SCORE'] = high_coverage['COVERAGE_TR'] * high_coverage['TRF_SCORE']
         high_coverage = high_coverage.sort_values('MOTIF_SCORE', ascending=False)
-        best_motif = high_coverage['UNIFORM_MOTIF'].iloc[[0]]
-        copies = high_coverage['COPIES_TRF'].iloc[[0]]
-        start = high_coverage['START_TRF'].iloc[[0]]
-        end = high_coverage['END_TRF'].iloc[[0]]
+        best_motif = high_coverage['UNIFORM_MOTIF'].iloc[0]
+        copies = high_coverage['COPIES_TRF'].iloc[0]
+        start = high_coverage['START_TRF'].iloc[0]
+        end = high_coverage['END_TRF'].iloc[0]
     else:
         best_motif, copies, indexes = combineMotifs(haplo_data, r)
         start, end = indexes[0], indexes[-1]
@@ -267,35 +362,38 @@ def combineMotifs(haplo_data, r):
     best_motif_index = range(int(haplo_data['START_TRF'].iloc[0]), int(haplo_data['END_TRF'].iloc[0]))
     # loop on the other motifs
     for i in range(1, haplo_data.shape[0]):
-        # take corresponding motif and range
-        tmp_motif = haplo_data['UNIFORM_MOTIF'].iloc[i]
-        tmp_motif_copies = haplo_data['COPIES_TRF'].iloc[i]
-        tmp_motif_index = range(int(haplo_data['START_TRF'].iloc[i]), int(haplo_data['END_TRF'].iloc[i]))
-        # find the length of the intersection
-        intersection_length = max(0, min(best_motif_index.stop, tmp_motif_index.stop) - max(best_motif_index.start, tmp_motif_index.start))
-        # calculate the percentage of overlap
-        fraction_overlap = intersection_length / len(tmp_motif_index)
-        # if the fraction is below 90%, then we should combine the motifs
-        if fraction_overlap < 0.90:
-            # update best_motif and index: this is a combination of the two motifs
-            if best_motif == tmp_motif:
-                # here the simple case: motif is the same
-                best_motif_index = range(min(best_motif_index.start, tmp_motif_index.start), max(best_motif_index.stop, tmp_motif_index.stop))
-                best_motif_copies = len(list(best_motif_index))/len(best_motif)
+        try:
+            # take corresponding motif and range
+            tmp_motif = haplo_data['UNIFORM_MOTIF'].iloc[i]
+            tmp_motif_copies = haplo_data['COPIES_TRF'].iloc[i]
+            tmp_motif_index = range(int(haplo_data['START_TRF'].iloc[i]), int(haplo_data['END_TRF'].iloc[i]))
+            # find the length of the intersection
+            intersection_length = max(0, min(best_motif_index.stop, tmp_motif_index.stop) - max(best_motif_index.start, tmp_motif_index.start))
+            # calculate the percentage of overlap
+            fraction_overlap = intersection_length / len(tmp_motif_index)
+            # if the fraction is below 90%, then we should combine the motifs
+            if fraction_overlap < 0.90:
+                # update best_motif and index: this is a combination of the two motifs
+                if best_motif == tmp_motif:
+                    # here the simple case: motif is the same
+                    best_motif_index = range(min(best_motif_index.start, tmp_motif_index.start), max(best_motif_index.stop, tmp_motif_index.stop))
+                    best_motif_copies = len(list(best_motif_index))/len(best_motif)
+                else:
+                    # here the more tricky case: motifs are different
+                    not_in_best = [x for x in tmp_motif_index if x not in best_motif_index]
+                    # find list of consecutive numbers
+                    consecutive_seq = is_consecutive(not_in_best)
+                    # iterate over each subsequence: if a motif can be fit, add it, otherwise skip
+                    for subs in consecutive_seq:
+                        if len(subs) > len(tmp_motif):
+                            sub_copies = len(subs)/len(tmp_motif)
+                            best_motif = '%s+%s' %(best_motif, tmp_motif)
+                            best_motif_copies = '%s+%s' %(best_motif_copies, sub_copies)
+                            best_motif_index = range(min(best_motif_index.start, subs[0]), max(best_motif_index.stop, subs[-1]))
             else:
-                # here the more tricky case: motifs are different
-                not_in_best = [x for x in tmp_motif_index if x not in best_motif_index]
-                # find list of consecutive numbers
-                consecutive_seq = is_consecutive(not_in_best)
-                # iterate over each subsequence: if a motif can be fit, add it, otherwise skip
-                for subs in consecutive_seq:
-                    if len(subs) > len(tmp_motif):
-                        sub_copies = len(subs)/len(tmp_motif)
-                        best_motif = '%s+%s' %(best_motif, tmp_motif)
-                        best_motif_copies = '%s+%s' %(best_motif_copies, sub_copies)
-                        best_motif_index = range(min(best_motif_index.start, subs[0]), max(best_motif_index.stop, subs[-1]))
-        else:
-            best_motif_index = best_motif_index
+                best_motif_index = best_motif_index
+        except:
+            pass
     return best_motif, best_motif_copies, best_motif_index
 
 # function to find sequences of consecutive integers
@@ -314,9 +412,10 @@ def is_consecutive(numbers):
     return sequences
 
 # function to look at the motif of the samples
-def sampleMotifs(r, all_sbs, reference_motif_dic, haplo):
+def sampleMotifs(r, all_sbs, reference_motif_dic, haplo, type):
     # subset of data
     haplo_data = all_sbs[all_sbs['HAPLOTAG'] == haplo].copy()
+    haplo_depth = len(set(list(haplo_data['UNIQUE_NAME'])))
     # if there's only 1 motif, we are done
     if haplo_data.shape[0] == 1:
         haplo_data['CONSENSUS_MOTIF'] = haplo_data['UNIFORM_MOTIF']
@@ -334,7 +433,10 @@ def sampleMotifs(r, all_sbs, reference_motif_dic, haplo):
             haplo_data['REFERENCE_MOTIF_COPIES'] = 'nan'
     except:
         haplo_data['REFERENCE_MOTIF_COPIES'] = 'nan'
-    return haplo_data
+    if type == 'reads':
+        return haplo_data, haplo_depth
+    else:
+        return haplo_data
 
 # function to prepare intervals
 def prepareIntervals(all_regions):
@@ -413,11 +515,15 @@ if type in ['reads', 'assembly']:
     intervals = prepareIntervals(all_regions)
     sample_res = []
     for s in all_samples:
-        print('**** %s' %(s))
+        print('**** %s                      ' %(s))
         sbs = data_nodup[(data_nodup['SAMPLE_NAME'] == s)]
         sbs_dups = dup_df[(dup_df['SAMPLE_NAME'] == s)]
+        for r in all_regions:
+            haplo_results = haplotyping(r, s, thr_mad, sbs, type, sbs_dups, reference_motif_dic, intervals, min_support)
+            sample_res.append(haplo_results)
+
         pool = multiprocessing.Pool(processes=n_cpu)
-        haplo_fun = partial(haplotyping, s = s, thr_mad = thr_mad, data_nodup = sbs, type = type, dup_df = sbs_dups, reference_motif_dic = reference_motif_dic, intervals = intervals, min_support = )
+        haplo_fun = partial(haplotyping, s = s, thr_mad = thr_mad, data_nodup = sbs, type = type, dup_df = sbs_dups, reference_motif_dic = reference_motif_dic, intervals = intervals, min_support = 5)
         haplo_results = pool.map(haplo_fun, all_regions)
         sample_res.append(haplo_results)
 
