@@ -12,7 +12,7 @@ parser = argparse.ArgumentParser(description='TREAT: Tandem REpeat Haplotyping T
 parser.add_argument('run_type', help='Type of run', choices=['reads', 'assembly'])
 
 # Create subparsers for each run type
-subparsers = parse.add_subparsers(title='subcommands_reads')
+subparsers = parser.add_subparsers(title='subcommands_reads')
 
 # Define the subparser for reads analysis
 parser_type1 = subparsers.add_parser('reads', help='Reads analysis: help')
