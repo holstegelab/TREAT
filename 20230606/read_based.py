@@ -30,7 +30,7 @@ def readBed(bed_dir):
     return bed
 
 # Check directory
-def checkOutDir(out_dir, analysis_type):
+def checkOutDir(out_dir):
     if out_dir[-1] == '/':
         out_dir = out_dir[:-1]
     if os.path.isdir(out_dir) == False:
