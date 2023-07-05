@@ -9,5 +9,5 @@ import sys
 
 # Main
 # Read arguments
-inBam, bed, outDir, ref, window, cpu, phasingData, mappingSNP, HaploDev, minimumSupport, minimumCoverage = sys.argv
+inBam, bed, outDir, ref, window, cpu, phasingData, mappingSNP, HaploDev, minimumSupport, minimumCoverage = sys.argv[1::]
 print(inBam, bed, outDir)
