@@ -15,7 +15,7 @@ parser.add_argument('run_type', help='Type of run', choices=['reads', 'assembly'
 subparsers = parser.add_subparsers(title='subcommands_reads')
 
 # Define the subparser for reads analysis
-parser_type1 = subparsers.add_parser('reads', help='Reads analysis: help')
+parser_type1 = subparsers.add_parser('reads', help='Read-based analysis')
 # required arguments
 # bed file
 parser_type1.add_argument('-b', '--bed', required=True, help='BED file with the regions(s) to look at. Header is not required but if present, it must start with #.')
@@ -42,14 +42,14 @@ parser_type1.add_argument('-minSup', '--minimumSupport', type = int, help = 'Dur
 parser_type1.add_argument('-minCov', '--minimumCoverage', type = int, help = 'During haplotying, minimum number of total reads necessary for calling.', required = False, default = 5)
 
 # Define the subparser for assembly analysis
-parser_type2 = subparsers.add_parser('assembly', help='Assembly analysis: help')
+parser_type2 = subparsers.add_parser('assembly', help='Assembly-based analysis')
 # required arguments
 # bed file
 parser_type2.add_argument('-b', '--bed', required=True, help='BED file with the regions(s) to look at. Header is not required but if present, it must start with #.')
 # input bam file(s)
 parser_type2.add_argument('-i', '--inBam', required=True, help='BAM file to be used as input. A directory can be provided, in which case all BAM files in the directory will be used.')
 # output directory
-parser_type2.add_argument('-o', '--outDir', help='Output directory where to place outputs. If the directory exists, will add files there, otherwise the directory will be created.')
+parser_type2.add_argument('-o', '--outDir', required=True, help='Output directory where to place outputs. If the directory exists, will add files there, otherwise the directory will be created.')
 # reference genome
 parser_type2.add_argument('-r', '--ref', required=True, help='Path to reference genome data in FASTA format. Reference needs to be indexed.')
 # optional arguments
