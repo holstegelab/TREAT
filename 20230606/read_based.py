@@ -322,8 +322,10 @@ def run_trf(fasta, distances, type):
     return complete_df
 
 # Main
-# Read arguments
+# Read arguments and make small changes
 inBam_dir, bed_dir, outDir, ref, window, cpu, phasingData, mappingSNP, HaploDev, minimumSupport, minimumCoverage = sys.argv[1::]
+window = int(window); cpu = int(cpu)
+
 
 # Start analysis
 print('** Analysis started')
