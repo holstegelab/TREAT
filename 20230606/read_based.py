@@ -9,6 +9,7 @@ import pysam
 from functools import partial
 import multiprocessing
 import pandas as pd
+import time
 
 # Functions
 # Read bed file
