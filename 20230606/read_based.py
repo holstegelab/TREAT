@@ -29,12 +29,44 @@ def readBed(bed_dir):
     print('**** Found %s regions in %s chromosomes' %(count_reg, len(bed)))
     return bed
 
+# Check directory
+def checkOutDir(out_dir, analysis_type):
+    if out_dir[-1] == '/':
+        out_dir = out_dir[:-1]
+    if os.path.isdir(out_dir) == False:
+        os.system('mkdir %s' %(out_dir))
+        return("**** output directory not found, will create.")
+    else:
+        return("**** output directory found, will add outputs there.")
+
+# Check bam file(s)
+def checkBAM(bam_dir):
+    if bam_dir[-1] == '/':
+        bam_dir = bam_dir[:-1]
+    if os.path.isdir(bam_dir) == True:              # in case a directory was submitted
+        all_bams = [x.rstrip()for x in list(os.popen('ls %s/*bam' %(bam_dir)))]
+        print("**** found directory with %s bam" %(len(all_bams)))
+    elif os.path.isfile(bam_dir) == True:           # in case is a single bam file
+        print("**** found single bam")
+        all_bams = [bam_dir]
+    elif ',' in bam_dir:                            # in case there is a comma-separated list of bams
+        all_bams = bam_dir.split(',')
+        print("**** found %s bam" %(len(all_bams)))
+    return all_bams
+
 # Main
 # Read arguments
-inBam, bed_dir, outDir, ref, window, cpu, phasingData, mappingSNP, HaploDev, minimumSupport, minimumCoverage = sys.argv[1::]
+inBam_dir, bed_dir, outDir, ref, window, cpu, phasingData, mappingSNP, HaploDev, minimumSupport, minimumCoverage = sys.argv[1::]
 
 # Start analysis
 print('** Analysis started')
-# Read bed file
+
+# 1. Check output directory
+print(checkOutDir(outDir))
+
+# 2. Read bed file
 bed = readBed(bed_dir)
+
+# 3. Check BAM files
+inBam = checkBAM(inBam_dir)
 
