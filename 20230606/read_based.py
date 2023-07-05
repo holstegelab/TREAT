@@ -4,6 +4,7 @@
 
 # Libraries
 import sys
+import os
 
 # Functions
 # Read bed file
