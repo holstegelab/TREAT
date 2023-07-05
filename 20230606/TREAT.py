@@ -120,7 +120,11 @@ else:
 
 # If all arguments are good, run the main script
 if RUN == True:
+    # Take main path
+    main_path = os.path.realpath(__file__)
+    main_path = '/'.join(main_path.split('/')[:-1])
+
     # Run the script
-    main_script = 'python3 %s %s' %(script_path, ' '.join(arguments))
-    print(main_script)
+    main_script = 'python3 %s/%s %s' %(main_path, script_path, ' '.join(arguments))
+    print(main_script, '\n')
     os.system(main_script)
