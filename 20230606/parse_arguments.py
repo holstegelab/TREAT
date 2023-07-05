@@ -77,7 +77,6 @@ args = parser.parse_args()
 print(f"Run type: {args.run_type}")
 
 if args.run_type == 'reads':
-    print('Reads analysis selected:')
     print('Required argument:')
     print(f"\tInput BAM file(s): {args.inBam}")
     print(f"\tInput BED file: {args.bed}")
@@ -92,7 +91,6 @@ if args.run_type == 'reads':
     print(f"\tMinimum supporting reads: {args.minimumSupport}")
     print(f"\tMinimum coverage: {args.minimumCoverage}")
 elif args.run_type == 'assembly':
-    print('Assembly analysis selected:')
     print('Required argument:')
     print(f"\tInput BAM file(s): {args.inBam}")
     print(f"\tInput BED file: {args.bed}")
