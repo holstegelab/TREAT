@@ -372,7 +372,7 @@ print('**** Operation took %s seconds                                 ' %(round(
 # 4. Phasing and haplotagging
 ts = time.time()
 # 4.1 Check whether we need to do this
-if phasingData == 'False':
+if phasingData == 'None':
     print('**** Phasing NOT selected (not specified any SNP data)')
     combined_haplotags_df = pd.DataFrame(columns=['READ_NAME', 'HAPLOTAG'])
 else:
