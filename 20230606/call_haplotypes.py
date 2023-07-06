@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 # libraries
+print('**** Loading libraries')
 import pandas as pd
 import sys
 from Bio.Seq import reverse_complement
@@ -30,7 +31,6 @@ def permutMotif(motif):
 
 # function to guide haplotyping
 def haplotyping(r, s, thr_mad, data_nodup, type, dup_df, reference_motif_dic, intervals, min_support):
-    print(r)
     if r in intervals:
         print('****** done %s%% of the regions' %(intervals.index(r)*5+5), end = '\r')
     # data of interest
@@ -481,7 +481,7 @@ outd = sys.argv[2]
 n_cpu = int(sys.argv[3])
 thr_mad = float(sys.argv[4])
 type = sys.argv[5]
-min_support = sys.argv[6]
+min_support = int(sys.argv[6])
 
 # 2. read data
 print('** Read data')

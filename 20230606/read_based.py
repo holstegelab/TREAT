@@ -3,6 +3,7 @@
 # This script manages the read-based analysis
 
 # Libraries
+print('**** Loading libraries')
 import sys
 import os
 import pysam
@@ -408,6 +409,8 @@ print('**** Operation took %s seconds                                 ' %(round(
 ts = time.time()
 file_path = os.path.realpath(__file__)
 file_path = '/'.join(file_path.split('/')[:-1])
+main_script = '%s/call_haplotypes.py %s/spanning_reads_trf_phasing.txt %s %s %s %s %s ' %(file_path, outDir, outDir, cpu, HaploDev, 'reads', minimumSupport)
+print(main_script, '\n')
 os.system('%s/call_haplotypes.py %s/spanning_reads_trf_phasing.txt %s %s %s %s %s ' %(file_path, outDir, outDir, cpu, HaploDev, 'reads', minimumSupport))
 te = time.time()
 time_write = te-ts
