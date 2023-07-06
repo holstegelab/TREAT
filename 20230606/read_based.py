@@ -318,7 +318,6 @@ def run_trf(fasta, distances, type):
     distances_sample_df['SAMPLE_NAME'] = sample_interest
     # merge trf dataframe and reads dataframes
     complete_df = pd.merge(distances_sample_df, df, left_on = 'ID', right_on = 'ID', how = 'outer')
-    print("**** done with %s                               " %(sample_interest), end = '\r')
     return complete_df
 
 # Main
@@ -326,12 +325,9 @@ def run_trf(fasta, distances, type):
 inBam_dir, bed_dir, outDir, ref, window, cpu, phasingData, mappingSNP, HaploDev, minimumSupport, minimumCoverage = sys.argv[1::]
 window = int(window); cpu = int(cpu)
 
-
-# Start analysis
-print('** Analysis started')
-
 # 1. Check arguments: BED, output directory and BAMs
 print('** Analysis started')
+ts_total = time.time()
 # 1.1 Check output directory
 print(checkOutDir(outDir))
 # 1.2 Read bed file
@@ -407,3 +403,15 @@ print('**** Data combined and outputs are ready')
 te = time.time()
 time_write = te-ts
 print('**** Operation took %s seconds                                 ' %(round(time_write, 0)))
+
+# 6. Haplotyping
+ts = time.time()
+file_path = os.path.realpath(__file__)
+file_path = '/'.join(file_path.split('/')[:-1])
+os.system('%s/call_haplotypes.py %s/spanning_reads_trf_phasing.txt %s %s %s %s %s ' %(file_path, outDir, outDir, cpu, HaploDev, 'reads', minimumSupport))
+te = time.time()
+time_write = te-ts
+print('**** Operation took %s seconds                                 ' %(round(time_write, 0)))
+te_total = time.time()
+time_total = te_total - ts_total
+print('\n** Analysis completed in %s seconds. Ciao!                   ' %(round(time_total, 0)))
