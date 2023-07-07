@@ -118,7 +118,7 @@ elif args.cmd == 'assembly':
     # set flag to true
     RUN = True
     # define script to run and arguments
-    script_path = 'assembly.py'
+    script_path = 'assembly_based.py'
     arguments = [args.inBam, args.bed, args.outDir, args.ref, str(args.window), str(args.windowAssembly), str(args.cpu), str(args.ploidy), args.software, str(args.HaploDev), str(args.minimumSupport), str(args.minimumCoverage)]
 else:
     print('!! Invalid run_type. Quitting.')
