@@ -396,7 +396,7 @@ print('**** Operation took %s seconds                                 ' %(round(
 # 5. Output
 ts = time.time()
 # 5.2 Output file for haplotyping
-outf = '%s/spanning_reads_trf_phasing.txt' %(outDir)
+outf = '%s/spanning_reads_trf_phasing.txt.gz' %(outDir)
 df_trf_phasing_combined.to_csv(outf, sep = "\t", index=False, na_rep='NA', compression='gzip')
 print('**** Data combined and outputs are ready')
 te = time.time()
