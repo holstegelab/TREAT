@@ -313,6 +313,15 @@ def run_trf(index, all_fasta, distances, type):
     complete_df = pd.merge(df_seqs, df, left_on = 'ID', right_on = 'ID', how = 'outer')
     return complete_df
 
+# Function to remove temporary files
+def removeTemp(outDir):
+    # list all files
+    all_files = [x.rstrip() for x in list(os.popen('ls %s' %(outDir)))]
+    all_files = ['%s/%s' %(outDir, x) for x in all_files if 'gz' not in x]
+    # and remove them
+    for x in all_files:
+        os.remove(x)
+
 # Main
 # Read arguments and make small changes
 inBam_dir, bed_dir, outDir, ref, window, cpu, phasingData, mappingSNP, HaploDev, minimumSupport, minimumCoverage = sys.argv[1::]
@@ -404,6 +413,7 @@ time_write = te-ts
 print('**** Operation took %s seconds                                 ' %(round(time_write, 0)))
 
 # 6. Haplotyping
+# 6.1 Run python script
 ts = time.time()
 file_path = os.path.realpath(__file__)
 file_path = '/'.join(file_path.split('/')[:-1])
@@ -415,4 +425,6 @@ time_write = te-ts
 print('**** Operation took %s seconds                                 ' %(round(time_write, 0)))
 te_total = time.time()
 time_total = te_total - ts_total
+# 6.2 Removing temporary files
+removeTemp(temp_bams, temp_bams)
 print('\n** Analysis completed in %s seconds. Ciao!                   ' %(round(time_total, 0)))
