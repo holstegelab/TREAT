@@ -493,7 +493,7 @@ all_motifs = data['TRF_MOTIF'].dropna().unique()
 main_motifs = [permutMotif(motif) for motif in all_motifs]
 motifs_df = pd.DataFrame({'motif' : all_motifs, 'UNIFORM_MOTIF' : main_motifs})
 data = pd.merge(data, motifs_df, left_on='TRF_MOTIF', right_on='motif', how='left')
-data['UNIQUE_NAME'] = data.apply(lambda row: row['READ_NAME'] + '___' + row['SAMPLE_NAME'] + '___' + row['REGION'] + '___' + str(row['LEN_SEQUENCE_FOR_TRF']), axis = 1)
+data['UNIQUE_NAME'] = data.apply(lambda row: str(row['READ_NAME']) + '___' + str(row['SAMPLE_NAME']) + '___' + str(row['REGION']) + '___' + str(row['LEN_SEQUENCE_FOR_TRF']), axis = 1)
 
 # 4. extract the reference and work on the motifs
 print('** Reference motifs                                     ')
