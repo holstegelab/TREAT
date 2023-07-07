@@ -273,4 +273,4 @@ if software == 'otter':
     time_total = te_total - ts_total
     print('\n** Analysis completed in %s seconds. Ciao!                   ' %(round(time_total, 0)))
 else:
-    break
+    print('!! Selected hifiasm but not implemented !! Quitting.')

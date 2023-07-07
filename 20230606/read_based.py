@@ -379,6 +379,7 @@ if phasingData == 'None':
     print('**** Phasing NOT selected (not specified any SNP data)')
     combined_haplotags_df = pd.DataFrame(columns=['READ_NAME', 'HAPLOTAG'])
 else:
+    print('!! Selected hifiasm but not implemented !! Quitting.')
     # check this
     print('**** Phasing and haplotagging')
     os.system('mkdir %s/phasing' %(output_directory))
