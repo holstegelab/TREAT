@@ -485,7 +485,7 @@ min_support = int(sys.argv[6])
 
 # 2. read data
 print('** Read data')
-data = pd.read_csv(inpf, sep='\t')
+data = pd.read_csv(inpf, sep='\t', compression='gzip')
 
 # 3. adjust the motif -- merge the same motifs
 print('** Adjust motifs')
