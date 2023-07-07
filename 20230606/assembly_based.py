@@ -231,6 +231,8 @@ def removeTemp(outDir):
     # list all files
     all_files = [x.rstrip() for x in list(os.popen('ls %s' %(outDir)))]
     all_files = ['%s/%s' %(outDir, x) for x in all_files if 'gz' not in x]
+    all_files = [x for x in all_files if 'otter_local_asm' not in x]
+    all_files = [x for x in all_files if 'trf_reads' not in x]
     # and remove them
     for x in all_files:
         os.remove(x)
