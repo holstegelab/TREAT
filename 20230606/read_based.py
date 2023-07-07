@@ -66,12 +66,12 @@ def checkBAM(bam_dir):
 def samtoolsExtract(x, bam, out_dir, temp_name):
     # combine temporary name with the splitted bed name
     bed_ext = x.split('_bed.')[-1]
-    temp_name = bed_ext + '.' + temp_name
+    temp_name = '%s/%s.%s' %(out_dir, bed_ext, temp_name)
     # define command for the extraction
-    cmd = 'samtools view -M -b -L %s %s > %s/%s' %(x, bam, out_dir, temp_name)
+    cmd = 'samtools view -M -b -L %s %s > %s' %(x, bam, temp_name)
     os.system(cmd)
     # and index
-    cmd = 'samtools index %s/%s' %(out_dir, temp_name)
+    cmd = 'samtools index %s' %(temp_name)
     os.system(cmd)
     return temp_name
 
