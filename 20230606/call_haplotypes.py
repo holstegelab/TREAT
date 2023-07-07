@@ -476,7 +476,6 @@ def writeOutputs(df_vcf, df_seq, seq_file, vcf_file):
         df_vcf.to_csv(file, header=True, index=False, sep='\t')
     # then compress it
     os.system('gzip %s' %(vcf_file))
-    os.system('rm %s' %(vcf_file))
     # write sequence file
     df_seq.to_csv(seq_file, header=True, index=False, sep='\t', compression = 'gzip')
     return
