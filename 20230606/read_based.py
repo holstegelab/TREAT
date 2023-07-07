@@ -426,5 +426,5 @@ print('**** Operation took %s seconds                                 ' %(round(
 te_total = time.time()
 time_total = te_total - ts_total
 # 6.2 Removing temporary files
-removeTemp(temp_bams, temp_bams)
+removeTemp(outDir)
 print('\n** Analysis completed in %s seconds. Ciao!                   ' %(round(time_total, 0)))
