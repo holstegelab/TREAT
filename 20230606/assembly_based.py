@@ -235,8 +235,8 @@ def removeTemp(outDir):
     for x in all_files:
         os.remove(x)
     # then remove the folders
-    os.system('rm -rf %s/otter_local_asm')
-    os.system('rm -rf %s/trf_reads')
+    os.system('rm -rf %s/otter_local_asm' %(outDir))
+    os.system('rm -rf %s/trf_reads' %(outDir))
 
 # Main
 # Read arguments and make small changes
