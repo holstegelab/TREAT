@@ -278,7 +278,7 @@ def run_trf(index, all_fasta, distances, type):
         # check if the line is the header of an entry
         if trf[x].startswith('@'):
             # if so, save the corresponding information depending on the type of input
-            if type != 'otter' or sample_interest == 'reference':
+            if type != 'otter' or sample_name == 'reference':
                 region, sample, read_id = trf[x].split(';')
             else:
                 read_id, region, seq_size_with_padding, seq_size = trf[x].split(';')

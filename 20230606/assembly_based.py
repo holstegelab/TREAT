@@ -243,6 +243,7 @@ def removeTemp(outDir):
 # Main
 # Read arguments and make small changes
 inBam_dir, bed_dir, outDir, ref, window, windowAss, cpu, ploidy, software, HaploDev, minimumSupport, minimumCoverage = sys.argv[1::]
+print(sys.argv[1::])
 window = int(window); cpu = int(cpu); ploidy = int(ploidy); windowAss = int(windowAss), minimumSupport = int(minimumSupport)
 
 # 1. Check arguments: BED, output directory and BAMs
