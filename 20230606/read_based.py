@@ -204,7 +204,7 @@ def distributeExtraction(x, bed, window):
     # container for results
     tmp_results = []
     # get sample name
-    sample_name = re.sub(r'^a[az]\.tmp_', '', os.path.basename(x)).replace('.bam', '')
+    sample_name = re.sub(r'^a[a-z]\.tmp_', '', os.path.basename(x)).replace('.bam', '')
     # loop over reads with pysam
     with pysam.AlignmentFile(x, 'rb', check_sq=False) as bamfile:
         for read in bamfile:
