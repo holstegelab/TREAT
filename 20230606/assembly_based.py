@@ -272,9 +272,3 @@ if software == 'otter':
     print('\n** Analysis completed in %s seconds. Ciao!                   ' %(round(time_total, 0)))
 else:
     break
-
-
-################################### 
-while True:
-    print("ok")
-    time.sleep(20)
