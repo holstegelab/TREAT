@@ -48,7 +48,7 @@ def haplotyping(r, s, thr_mad, data_nodup, type, dup_df, reference_motif_dic, in
             # polish haplotypes
             pol_sbs = polishHaplo_asm(phased_sbs, r)
             # add duplicates
-            all_sbs = addDups(pol_sbs, dup_df, s, r)
+            all_sbs = addDups(pol_sbs, dup_df, s, r, type)
             # finally look at the motif
             final_sbs_h1 = sampleMotifs(r, all_sbs, reference_motif_dic, 1)
             final_sbs_h2 = sampleMotifs(r, all_sbs, reference_motif_dic, 2)
