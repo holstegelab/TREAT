@@ -407,9 +407,9 @@ print('**** Operation took %s seconds                                 ' %(round(
 ts = time.time()
 file_path = os.path.realpath(__file__)
 file_path = '/'.join(file_path.split('/')[:-1])
-main_script = '%s/call_haplotypes.py %s/spanning_reads_trf_phasing.txt %s %s %s %s %s ' %(file_path, outDir, outDir, cpu, HaploDev, 'reads', minimumSupport)
+main_script = '%s/call_haplotypes.py %s/spanning_reads_trf_phasing.txt.gz %s %s %s %s %s ' %(file_path, outDir, outDir, cpu, HaploDev, 'reads', minimumSupport)
 print('\n', main_script, '\n')
-os.system('%s/call_haplotypes.py %s/spanning_reads_trf_phasing.txt %s %s %s %s %s ' %(file_path, outDir, outDir, cpu, HaploDev, 'reads', minimumSupport))
+os.system(main_script)
 te = time.time()
 time_write = te-ts
 print('**** Operation took %s seconds                                 ' %(round(time_write, 0)))
