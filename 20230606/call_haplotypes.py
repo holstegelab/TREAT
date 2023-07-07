@@ -13,7 +13,9 @@ import scipy.stats as stats
 import statistics
 from sklearn.cluster import KMeans
 import numpy as np
+import shutil
 import warnings
+import gzip
 
 # FUNCTIONS
 # function to make permutations
@@ -470,7 +472,10 @@ def writeOutputs(df_vcf, df_seq, seq_file, vcf_file):
     # write header of vcf file
     writeVCFheader(vcf_file, all_samples)
     with open(vcf_file, mode='a') as file:
-        df_vcf.to_csv(file, header=True, index=False, sep='\t', compression = 'gzip')
+        df_vcf.to_csv(file, header=True, index=False, sep='\t')
+    # then compress it
+    os.system('gzip %s' %(vcf_file))
+    os.system('rm %s' %(vcf_file))
     # write sequence file
     df_seq.to_csv(seq_file, header=True, index=False, sep='\t', compression = 'gzip')
     return
@@ -546,7 +551,7 @@ if len(sample_res) >1:
 
 # 8. write outputs: vcf file and raw sequences
 print('** Producing outputs: VCF file and table with sequences                        ')
-seq_file = '%s/sample.seq.txt' %(outd)
-vcf_file = '%s/sample.vcf' %(outd)
+seq_file = '%s/sample.seq.txt.gz' %(outd)
+vcf_file = '%s/sample.vcf.gz' %(outd)
 writeOutputs(df_vcf, df_seq, seq_file, vcf_file)
 
