@@ -470,9 +470,9 @@ def writeOutputs(df_vcf, df_seq, seq_file, vcf_file):
     # write header of vcf file
     writeVCFheader(vcf_file, all_samples)
     with open(vcf_file, mode='a') as file:
-        df_vcf.to_csv(file, header=True, index=False, sep='\t')
+        df_vcf.to_csv(file, header=True, index=False, sep='\t', compression = 'gzip')
     # write sequence file
-    df_seq.to_csv(seq_file, header=True, index=False, sep='\t')
+    df_seq.to_csv(seq_file, header=True, index=False, sep='\t', compression = 'gzip')
     return
 
 # 1. arguments
