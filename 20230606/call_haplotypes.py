@@ -553,6 +553,6 @@ if len(sample_res) >1:
 # 8. write outputs: vcf file and raw sequences
 print('** Producing outputs: VCF file and table with sequences                        ')
 seq_file = '%s/sample.seq.txt.gz' %(outd)
-vcf_file = '%s/sample.vcf.gz' %(outd)
+vcf_file = '%s/sample.vcf' %(outd)
 writeOutputs(df_vcf, df_seq, seq_file, vcf_file)
 
