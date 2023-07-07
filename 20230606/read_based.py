@@ -273,7 +273,7 @@ def run_trf(index, all_fasta, distances, type):
     trf = [x for x in os.popen(cmd).read().split('\n') if x != '']
     # loop on trf results and save them into a list of lists
     x = 0; trf_matches = []
-    sample_name = re.sub(r'^a[az]\.tmp_', '', os.path.basename(all_fasta[index])).replace('.fa', '')
+    sample_name = re.sub(r'^a[a-z]\.tmp_', '', os.path.basename(all_fasta[index])).replace('.fa', '')
     while x < len(trf):
         # check if the line is the header of an entry
         if trf[x].startswith('@'):
@@ -341,7 +341,7 @@ all_fasta = [outer_list[1] for outer_list in extract_results]
 pool = multiprocessing.Pool(processes=cpu)
 extract_fun = partial(measureDistance_reference, window = window, ref = ref, output_directory = outDir)
 extract_results_ref = pool.map(extract_fun, temp_beds)
-all_fasta_ref = [outer_list[1] for outer_list in extract_results]
+all_fasta_ref = [outer_list[1] for outer_list in extract_results_ref]
 # 2.5 combine reference with other samples
 extract_results.extend(extract_results_ref)
 all_fasta.extend(all_fasta_ref)
