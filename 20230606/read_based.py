@@ -98,6 +98,7 @@ def extractRead(bam_dir, bed_dir, out_dir, cpu, count_reg):
         pool = multiprocessing.Pool(processes=cpu)
         extract_fun = partial(samtoolsExtract, bam = bam, out_dir = out_dir, temp_name = temp_name)
         extract_results = pool.map(extract_fun, split_beds)
+        pool.close()
         # append temporary names
         temp_bams.extend(extract_results)
         print('**** Reads overlapping BED file extracted')
@@ -345,11 +346,13 @@ temp_bams, temp_beds = extractRead(inBam, bed_dir, outDir, cpu, count_reg)
 pool = multiprocessing.Pool(processes=cpu)
 extract_fun = partial(distributeExtraction, bed = bed, window = window)
 extract_results = pool.map(extract_fun, temp_bams)
+pool.close()
 all_fasta = [outer_list[1] for outer_list in extract_results]
 # 2.3 Then do the same on the reference genome
 pool = multiprocessing.Pool(processes=cpu)
 extract_fun = partial(measureDistance_reference, window = window, ref = ref, output_directory = outDir)
 extract_results_ref = pool.map(extract_fun, temp_beds)
+pool.close()
 all_fasta_ref = [outer_list[1] for outer_list in extract_results_ref]
 # 2.5 combine reference with other samples
 extract_results.extend(extract_results_ref)
@@ -365,6 +368,7 @@ pool = multiprocessing.Pool(processes=cpu)
 trf_fun = partial(run_trf, all_fasta = all_fasta, distances = extract_results, type = 'reads')
 index_fasta = [x for x in range(len(all_fasta))]
 trf_results = pool.map(trf_fun, index_fasta)
+pool.close()
 # 3.2 combine df from different samples together
 df_trf_combined = pd.concat(trf_results)
 print('**** TRF done on all reads and samples')
@@ -391,6 +395,7 @@ else:
     phasing_fun = partial(phase_reads_MP, output_directory = output_directory, SNPs_data_directory = snp_dir, ref_path = ref_fasta, bed_file = bed_file, window = window_for_phasing)
     ts = time.time()
     phasing_results = pool.map(phasing_fun, snps_for_phasing)
+    pool.close()
     te = time.time()
     time_phasing = te-ts
     print('**** phasing done in %s seconds                                       ' %(round(time_phasing, 0)))

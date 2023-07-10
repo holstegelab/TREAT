@@ -159,11 +159,13 @@ def otterPipeline(outDir, cpu, ref, bed_dir, inBam, count_reg):
     pool = multiprocessing.Pool(processes=cpu)
     otter_fun = partial(assembly_otter, output_directory = outDir, ref_fasta = ref, bed_file = bed_dir, number_threads = cpu)
     extract_results = pool.map(otter_fun, inBam)
+    pool.close()
     # do the same on the reference genome
     temp_beds = splitBed(bed_dir, cpu, outDir, count_reg)
     pool = multiprocessing.Pool(processes=cpu)
     extract_fun = partial(measureDistance_reference, window = window, ref = ref, output_directory = outDir)
     extract_results_ref = pool.map(extract_fun, temp_beds)
+    pool.close()
     all_fasta_ref = [outer_list[1] for outer_list in extract_results_ref]
     extract_results_ref = [outer_list[0] for outer_list in extract_results_ref]
     # combine reference and local assembly
@@ -179,6 +181,7 @@ def otterPipeline(outDir, cpu, ref, bed_dir, inBam, count_reg):
     trf_fun = partial(run_trf, all_fasta = reads_fasta, distances = extract_results, type = 'otter')
     index_fasta = [x for x in range(len(reads_fasta))]
     trf_results = pool.map(trf_fun, index_fasta)
+    pool.close()
     # Combine df from different samples together
     df_trf_combined = pd.concat(trf_results)
     return df_trf_combined
