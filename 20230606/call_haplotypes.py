@@ -9,6 +9,7 @@ import multiprocessing
 from functools import partial
 import numpy as np
 import math
+import itertools
 import os
 import scipy.stats as stats
 import statistics
@@ -33,11 +34,11 @@ def permutMotif(motif):
     return sel_motif
 
 # function to guide haplotyping
-def haplotyping(r, s, thr_mad, data_nodup, type, dup_df, reference_motif_dic, intervals, min_support):
-    if r in intervals:
-        print('****** done %s%% of the regions' %(intervals.index(r)*5+5), end = '\r')
-    # data of interest
-    sbs = data_nodup[data_nodup['REGION'] == r].copy()
+def haplotyping(x, s, thr_mad, type, dup_df, reference_motif_dic, intervals, min_support):
+    # data of interest to dataframe
+    sbs = pd.DataFrame(x, columns=['SAMPLE_NAME', 'REGION', 'READ_NAME', 'PASSES', 'READ_QUALITY', 'MAPPING_CONSENSUS', 'SEQUENCE_FOR_TRF', 'SEQUENCE_WITH_PADDINGS', 'LEN_SEQUENCE_FOR_TRF', 'LEN_SEQUENCE_WITH_PADDINGS', 'ID', 'EXPECTED_MOTIF', 'START_TRF', 'END_TRF', 'LENGTH_MOTIF_TRF', 'COPIES_TRF', 'TRF_CONSENSUS_SIZE', 'TRF_PERC_MATCH', 'TRF_PERC_INDEL', 'TRF_SCORE', 'TRF_A_PERC', 'TRF_C_PERC', 'TRF_G_PERC', 'TRF_T_PERC', 'TRF_ENTROPY', 'TRF_MOTIF', 'TRF_REPEAT_SEQUENCE', 'TRF_PADDING_BEFORE', 'TRF_PADDING_AFTER', 'HAPLOTAG', 'motif', 'UNIFORM_MOTIF', 'UNIQUE_NAME'])
+    # extract region
+    r = list(sbs['REGION'].unique())[0]
     # exclude nas
     sbs = sbs.dropna(subset=['LEN_SEQUENCE_FOR_TRF'])
     # check if there are rows
@@ -510,6 +511,7 @@ all_regions = list(ref['REGION'].dropna().unique())
 pool = multiprocessing.Pool(processes=n_cpu)
 motif_fun = partial(referenceMotifs, ref = ref, intervals = intervals)
 motif_res = pool.map(motif_fun, all_regions)
+pool.close()
 # combine dictionaries
 reference_motif_dic = {k: v for d in motif_res for k, v in d.items()}
 
@@ -527,13 +529,17 @@ sample_res = []
 for s in all_samples:
     print('**** %s                      ' %(s))
     sbs = data_nodup[(data_nodup['SAMPLE_NAME'] == s)]
-    sbs_dups = dup_df[(dup_df['SAMPLE_NAME'] == s)]
+    # create a dictionary of lists of lists of the rows, grouped by the 'group' column
+    grouped_rows = {k: [list(row) for _, row in v.iterrows()] for k, v in sbs.groupby('REGION')}
+    # Create a list of lists of lists from the dictionary
+    list_of_lists_of_lists = [group_rows for group_rows in grouped_rows.values()]
     #for r in all_regions:
     #    haplo_results = haplotyping(r, s, thr_mad, sbs, type, sbs_dups, reference_motif_dic, intervals, min_support)
     #    sample_res.append(haplo_results)
     pool = multiprocessing.Pool(processes=n_cpu)
-    haplo_fun = partial(haplotyping, s = s, thr_mad = thr_mad, data_nodup = sbs, type = type, dup_df = sbs_dups, reference_motif_dic = reference_motif_dic, intervals = intervals, min_support = 3)
-    haplo_results = pool.map(haplo_fun, all_regions)
+    haplo_fun = partial(haplotyping, s = s, thr_mad = thr_mad, type = type, dup_df = sbs_dups, reference_motif_dic = reference_motif_dic, intervals = intervals, min_support = min_support)
+    haplo_results = pool.map(haplo_fun, list_of_lists_of_lists)
+    pool.close()
     sample_res.append(haplo_results)
 
 # 7. compose the vcf and seq dataframes
