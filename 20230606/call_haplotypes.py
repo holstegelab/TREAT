@@ -35,8 +35,10 @@ def permutMotif(motif):
 
 # function to guide haplotyping
 def haplotyping(x, s, thr_mad, type, dup_df, reference_motif_dic, intervals, min_support):
+    # define columns based on the data type
+    columns = ['SAMPLE_NAME', 'REGION', 'READ_NAME', 'PASSES', 'READ_QUALITY', 'MAPPING_CONSENSUS', 'SEQUENCE_FOR_TRF', 'SEQUENCE_WITH_PADDINGS', 'LEN_SEQUENCE_FOR_TRF', 'LEN_SEQUENCE_WITH_PADDINGS', 'ID', 'EXPECTED_MOTIF', 'START_TRF', 'END_TRF', 'LENGTH_MOTIF_TRF', 'COPIES_TRF', 'TRF_CONSENSUS_SIZE', 'TRF_PERC_MATCH', 'TRF_PERC_INDEL', 'TRF_SCORE', 'TRF_A_PERC', 'TRF_C_PERC', 'TRF_G_PERC', 'TRF_T_PERC', 'TRF_ENTROPY', 'TRF_MOTIF', 'TRF_REPEAT_SEQUENCE', 'TRF_PADDING_BEFORE', 'TRF_PADDING_AFTER', 'HAPLOTAG', 'motif', 'UNIFORM_MOTIF', 'UNIQUE_NAME'] if type == 'reads' else ['SAMPLE_NAME', 'REGION', 'READ_NAME', 'SEQUENCE_WITH_PADDINGS', 'LEN_SEQUENCE_WITH_PADDINGS', 'SEQUENCE_FOR_TRF', 'LEN_SEQUENCE_FOR_TRF', 'HAPLOTAG', 'PASSES', 'READ_QUALITY', 'MAPPING_CONSENSUS', 'ID', 'EXPECTED_MOTIF', 'START_TRF', 'END_TRF', 'LENGTH_MOTIF_TRF', 'COPIES_TRF', 'TRF_CONSENSUS_SIZE', 'TRF_PERC_MATCH', 'TRF_PERC_INDEL', 'TRF_SCORE', 'TRF_A_PERC', 'TRF_C_PERC', 'TRF_G_PERC', 'TRF_T_PERC', 'TRF_ENTROPY', 'TRF_MOTIF', 'TRF_REPEAT_SEQUENCE', 'TRF_PADDING_BEFORE', 'TRF_PADDING_AFTER', 'motif', 'UNIFORM_MOTIF', 'UNIQUE_NAME']
     # data of interest to dataframe
-    sbs = pd.DataFrame(x, columns=['SAMPLE_NAME', 'REGION', 'READ_NAME', 'PASSES', 'READ_QUALITY', 'MAPPING_CONSENSUS', 'SEQUENCE_FOR_TRF', 'SEQUENCE_WITH_PADDINGS', 'LEN_SEQUENCE_FOR_TRF', 'LEN_SEQUENCE_WITH_PADDINGS', 'ID', 'EXPECTED_MOTIF', 'START_TRF', 'END_TRF', 'LENGTH_MOTIF_TRF', 'COPIES_TRF', 'TRF_CONSENSUS_SIZE', 'TRF_PERC_MATCH', 'TRF_PERC_INDEL', 'TRF_SCORE', 'TRF_A_PERC', 'TRF_C_PERC', 'TRF_G_PERC', 'TRF_T_PERC', 'TRF_ENTROPY', 'TRF_MOTIF', 'TRF_REPEAT_SEQUENCE', 'TRF_PADDING_BEFORE', 'TRF_PADDING_AFTER', 'HAPLOTAG', 'motif', 'UNIFORM_MOTIF', 'UNIQUE_NAME'])
+    sbs = pd.DataFrame(x, columns=columns)
     # extract region
     r = list(sbs['REGION'].unique())[0]
     # exclude nas
@@ -534,8 +536,8 @@ for s in all_samples:
     grouped_rows = {k: [list(row) for _, row in v.iterrows()] for k, v in sbs.groupby('REGION')}
     # Create a list of lists of lists from the dictionary
     list_of_lists_of_lists = [group_rows for group_rows in grouped_rows.values()]
-    #for r in all_regions:
-    #    haplo_results = haplotyping(r, s, thr_mad, sbs, type, sbs_dups, reference_motif_dic, intervals, min_support)
+    #for x in list_of_lists_of_lists:
+    #    haplo_results = haplotyping(x, s, thr_mad, type, sbs_dups, reference_motif_dic, intervals, min_support)
     #    sample_res.append(haplo_results)
     pool = multiprocessing.Pool(processes=n_cpu)
     haplo_fun = partial(haplotyping, s = s, thr_mad = thr_mad, type = type, dup_df = sbs_dups, reference_motif_dic = reference_motif_dic, intervals = intervals, min_support = min_support)
