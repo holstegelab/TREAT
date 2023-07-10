@@ -529,6 +529,7 @@ sample_res = []
 for s in all_samples:
     print('**** %s                      ' %(s))
     sbs = data_nodup[(data_nodup['SAMPLE_NAME'] == s)]
+    sbs_dups = dup_df[(dup_df['SAMPLE_NAME'] == s)]
     # create a dictionary of lists of lists of the rows, grouped by the 'group' column
     grouped_rows = {k: [list(row) for _, row in v.iterrows()] for k, v in sbs.groupby('REGION')}
     # Create a list of lists of lists from the dictionary
