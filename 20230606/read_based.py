@@ -91,7 +91,7 @@ def writeBED(bed, out_dir):
 # Function to split bed file in n bed files
 def splitBed(n, outDir, count_reg, bed):
     # write the corrected bed file
-    qc_bed = writeBED(bed, out_dir)
+    qc_bed = writeBED(bed, outDir)
     # then split in bed of equal lines
     number_lines_per_file = int(count_reg/n)
     cmd = 'split -l %s %s %s/tmp_bed.' %(number_lines_per_file, qc_bed, outDir)
