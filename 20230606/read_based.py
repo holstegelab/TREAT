@@ -18,6 +18,7 @@ import time
 def readBed(bed_dir):
     bed = {}
     count_reg = 0
+    qc_removed = 0
     with open(bed_dir) as finp:
         for line in finp:
             if line.startswith('#'):
@@ -27,14 +28,17 @@ def readBed(bed_dir):
                 if len(line) >= 3:
                     chrom, start, end = line[0:3]
                     region_id = chrom + ':' + start + '-' + end
-                    count_reg += 1
-                    if 'chr' not in chrom:
-                        chrom = 'chr' + str(chrom)
-                    if chrom in bed.keys():
-                        bed[chrom].append([start, end, region_id])
+                    if int(start) != int(end) and int(start) < int(end):
+                        count_reg += 1
+                        if 'chr' not in chrom:
+                            chrom = 'chr' + str(chrom)
+                        if chrom in bed.keys():
+                            bed[chrom].append([start, end, region_id])
+                        else:
+                            bed[chrom] = [[start, end, region_id]]
                     else:
-                        bed[chrom] = [[start, end, region_id]]
-    print('**** Found %s regions in %s chromosomes' %(count_reg, len(bed)))
+                        qc_removed += 1
+    print('**** Found %s regions in %s chromosomes. %s were removed due to QC.' %(count_reg + qc_removed, len(bed), qc_removed))
     return bed, count_reg
 
 # Check directory
@@ -75,10 +79,22 @@ def samtoolsExtract(x, bam, out_dir, temp_name):
     os.system(cmd)
     return temp_name
 
+# Function to write the correct bed file
+def writeBED(bed, out_dir):
+    fname = open('%s/qc.bed' %(out_dir), 'w')
+    for chr in bed.keys():
+        for region in bed[chr]:
+            fname.write('%s\t%s\t%s\n' %(chr, region[0], region[1]))
+    fname.close()
+    return '%s/qc.bed' %(out_dir)
+
 # Function to split bed file in n bed files
-def splitBed(bed_dir, n, outDir, count_reg):
+def splitBed(n, outDir, count_reg, bed):
+    # write the corrected bed file
+    qc_bed = writeBED(bed, out_dir)
+    # then split in bed of equal lines
     number_lines_per_file = int(count_reg/n)
-    cmd = 'split -l %s %s %s/tmp_bed.' %(number_lines_per_file, bed_dir, outDir)
+    cmd = 'split -l %s %s %s/tmp_bed.' %(number_lines_per_file, qc_bed, outDir)
     os.system(cmd)
     # then read the obtained temporary beds
     cmd = 'ls %s/tmp_bed.*' %(outDir)
@@ -86,9 +102,9 @@ def splitBed(bed_dir, n, outDir, count_reg):
     return tmp_beds
 
 # Extract reads of interest to temporary BAM files
-def extractRead(bam_dir, bed_dir, out_dir, cpu, count_reg):
+def extractRead(bam_dir, bed, out_dir, cpu, count_reg):
     # first split the bed files in n smaller bed depending on the cpu number
-    split_beds = splitBed(bed_dir, cpu, out_dir, count_reg)
+    split_beds = splitBed(cpu, out_dir, count_reg, bed)
     # make list of temporary outputs
     temp_bams = []
     for bam in bam_dir:
@@ -237,7 +253,7 @@ def writeFastaTRF(all_seqs, fasta_name):
 # Measure the distance in the reference genome
 def measureDistance_reference(bed_file, window, ref, output_directory):    
     # sequence with paddings
-    awk_command = """awk '{print $1":"$2-%s"-"$3+%s}' %s > %s_reformatted.txt""" %(window, window, bed_file, bed_file)
+    awk_command = """awk '{if ($2-%s<0) {start=0} else {start=$2-%s}; print $1":"start"-"$3+%s}' %s > %s_reformatted.txt""" %(window, window, window, bed_file, bed_file)
     os.system(awk_command)
     sequence_in_reference_with_padding = [x.rstrip() for x in list(os.popen('samtools faidx -r %s_reformatted.txt %s' %(bed_file, ref)))]        # sequence without padding
     # then store these results
@@ -341,7 +357,7 @@ inBam = checkBAM(inBam_dir)
 # 2. Extract sequence of interest
 ts = time.time()
 # 2.1 Extract reads using samtools
-temp_bams, temp_beds = extractRead(inBam, bed_dir, outDir, cpu, count_reg)
+temp_bams, temp_beds = extractRead(inBam, bed, outDir, cpu, count_reg)
 # 2.2 Parse output and get sequences
 pool = multiprocessing.Pool(processes=cpu)
 extract_fun = partial(distributeExtraction, bed = bed, window = window)
