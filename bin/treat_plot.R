@@ -201,7 +201,7 @@
       max_len <- ceiling(max(na.omit(vcf_info_withRef$long_allele)) + max(na.omit(vcf_info_withRef$long_allele))*0.15)
         
       # Parse the chromosomal band
-      chr_bands <- fread("/project/holstegelab/Software/nicco/bin/treat/hg38_cytogenetic_bands.txt", h=T)
+      chr_bands <- fread("/project/holstegelab/Software/nicco/bin/treat/bin/hg38_cytogenetic_bands.txt", h=T)
       tmp_band <- chr_bands[which(chr_bands$`#chrom` == chrom),]
       # assign colors depending on transcription levels
       tmp_band$col <- "white"; tmp_band$col[which(tmp_band$gieStain == "gpos25")] <- "grey90";tmp_band$col[which(tmp_band$gieStain == "gpos50")] <- "grey60"; tmp_band$col[which(tmp_band$gieStain == "gpos75")] <- "grey40"; tmp_band$col[which(tmp_band$gieStain == "gpos100")] <- "black"; tmp_band$col[which(tmp_band$gieStain == "acen")] <- "deepskyblue3"

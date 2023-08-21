@@ -1,7 +1,5 @@
-#!/usr/bin/env python3
-
 # libraries
-print('**** Loading libraries')
+print('* Loading libraries')
 import pandas as pd
 import sys
 from Bio.Seq import reverse_complement
@@ -36,7 +34,7 @@ def permutMotif(motif):
 # function to guide haplotyping
 def haplotyping(x, s, thr_mad, type, dup_df, reference_motif_dic, intervals, min_support):
     # define columns based on the data type
-    columns = ['SAMPLE_NAME', 'REGION', 'READ_NAME', 'PASSES', 'READ_QUALITY', 'MAPPING_CONSENSUS', 'SEQUENCE_FOR_TRF', 'SEQUENCE_WITH_PADDINGS', 'LEN_SEQUENCE_FOR_TRF', 'LEN_SEQUENCE_WITH_PADDINGS', 'ID', 'EXPECTED_MOTIF', 'START_TRF', 'END_TRF', 'LENGTH_MOTIF_TRF', 'COPIES_TRF', 'TRF_CONSENSUS_SIZE', 'TRF_PERC_MATCH', 'TRF_PERC_INDEL', 'TRF_SCORE', 'TRF_A_PERC', 'TRF_C_PERC', 'TRF_G_PERC', 'TRF_T_PERC', 'TRF_ENTROPY', 'TRF_MOTIF', 'TRF_REPEAT_SEQUENCE', 'TRF_PADDING_BEFORE', 'TRF_PADDING_AFTER', 'HAPLOTAG', 'motif', 'UNIFORM_MOTIF', 'UNIQUE_NAME'] if type == 'reads' else ['SAMPLE_NAME', 'REGION', 'READ_NAME', 'SEQUENCE_WITH_PADDINGS', 'LEN_SEQUENCE_WITH_PADDINGS', 'SEQUENCE_FOR_TRF', 'LEN_SEQUENCE_FOR_TRF', 'HAPLOTAG', 'PASSES', 'READ_QUALITY', 'MAPPING_CONSENSUS', 'ID', 'EXPECTED_MOTIF', 'START_TRF', 'END_TRF', 'LENGTH_MOTIF_TRF', 'COPIES_TRF', 'TRF_CONSENSUS_SIZE', 'TRF_PERC_MATCH', 'TRF_PERC_INDEL', 'TRF_SCORE', 'TRF_A_PERC', 'TRF_C_PERC', 'TRF_G_PERC', 'TRF_T_PERC', 'TRF_ENTROPY', 'TRF_MOTIF', 'TRF_REPEAT_SEQUENCE', 'TRF_PADDING_BEFORE', 'TRF_PADDING_AFTER', 'motif', 'UNIFORM_MOTIF', 'UNIQUE_NAME']
+    columns = ['SAMPLE_NAME', 'REGION', 'READ_NAME', 'PASSES', 'READ_QUALITY', 'MAPPING_CONSENSUS', 'SEQUENCE_FOR_TRF', 'SEQUENCE_WITH_PADDINGS', 'LEN_SEQUENCE_FOR_TRF', 'LEN_SEQUENCE_WITH_PADDINGS', 'ID', 'EXPECTED_MOTIF', 'START_TRF', 'END_TRF', 'LENGTH_MOTIF_TRF', 'COPIES_TRF', 'TRF_CONSENSUS_SIZE', 'TRF_PERC_MATCH', 'TRF_PERC_INDEL', 'TRF_SCORE', 'TRF_A_PERC', 'TRF_C_PERC', 'TRF_G_PERC', 'TRF_T_PERC', 'TRF_ENTROPY', 'TRF_MOTIF', 'TRF_REPEAT_SEQUENCE', 'TRF_PADDING_BEFORE', 'TRF_PADDING_AFTER', 'HAPLOTAG', 'motif', 'UNIFORM_MOTIF', 'UNIQUE_NAME'] if type in ['reads', 'hifiasm'] else ['SAMPLE_NAME', 'REGION', 'READ_NAME', 'SEQUENCE_WITH_PADDINGS', 'LEN_SEQUENCE_WITH_PADDINGS', 'SEQUENCE_FOR_TRF', 'LEN_SEQUENCE_FOR_TRF', 'HAPLOTAG', 'PASSES', 'READ_QUALITY', 'MAPPING_CONSENSUS', 'ID', 'EXPECTED_MOTIF', 'START_TRF', 'END_TRF', 'LENGTH_MOTIF_TRF', 'COPIES_TRF', 'TRF_CONSENSUS_SIZE', 'TRF_PERC_MATCH', 'TRF_PERC_INDEL', 'TRF_SCORE', 'TRF_A_PERC', 'TRF_C_PERC', 'TRF_G_PERC', 'TRF_T_PERC', 'TRF_ENTROPY', 'TRF_MOTIF', 'TRF_REPEAT_SEQUENCE', 'TRF_PADDING_BEFORE', 'TRF_PADDING_AFTER', 'motif', 'UNIFORM_MOTIF', 'UNIQUE_NAME']
     # data of interest to dataframe
     sbs = pd.DataFrame(x, columns=columns)
     # extract region
@@ -45,7 +43,7 @@ def haplotyping(x, s, thr_mad, type, dup_df, reference_motif_dic, intervals, min
     sbs = sbs.dropna(subset=['LEN_SEQUENCE_FOR_TRF'])
     # check if there are rows
     if sbs.shape[0] >0:
-        if type == 'assembly':
+        if type in ['otter', 'hifiasm']:
             # identify haplotypes
             phased_sbs = assemblyBased_size(sbs, r)
             # polish haplotypes
@@ -108,9 +106,58 @@ def readBased_size(sbs, r, chrom):
             kept_rows['HAPLOTAG'] = haplo_id
             kept_rows['POLISHED_HAPLO'] = haplo_center
             sbs = pd.concat([kept_rows, deleted_rows], axis=0)
-        return sbs
     else:
-        print('!! haplotags found at %s' %(r))
+        if len(haplotag_list) == sbs.shape[0]:
+            # if all reads are phased, get polished haplotags as the median of the sizes per haplotype
+            pol = sbs.groupby('HAPLOTAG')['LEN_SEQUENCE_FOR_TRF'].median()
+            # then assign these values to the dataframe
+            sbs['POLISHED_HAPLO'] = sbs['HAPLOTAG'].map(pol)
+            # haplotags need to be either 0 or 1, so remove 1 from the current values
+            sbs['HAPLOTAG'] = sbs['HAPLOTAG'] - 1
+        else:
+            # otherwise assign the reads with unknown haplotag to those with a value
+            sbs['HAPLOTAG'] = sbs.apply(impute_hap, axis=1, df = sbs)
+            # then check for deviations
+            pol_sbs = checkDeviationPhasing(sbs)
+            # finally add the polished haplotypes
+            pol = pol_sbs.groupby('HAPLOTAG')['LEN_SEQUENCE_FOR_TRF'].median()
+            # then assign these values to the dataframe
+            pol_sbs['POLISHED_HAPLO'] = pol_sbs['HAPLOTAG'].map(pol)
+            # haplotags need to be either 0 or 1, so remove 1 from the current values
+            pol_sbs['HAPLOTAG'] = pol_sbs['HAPLOTAG'] - 1
+            sbs = pol_sbs
+    return sbs
+
+# function to check deviation of the phasing imputation
+def checkDeviationPhasing(sbs):
+    # iterate over haplotags
+    responses = []
+    all_values = {}
+    for haplo in list(sbs['HAPLOTAG'].unique()):
+        median_value_boundary, median_distances = checkDeviation(sbs.loc[sbs['HAPLOTAG'] == haplo, 'LEN_SEQUENCE_FOR_TRF'])
+        # then check deviations
+        call = 'ok' if (max(median_distances) <= median_value_boundary) else 'outliers'
+        all_values[haplo] = [median_value_boundary, median_distances]
+        responses.append(call)
+    # check if there are outliers
+    if 'outliers' in responses:
+        print(sbs[['HAPLOTAG', 'LEN_SEQUENCE_FOR_TRF']])
+        print(responses)
+        print('check %s' %(list(sbs['REGION'].unique())[0]))
+    return sbs
+
+# function to impute the haplotag values when phasing is available but not present for all reads based on the closest size of TR 
+def impute_hap(row, df):
+    if np.isnan(row['HAPLOTAG']):
+        # extract the length of the sequence to assign
+        len_val = row['LEN_SEQUENCE_FOR_TRF']
+        # find the median values of all assigned sequences
+        pol = df.groupby('HAPLOTAG')['LEN_SEQUENCE_FOR_TRF'].median()
+        hap_dists = abs(len_val - pol)
+        imputed_hap = np.argmin(hap_dists) + 1
+        return imputed_hap
+    else:
+        return row['HAPLOTAG']
 
 # function to check deviations within each haplotype
 def checkDeviation(read_lengths):
@@ -234,7 +281,9 @@ def prepareOutputs(final_sbs, reference_motif_dic, r, type, depths):
     sam_cop_ref = '|'.join(list(final_sbs['REFERENCE_MOTIF_COPIES'].map(str))) if final_sbs.shape[0] >1 else list(final_sbs["REFERENCE_MOTIF_COPIES"].map(str).apply(lambda x: x + "|" + x))[0]
     if type == 'reads':
         sam_depth = '|'.join([str(x) for x in depths])
-    else:
+    elif type == 'hifiasm':
+        sam_depth = 'Na|Na'
+    elif type == 'otter':
         sam_depth = '|'.join(list(final_sbs["READ_NAME"].str.split("_").str[1])) if final_sbs.shape[0] >1 else list(final_sbs["READ_NAME"].str.split("_").str[1].apply(lambda x: x + "|" + x))[0]
     sample_field = '%s;%s;%s;%s;%s;%s' %('PASS_ASM', sam_gt, sam_mot, sam_cop, sam_cop_ref, sam_depth)
     res_vcf = [chrom, start, r, ref_len, '.', '.', 'PASS', info_field, format_field, sample_field]
@@ -242,7 +291,9 @@ def prepareOutputs(final_sbs, reference_motif_dic, r, type, depths):
     if type == 'reads':
         final_sbs['DEPTH'] = [x for x in depths if x != 0]
         final_sbs['type'] = type
-    else:
+    elif type == 'hifiasm':
+        final_sbs['DEPTH'] = ['NA' for x in range(final_sbs.shape[0])]
+    elif type == 'otter':
         final_sbs['DEPTH'] = final_sbs["READ_NAME"].str.split("_").str[1]
     final_sbs['MOTIF_REF'] = ref_motif
     keep_cols = ['READ_NAME', 'HAPLOTAG', 'REGION', 'PASSES', 'READ_QUALITY', 'LEN_SEQUENCE_FOR_TRF', 'START_TRF', 'END_TRF', 'type', 'SAMPLE_NAME', 'POLISHED_HAPLO', 'DEPTH', 'CONSENSUS_MOTIF', 'CONSENSUS_MOTIF_COPIES', 'MOTIF_REF', 'REFERENCE_MOTIF_COPIES', 'SEQUENCE_WITH_PADDINGS', 'SEQUENCE_FOR_TRF']
@@ -299,7 +350,7 @@ def addDups(pol_sbs, dup_df, s, r, type):
             haplo = []; size = []
             for x in target:
                 tmp_haplo, tmp_size = assignHaplotag_asm(h1_size, h2_size, x)
-                haplo.append(tmp_haplo); size.append(tmp_size)
+                haplo.append(tmp_haplo-1); size.append(tmp_size)
             sbs_dups['type'] = type
             sbs_dups['POLISHED_HAPLO'] = [float(x) for x in size]
             sbs_dups['HAPLOTAG'] = [float(x) for x in haplo]
@@ -493,7 +544,7 @@ min_support = int(sys.argv[6])
 
 # 2. read data
 print('** Read data')
-data = pd.read_csv(inpf, sep='\t', compression='gzip')
+data = pd.read_csv(inpf, sep='\t', compression='gzip', low_memory=False)
 
 # 3. adjust the motif -- merge the same motifs
 print('** Adjust motifs')
@@ -536,8 +587,9 @@ for s in all_samples:
     grouped_rows = {k: [list(row) for _, row in v.iterrows()] for k, v in sbs.groupby('REGION')}
     # Create a list of lists of lists from the dictionary
     list_of_lists_of_lists = [group_rows for group_rows in grouped_rows.values()]
-    #for x in list_of_lists_of_lists:
-    #    haplo_results = haplotyping(x, s, thr_mad, type, sbs_dups, reference_motif_dic, intervals, min_support)
+    #for x in range(len(list_of_lists_of_lists)):
+    #    print(x)
+    #    haplo_results = haplotyping(list_of_lists_of_lists[x], s, thr_mad, type, sbs_dups, reference_motif_dic, intervals, min_support)
     #    sample_res.append(haplo_results)
     pool = multiprocessing.Pool(processes=n_cpu)
     haplo_fun = partial(haplotyping, s = s, thr_mad = thr_mad, type = type, dup_df = sbs_dups, reference_motif_dic = reference_motif_dic, intervals = intervals, min_support = min_support)
@@ -548,6 +600,7 @@ for s in all_samples:
 # 7. compose the vcf and seq dataframes
 df_vcf = pd.DataFrame([x[0] for x in sample_res[0]], columns=['#CHROM', 'POS', 'ID', 'REF', 'ALT', 'QUAL', 'FILTER', 'INFO', 'FORMAT', all_samples[0]])
 df_seq = pd.DataFrame([x for y in sample_res[0] for x in y[1]], columns=['READ_NAME', 'HAPLOTAG', 'REGION', 'PASSES', 'READ_QUALITY', 'LEN_SEQUENCE_FOR_TRF', 'START_TRF', 'END_TRF', 'type', 'SAMPLE_NAME', 'POLISHED_HAPLO', 'DEPTH', 'CONSENSUS_MOTIF', 'CONSENSUS_MOTIF_COPIES', 'MOTIF_REF', 'REFERENCE_MOTIF_COPIES', 'SEQUENCE_WITH_PADDINGS', 'SEQUENCE_FOR_TRF'])
+# if there are more samples, write them as well
 if len(sample_res) >1:
     for i in range(1, len(sample_res)):
         tmp = pd.DataFrame([[x[0][2], x[0][-1]] for x in sample_res[i]], columns=['ID', all_samples[i]])

@@ -1,6 +1,13 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 
 # This script manages the arguments provided along with the script
+
+# print initial message
+print("\n\n**********************************************")
+print("** Tandem REpeat Annotation Toolkit (Treat) **")
+print('******** put together by Niccolo Tesi ********')
+print("*********** n.tesi@amsterdamumc.nl ***********")
+print("**********************************************\n")
 
 # Libraries
 import argparse
@@ -64,7 +71,7 @@ asseAnal.add_argument('-minSup', '--minimumSupport', type = int, help = 'During 
 # haplotyping: minimum coverage
 asseAnal.add_argument('-minCov', '--minimumCoverage', type = int, help = 'During haplotying, minimum number of total reads necessary for calling.', required = False, default = 5)
 # window around for assembly
-asseAnal.add_argument('-wAss', '--windowAssembly', type = int, help = 'Integer. Will extend the regions defined in the BED file by this value upstream and downstream to take reads for assembly.', required = False, default = 500)
+asseAnal.add_argument('-wAss', '--windowAssembly', type = int, help = 'Integer. Will extend the regions defined in the BED file by this value upstream and downstream to take reads for assembly.', required = False, default = 50)
 # ploidy
 asseAnal.add_argument('-p', '--ploidy', type = int, help = 'Integer. Estimated ploidy of the sample.', required = False, default = 2)
 # software
@@ -131,6 +138,6 @@ if RUN == True:
     main_path = '/'.join(main_path.split('/')[:-1])
 
     # Run the script
-    main_script = 'python3 %s/%s %s' %(main_path, script_path, ' '.join(arguments))
-    print(main_script, '\n')
+    main_script = '~/.conda/envs/treat/bin/python %s/%s %s' %(main_path, script_path, ' '.join(arguments))
+    #print(main_script, '\n')
     os.system(main_script)
