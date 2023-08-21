@@ -94,6 +94,5 @@ dependencies:
   - zlib=1.2.11=h166bdaf_1014
   - zstd=1.5.2=ha95c52a_0
   - pip:
-    - pylibcigar==0.1
     - pysam==0.15.4
 prefix: /home/holstegelab-ntesi/.conda/envs/treat
