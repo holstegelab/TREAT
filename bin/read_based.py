@@ -233,15 +233,19 @@ def distributeExtraction(x, bed, window):
     # loop over reads with pysam
     with pysam.AlignmentFile(x, 'rb', check_sq=False) as bamfile:
         for read in bamfile:
-            # extract read information
-            ref_chrom, ref_start, ref_end, query_name, query_sequence, cigartuples, tags, is_secondary, is_supplementary, cigarstring = read.reference_name, int(read.reference_start), int(read.reference_end), read.query_name, read.query_sequence, read.cigartuples, read.tags, read.is_supplementary, read.is_secondary, read.cigarstring
-            # check how many regions we overlap with this read
-            regions_overlapping = checkIntervals(bed, ref_chrom, ref_start, ref_end, window)
-            # then get the sequence of the read in the interval
-            regions_overlapping_info = getSequenceInterval(regions_overlapping, tags, is_secondary, is_supplementary, query_name, query_sequence, window, ref_start, ref_end, cigartuples, sample_name)       
-            # add to results
-            for lst in regions_overlapping_info:
-                tmp_results.append(lst)
+            # sometimes the reference end is missing, control for that here
+            try:
+                # extract read information
+                ref_chrom, ref_start, ref_end, query_name, query_sequence, cigartuples, tags, is_secondary, is_supplementary, cigarstring = read.reference_name, int(read.reference_start), int(read.reference_end), read.query_name, read.query_sequence, read.cigartuples, read.tags, read.is_supplementary, read.is_secondary, read.cigarstring
+                # check how many regions we overlap with this read
+                regions_overlapping = checkIntervals(bed, ref_chrom, ref_start, ref_end, window)
+                # then get the sequence of the read in the interval
+                regions_overlapping_info = getSequenceInterval(regions_overlapping, tags, is_secondary, is_supplementary, query_name, query_sequence, window, ref_start, ref_end, cigartuples, sample_name)       
+                # add to results
+                for lst in regions_overlapping_info:
+                    tmp_results.append(lst)
+            except:
+                pass
     # name of the fasta output
     fasta_name = x.replace('.bam', '.fa')
     # finally write fasta files
@@ -253,6 +257,10 @@ def measureDistance_reference(bed_file, window, ref, output_directory):
     # sequence with paddings
     awk_command = """awk '{print $1":"$2-%s"-"$3+%s}' %s > %s_reformatted.txt""" %(window, window, bed_file, bed_file)
     os.system(awk_command)
+    # if reference is not GRCh38, then we need to exclude the 'chr' from the bed file otherwise it will not work
+    if 'GRCh37' in ref or 'hg19' in ref or 'hg37' in ref:
+        sed_cmd = "sed -i 's/chr//g' %s_reformatted.txt" %(bed_file)
+        os.system(sed_cmd)        
     sequence_in_reference_with_padding = [x.rstrip() for x in list(os.popen('samtools faidx -r %s_reformatted.txt %s' %(bed_file, ref)))]        # sequence without padding
     # then store these results
     distances = []

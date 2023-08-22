@@ -272,6 +272,9 @@ def kmeans_haplotyping(sbs, min_support, thr_mad, chrom, r):
 def prepareOutputs(final_sbs, reference_motif_dic, r, type, depths):
     # prepare data for VCF
     chrom, start, end = [r.split(':')[0]] + r.split(':')[-1].split('-')
+    # check if 'chr' is in both the dictionary and the region of interest
+    if 'chr' not in list(reference_motif_dic.keys())[0]:
+        reference_motif_dic = {'chr' + key: value for key, value in reference_motif_dic.items()}
     ref_motif, ref_len, ref_copies = reference_motif_dic[r]
     info_field = '%s;%s' %(ref_motif, ref_copies)
     format_field = 'QC;GT;MOTIF;CN;CN_REF;DP'
