@@ -19,24 +19,28 @@ import time
 def readBed(bed_dir):
     bed = {}
     count_reg = 0
-    with open(bed_dir) as finp:
-        for line in finp:
-            if line.startswith('#'):
-                pass
-            else:
-                line = line.rstrip().split()
-                if len(line) >= 3:
-                    chrom, start, end = line[0:3]
-                    region_id = chrom + ':' + start + '-' + end
-                    count_reg += 1
-                    if 'chr' not in chrom:
-                        chrom = 'chr' + str(chrom)
-                    if chrom in bed.keys():
-                        bed[chrom].append([start, end, region_id])
-                    else:
-                        bed[chrom] = [[start, end, region_id]]
-    print('** BED file: found %s regions in %s chromosomes' %(count_reg, len(bed)))
-    return bed, count_reg
+    try:
+        with open(bed_dir) as finp:
+            for line in finp:
+                if line.startswith('#'):
+                    pass
+                else:
+                    line = line.rstrip().split()
+                    if len(line) >= 3:
+                        chrom, start, end = line[0:3]
+                        region_id = chrom + ':' + start + '-' + end
+                        count_reg += 1
+                        if 'chr' not in chrom:
+                            chrom = 'chr' + str(chrom)
+                        if chrom in bed.keys():
+                            bed[chrom].append([start, end, region_id])
+                        else:
+                            bed[chrom] = [[start, end, region_id]]
+        print('** BED file: found %s regions in %s chromosomes' %(count_reg, len(bed)))
+        return bed, count_reg
+    except:
+        print("!!! Input BED file is missing or wrongly formatted. Make sure to provide a genuine tab-separated BED file without header.")
+        sys.exit(1)  # Exit the script with a non-zero status code
 
 # Check directory
 def checkOutDir(out_dir):
@@ -468,7 +472,6 @@ if HaploDev == 'None':
     HaploDev = 0.10
 
 # 1. Check arguments: BED, output directory and BAMs
-
 print('* Analysis started')
 ts_total = time.time()
 # 1.1 Check output directory
