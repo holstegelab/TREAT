@@ -39,7 +39,7 @@ def readBed(bed_dir):
         print('** BED file: found %s regions in %s chromosomes' %(count_reg, len(bed)))
         return bed, count_reg
     except:
-        print("!!! Input BED file is missing or wrongly formatted. Make sure to provide a genuine tab-separated BED file without header.")
+        print("\n!!! Input BED file is missing or wrongly formatted. Make sure to provide a genuine tab-separated BED file without header.\nExecution halted.")
         sys.exit(1)  # Exit the script with a non-zero status code
 
 # Check directory
@@ -48,24 +48,33 @@ def checkOutDir(out_dir):
         out_dir = out_dir[:-1]
     if os.path.isdir(out_dir) == False:
         os.system('mkdir %s' %(out_dir))
-        return("** Output directory not found, will create.")
+        return("** Output directory valid.")
     else:
-        return("** Output directory found, will add outputs there.")
+        # check if directory is empty or not
+        if any(os.scandir(out_dir)):
+            print("\n!!! Output directory you indicated is not empty. This may cause issues and unexpected results. Please indicate a new folder instead.\nExecution halted.")
+            sys.exit(1)  # Exit the script with a non-zero status code
+        else:
+            return("** Output directory exists but empty. Will add outputs there.")
 
 # Check bam file(s)
 def checkBAM(bam_dir):
-    if bam_dir[-1] == '/':
-        bam_dir = bam_dir[:-1]
-    if os.path.isdir(bam_dir) == True:              # in case a directory was submitted
-        all_bams = [x.rstrip()for x in list(os.popen('ls %s/*bam' %(bam_dir)))]
-        print("** BAM file(s): found directory with %s bam" %(len(all_bams)))
-    elif os.path.isfile(bam_dir) == True:           # in case is a single bam file
-        print("** BAM file(s): found single bam")
-        all_bams = [bam_dir]
-    elif ',' in bam_dir:                            # in case there is a comma-separated list of bams
-        all_bams = bam_dir.split(',')
-        print("** BAM file(s): found %s bam" %(len(all_bams)))
-    return all_bams
+    try:
+        if bam_dir[-1] == '/':
+            bam_dir = bam_dir[:-1]
+        if os.path.isdir(bam_dir) == True:              # in case a directory was submitted
+            all_bams = [x.rstrip()for x in list(os.popen('ls %s/*bam' %(bam_dir)))]
+            print("** BAM file(s): found directory with %s bam" %(len(all_bams)))
+        elif os.path.isfile(bam_dir) == True:           # in case is a single bam file
+            print("** BAM file(s): found single bam")
+            all_bams = [bam_dir]
+        elif ',' in bam_dir:                            # in case there is a comma-separated list of bams
+            all_bams = bam_dir.split(',')
+            print("** BAM file(s): found %s bam" %(len(all_bams)))
+        return all_bams
+    except:
+        print("\n!!! Input BAM file is missing or wrongly formatted. Make sure to provide a genuine BAM file.\nExecution halted.")
+        sys.exit(1)  # Exit the script with a non-zero status code
 
 # Function to create Log file
 def createLog(inBam, bed_dir, outDir, ref, window, cpu, phasingData, mappingSNP, HaploDev, minimumSupport, minimumCoverage):
