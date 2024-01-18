@@ -85,5 +85,10 @@ Same as for the `reads` analysis.
 ## Additional folders in the repository
 
 ### test_data folder
-The `test_data` folder contains test data that can be use to assess the correct functioning of TREAT. For a test run, the following code can be used:
+The `test_data` folder contains test data that can be use to assess the correct functioning of TREAT. A basic test can be the following for a `reads` analysis:
 `TREAT.py reads -b test_data/example.bed -i test_data/example.bam -o test_output -r /path/to/reference_genome_hg38.fa`
+While for a `assembly` analysis, the following can be used:
+`TREAT.py assembly -b test_data/example.bed -i test_data/example.bam -o test_output_asm -r /path/to/reference_genome_hg38.fa -s otter`
+
+### treat_application folder
+The `treat_application` folder contains several sub-folders related to the different projects from our group in which TREAT was used. Each sub-folder contains additional scripts and downstream analysis scripts that were used. Please look at the README in the specific sub-folders for additional information.
