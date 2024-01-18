@@ -55,12 +55,12 @@ The `reads` analysis take advantage of all sequencing reads aligning to the targ
 
 ### Optional parameters
 - `-w / --window`: the target regions defined in the BED file will be extended by this value upstream and downstream. Default value is 20. Must be an integer.
-- `-t / --cpu`: number of parallel threads to be used.
+- `-t / --cpu`: number of parallel threads to be used. Default value is 2.
 - `-p / --phasingData`: if available, the path to the SNP dataset that will be used for phasing. The SNP dataset must be in PLINK2 format. If you are not familiar with PLINK2, please visit https://www.cog-genomics.org/plink/2.0.
 - `-m / --mappingSNP`: path to a 2-column file with SNP IDs and sequencing IDs. If not provided, will assume the IDs between SNP dataset and BAM files are the same.
 - `-d / --HaploDev`: during haplotype calling analysis, the median absolute deviation value to assign reads to the same allele. Defaul value is 0.10, that correspond to 10% median absolute deviation.
 - `-minSup / --minimumSupport`: during haplotype calling, the minimum number of reads supporting each haplotyping. Default is 2.
-- `-minCov / --minimumCoverage`: during haplotype calling, the minimum number of total reads necessary for calling. Default is 4.
+- `-minCov / --minimumCoverage`: during haplotype calling, the minimum number of total reads necessary for calling. Default is 5.
 
 ## Assembly analysis
 The `assembly` analysis take advantage of all sequencing reads aligning to the target region to perform local assembly of the target regions. The procedure goes as it follows:
@@ -74,10 +74,10 @@ Same as for the `reads` analysis.
 
 ### Optional parameters
 - `-w / --window`: the target regions defined in the BED file will be extended by this value upstream and downstream. Default value is 20. Must be an integer.
-- `-t / --cpu`: number of parallel threads to be used.
+- `-t / --cpu`: number of parallel threads to be used. Default value is 2.
 - `-d / --HaploDev`: during haplotype calling analysis, the median absolute deviation value to assign reads to the same allele. Defaul value is 0.10, that correspond to 10% median absolute deviation.
 - `-minSup / --minimumSupport`: during haplotype calling, the minimum number of reads supporting each haplotyping. Default is 2.
-- `-minCov / --minimumCoverage`: during haplotype calling, the minimum number of total reads necessary for calling. Default is 4.
+- `-minCov / --minimumCoverage`: during haplotype calling, the minimum number of total reads necessary for calling. Default is 5.
 - `-wAss / --windowAssembly`: the target regions defined in the BED file by this value upstream and downstream to take reads for assembly. Default value is 20. Must be an integer.
 - `-p / --ploidy`: estimated ploidy of the sample. Default value is 2 for autosomal regions. For sex-specific regions, the ploidy is either 1 (for males with chrX and chrY present in the BAM file), or 2 (for females with 2 chrX).
 - `-s / --software`: software to be used for assembly [otter/hifiasm]. Default value is otter. 
