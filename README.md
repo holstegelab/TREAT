@@ -81,3 +81,9 @@ Same as for the `reads` analysis.
 - `-wAss / --windowAssembly`: the target regions defined in the BED file by this value upstream and downstream to take reads for assembly. Default value is 20. Must be an integer.
 - `-p / --ploidy`: estimated ploidy of the sample. Default value is 2 for autosomal regions. For sex-specific regions, the ploidy is either 1 (for males with chrX and chrY present in the BAM file), or 2 (for females with 2 chrX).
 - `-s / --software`: software to be used for assembly [otter/hifiasm]. Default value is otter. 
+
+## Additional folders in the repository
+
+### test_data folder
+The `test_data` folder contains test data that can be use to assess the correct functioning of TREAT. For a test run, the following code can be used:
+`TREAT.py reads -b test_data/example.bed -i test_data/example.bam -o test_output -r /path/to/reference_genome_hg38.fa`
