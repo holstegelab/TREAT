@@ -12,7 +12,6 @@ import os
 import scipy.stats as stats
 import statistics
 from sklearn.cluster import KMeans
-import numpy as np
 import shutil
 import warnings
 import gzip
@@ -56,7 +55,8 @@ def haplotyping(x, s, thr_mad, type, dup_df, reference_motif_dic, intervals, min
             final_sbs = pd.concat([final_sbs_h1, final_sbs_h2], axis=0)
             # prepare for file writing
             tmp_vcf, tmp_seq = prepareOutputs(final_sbs, reference_motif_dic, r, type, 'None')
-            return tmp_vcf, tmp_seq
+            all_sbs = []
+            return tmp_vcf, tmp_seq, all_sbs
         elif type == 'reads':
             # check minimum support: minimum support is for alleles --> 2*min_support is the total minimum coverage required for autosomal regions. For sex-regions, we will use min_support directly
             # find chromosome to adapt coverage
@@ -76,16 +76,18 @@ def haplotyping(x, s, thr_mad, type, dup_df, reference_motif_dic, intervals, min
                 final_sbs = pd.concat([final_sbs_h1, final_sbs_h2], axis=0)
                 # prepare for file writing
                 tmp_vcf, tmp_seq = prepareOutputs(final_sbs, reference_motif_dic, r, type, [depth_h1, depth_h2])
-                return tmp_vcf, tmp_seq
+                return tmp_vcf, tmp_seq, all_sbs
             else:
                 tmp_vcf = [chrom, r.split(':')[1].split('-')[0], r, reference_motif_dic[r][1], '.', '.', 'LOW_COVERAGE', '%s;%s' %(reference_motif_dic[r][0], reference_motif_dic[r][2]), 'QC;GT;MOTIF;CN;CN_REF;DP', 'QC_ISSUE;NA|NA;NA|NA;NA|NA;NA|NA;%s|0' %(sbs.shape[0])]
                 tmp_seq = []
-                return tmp_vcf, tmp_seq
+                all_sbs = []
+                return tmp_vcf, tmp_seq, all_sbs
     else:
         chrom = r.split(':')[0]
         tmp_vcf = [chrom, r.split(':')[1].split('-')[0], r, reference_motif_dic[r][1], '.', '.', 'LOW_COVERAGE', '%s;%s' %(reference_motif_dic[r][0], reference_motif_dic[r][2]), 'QC;GT;MOTIF;CN;CN_REF;DP', 'QC_ISSUE;NA|NA;NA|NA;NA|NA;NA|NA;%s|0' %(sbs.shape[0])]
         tmp_seq = []
-        return tmp_vcf, tmp_seq
+        all_sbs = []
+        return tmp_vcf, tmp_seq, all_sbs
 
 # function to call haplotypes for reads
 def readBased_size(sbs, r, chrom):
@@ -302,7 +304,7 @@ def prepareOutputs(final_sbs, reference_motif_dic, r, type, depths):
     keep_cols = ['READ_NAME', 'HAPLOTAG', 'REGION', 'PASSES', 'READ_QUALITY', 'LEN_SEQUENCE_FOR_TRF', 'START_TRF', 'END_TRF', 'type', 'SAMPLE_NAME', 'POLISHED_HAPLO', 'DEPTH', 'CONSENSUS_MOTIF', 'CONSENSUS_MOTIF_COPIES', 'MOTIF_REF', 'REFERENCE_MOTIF_COPIES', 'SEQUENCE_WITH_PADDINGS', 'SEQUENCE_FOR_TRF']
     # subset dataframe to keep only selected columns
     df_subset = final_sbs.loc[:, keep_cols]
-    res_seq = df_subset.values.tolist()
+    res_seq = df_subset.values.tolist()    
     return res_vcf, res_seq
 
 # function to call haplotypes for assembly
@@ -428,6 +430,16 @@ def combineMotifs(haplo_data, r):
     haplo_data['MOTIF_SCORE'] = haplo_data['COVERAGE_TR'] * haplo_data['TRF_SCORE']
     haplo_data = haplo_data.sort_values('MOTIF_SCORE', ascending=False)
     best_motif = haplo_data['UNIFORM_MOTIF'].iloc[0]
+    # check if the best motif is NA: if so, then try to use any motif that's in there
+    if pd.isna(best_motif):
+        # extract all motifs non NA motifs
+        all_motifs = [value for value in list(set(haplo_data['UNIFORM_MOTIF'])) if not (isinstance(value, float) and math.isnan(value))]
+        if len(all_motifs) >0:
+            # consider the longest non-NA motif as the best motif
+            sorted_list = sorted(all_motifs, key=len, reverse=True)
+            best_motif = sorted_list[0]
+            # reorder dataframe based on this
+            haplo_data = haplo_data.sort_values(by='UNIFORM_MOTIF', ascending=(haplo_data['UNIFORM_MOTIF'] != best_motif).any())
     best_motif_copies = haplo_data['COPIES_TRF'].iloc[0]
     best_motif_index = range(int(haplo_data['START_TRF'].iloc[0]), int(haplo_data['END_TRF'].iloc[0]))
     # loop on the other motifs
@@ -603,6 +615,16 @@ for s in all_samples:
 # 7. compose the vcf and seq dataframes
 df_vcf = pd.DataFrame([x[0] for x in sample_res[0]], columns=['#CHROM', 'POS', 'ID', 'REF', 'ALT', 'QUAL', 'FILTER', 'INFO', 'FORMAT', all_samples[0]])
 df_seq = pd.DataFrame([x for y in sample_res[0] for x in y[1]], columns=['READ_NAME', 'HAPLOTAG', 'REGION', 'PASSES', 'READ_QUALITY', 'LEN_SEQUENCE_FOR_TRF', 'START_TRF', 'END_TRF', 'type', 'SAMPLE_NAME', 'POLISHED_HAPLO', 'DEPTH', 'CONSENSUS_MOTIF', 'CONSENSUS_MOTIF_COPIES', 'MOTIF_REF', 'REFERENCE_MOTIF_COPIES', 'SEQUENCE_WITH_PADDINGS', 'SEQUENCE_FOR_TRF'])
+# and the raw output
+if type == 'reads':
+    raw_seq_list = []
+    for sample in sample_res:
+        for region in sample:
+            if isinstance(region[-1], pd.DataFrame):
+                raw_seq_list.append(region[-1])
+    # combine all dataframes and write as output
+    raw_seq_df = pd.concat(raw_seq_list, ignore_index=True)
+    raw_seq_df.to_csv('%s/sample.raw.txt.gz' %(outd), sep="\t", compression = 'gzip', header=True, index=False)
 # if there are more samples, write them as well
 if len(sample_res) >1:
     for i in range(1, len(sample_res)):

@@ -65,7 +65,7 @@
     # Function to read VCF, and restrict to region of interest
     readVCF <- function(rs_vcf, region){
       # read vcf
-      d = fread(rs_vcf, h=T)
+      d = fread(rs_vcf, h=T, sep="\t")
       # restrict to region of interest
       if (length(region) == 1 && (region == 'all')){ sub = d } else { sub = d[which(d$ID %in% region),] }
       # check if region existed

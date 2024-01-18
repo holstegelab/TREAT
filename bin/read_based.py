@@ -10,10 +10,10 @@ from functools import partial
 import multiprocessing
 import pandas as pd
 import re
+import math
 import time
 
 # Functions
-
 ### Checking directories and log file
 # Read bed file
 def readBed(bed_dir):
@@ -115,7 +115,7 @@ def samtoolsExtract(x, bam, out_dir, temp_name):
 
 # Function to split bed file in n bed files
 def splitBed(bed_dir, n, outDir, count_reg):
-    number_lines_per_file = int(count_reg/n)
+    number_lines_per_file = math.ceil(count_reg/n)
     cmd = 'split -l %s %s %s/tmp_bed.' %(number_lines_per_file, bed_dir, outDir)
     os.system(cmd)
     # then read the obtained temporary beds
