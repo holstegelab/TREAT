@@ -41,25 +41,43 @@ Typing `/path/to/treat/bin/TREAT.py [reads/assembly/merge] -h` will show the hel
 
 ## Reads analysis
 The `reads` analysis take advantage of all sequencing reads aligning to the target regions to estimate genotypes. The procedure goes as it follows:
-1. extract the reads and relative sequences encompassing the region of interest
+1. extract the reads and relative sequences encompassing the target regions
 2. extract the corresponding sequence from the reference genome
-3. performs motif finding using tandem repeat finder (https://tandem.bu.edu/trf/trf.html)
+3. performs motif finding at the individual read level using tandem repeat finder (https://tandem.bu.edu/trf/trf.html)
 4. performs phasing using SNPs (optional, skipped by default)
 5. performs haplotype calling
 
 ### Required parameters
-- `-b / --bed`
+- `-b / --bed`: the target regions encoded in a BED file
+- `-i / --inBam`: the targer genomes encoded in a BAM file. Multiple comma-separated BAM files can be used. If a folder is provided, all BAM files in the folder will be used.
+- `-o / --outDir`: directory where output files will be placed. The output directory must NOT be present. TREAT will automatically create it.
+- `-r / --ref`: the reference genome encoded in a FASTA file.
+
 ### Optional parameters
+- `-w / --window`: the target regions defined in the BED file will be extended by this value upstream and downstream. Default value is 20. Must be an integer.
+- `-t / --cpu`: number of parallel threads to be used.
+- `-p / --phasingData`: if available, the path to the SNP dataset that will be used for phasing. The SNP dataset must be in PLINK2 format. If you are not familiar with PLINK2, please visit https://www.cog-genomics.org/plink/2.0.
+- `-m / --mappingSNP`: path to a 2-column file with SNP IDs and sequencing IDs. If not provided, will assume the IDs between SNP dataset and BAM files are the same.
+- `-d / --HaploDev`: during haplotype calling analysis, the median absolute deviation value to assign reads to the same allele. Defaul value is 0.10, that correspond to 10% median absolute deviation.
+- `-minSup / --minimumSupport`: during haplotype calling, the minimum number of reads supporting each haplotyping. Default is 2.
+- `-minCov / --minimumCoverage`: during haplotype calling, the minimum number of total reads necessary for calling. Default is 4.
 
-## General information
-### Single and multiple .bam files
-.bam files of interest are specified with `--bam-dir path/to/bam` flag. Every analysis type supports a single .bam files, multiple .bam files (that is, a comma-separated list of .bam files) or all .bam files in a directory. For the latter, in case a directory is the input, all .bam files in the directory will be used.
+## Assembly analysis
+The `assembly` analysis take advantage of all sequencing reads aligning to the target region to perform local assembly of the target regions. The procedure goes as it follows:
+1. extract the reads and relative sequences encompassing the target regions
+2. perform haplotype aware local assembly of the target regions in each sample
+3. performs motif finding at the individual assembly level using tandem repeat finder (https://tandem.bu.edu/trf/trf.html)
+4. performs haplotype calling
 
-### .bed file
-Any tab-separated file that includes at least chromosome (chr1, chr2, ..., chrN), start position and end position is valid. Header is not required (it is assumed that the fields are chromosome, start and end, respectively), but if header is present, it should start with #. If the analysis-type is `--analysis-type trf`, then you should add a fourth field with the expected motif. This can also be a comma-separated list of motifs. The `trf` analysis will compare the expected motif(s) with the observed and report whether the motif is the same, the reverse-complement, any permutation of these, or different. The motif is used mostly to match TRF findings by size. This means that if the motif in the .bed file is 5 nucleotide long, the analysis will report TRF findings with any motif of length 5. If no motifs are found, this is increased to 10 and all motifs are reported.
+### Required parameters
+Same as for the `reads` analysis.
 
-### Mapping file for phasing
-Often the sample identifiers for GWAS SNP array and sequencing are different. To account for this, you can input a mapping file: this should be a 2-column file with header (GWAS ID and PACBIO ID), which should contain, for each row, the mapping information between the two platform. At the moment, the pacbio identifier should report `_step1.bam` instead of `.bam`. This will change.
-
-### Reference genome
-In a number of options, the reference genome in fasta format should be provided. 
+### Optional parameters
+- `-w / --window`: the target regions defined in the BED file will be extended by this value upstream and downstream. Default value is 20. Must be an integer.
+- `-t / --cpu`: number of parallel threads to be used.
+- `-d / --HaploDev`: during haplotype calling analysis, the median absolute deviation value to assign reads to the same allele. Defaul value is 0.10, that correspond to 10% median absolute deviation.
+- `-minSup / --minimumSupport`: during haplotype calling, the minimum number of reads supporting each haplotyping. Default is 2.
+- `-minCov / --minimumCoverage`: during haplotype calling, the minimum number of total reads necessary for calling. Default is 4.
+- `-wAss / --windowAssembly`: the target regions defined in the BED file by this value upstream and downstream to take reads for assembly. Default value is 20. Must be an integer.
+- `-p / --ploidy`: estimated ploidy of the sample. Default value is 2 for autosomal regions. For sex-specific regions, the ploidy is either 1 (for males with chrX and chrY present in the BAM file), or 2 (for females with 2 chrX).
+- `-s / --software`: software to be used for assembly [otter/hifiasm]. Default value is otter. 
