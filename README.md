@@ -48,6 +48,7 @@ The `reads` analysis take advantage of all sequencing reads aligning to the targ
 5. performs haplotype calling
 
 ### Required parameters
+- `-b / --bed`
 ### Optional parameters
 
 ## General information
