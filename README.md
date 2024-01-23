@@ -1,49 +1,55 @@
 # TREAT (Tandem REpeat Annotation Toolkit)
 
 ## TREAT in a nutshell
-TREAT is a command line tool written in Python and R (for plotting) that can be used to work with tandem repeats and structural variants from long-read sequencing data.
+**TREAT** is a command line tool written in **Python** and **R** (for plotting) that can be used to work with tandem repeats and structural variants from long-read sequencing data.
 
 ## What data can be used with TREAT
-Although TREAT was developed for PacBio long-read sequencing data, it can be used with other long-read sequencing technologies (for example, Oxford Nanopore) and potentially short-read sequencing data.
+Although **TREAT** was developed for PacBio long-read sequencing data, it can be used with other long-read sequencing technologies (for example, Oxford Nanopore) and potentially short-read sequencing data.
 
 ## What do you need to run TREAT
-To run TREAT, you need:
-- TREAT correctly installed and working in your system
-- the target regions of interest in the form of a BED file. Please see BED file specifications at https://genome.ucsc.edu/FAQ/FAQformat.html#format1
-- the target genomes in the form of aligned BAM file(s). Please see BAM file specifications at https://genome.ucsc.edu/goldenPath/help/bam.html 
-- the reference genomes that was used to align genomes, in the form of a FASTA file. Please see FASTA file specifications at https://www.ncbi.nlm.nih.gov/genbank/fastaformat/ 
+To run **TREAT**, you need:
+- **TREAT** correctly installed and working in your system
+- the target regions of interest in the form of a BED file. Please see BED file specifications [here](https://genome.ucsc.edu/FAQ/FAQformat.html#format1)
+- the target genomes in the form of aligned BAM file(s). Please see BAM file specifications [here](https://genome.ucsc.edu/goldenPath/help/bam.html)
+- the reference genomes that was used to align genomes, in the form of a FASTA file. Please see FASTA file specifications [here](https://www.ncbi.nlm.nih.gov/genbank/fastaformat/)
 
 ## What do you get as output
-TREAT output consists of:
+**TREAT** output consists of:
 - `treat_run.log`: a recapitulation of the job along with a replicable command
 - `sample.vcf.gz`: the main VCF file summarizing the genotype of the target regions in the target genomes
 - `sample.seq.txt.gz`: this file contains the same information as the VCF file, but in a tab-delimited format
 - `sample.raw.txt.gz`: this file contains the raw read- or contig-specific information
 
 ## How do you install TREAT
-The easiest way to install TREAT in your system is to clone the repository in your system. You can do so by typing:
-`git clone https://github.com/holstegelab/treat.git`
-All you need to run TREAT is inside the repository.
-It is fundamental to install all the tools TREAT uses: this include, among others, aligners (minimap2), assembler (otter, hifiasm, flye). Although it is possible to install all software packages separately, we highly encourage to use the provided Conda environment. If you are not familiar with Conda, please see https://conda.io/projects/conda/en/latest/user-guide/getting-started.html. The easiest way to install all softwares required by TREAT is to replicate the provided Conda environment. You can do so by typing:
-`conda env create -f treat_environment.yml`. To make TREAT executable, you may need to type `chmod +x path/to/TREAT.py`. In addition, you may want to add TREAT directory to your bash_profile by typing `export PATH="/path/to/treat/bin/:$PATH"`. Alternatively, you can run TREAT directly from the folder.
+The easiest way to install **TREAT** in your system is to clone the repository in your system. You can do so by typing:  
+`git clone https://github.com/holstegelab/treat.git`  
+All you need for running **TREAT** is inside the repository.  
+It is *fundamental* to install all the tools **TREAT** uses: this include, among others, aligners (*minimap2*), assembler (*otter*, *hifiasm*), *samtools* and *tandem repeat finder*. Although it is possible to install all software packages separately, we highly encourage to use the provided Conda environment. If you are not familiar with Conda, please see [here](https://conda.io/projects/conda/en/latest/user-guide/getting-started.html).  
+The easiest way to install all softwares required by **TREAT** is to replicate the provided Conda environment. You can do so by typing:  
+`conda env create -f treat_environment.yml`  
+To make **TREAT** executable, you may need to type:  
+`chmod +x path/to/TREAT.py`  
+In addition, you may want to add **TREAT** directory to your bash_profile by typing:  
+`export PATH="/path/to/treat/bin/:$PATH"`  
+Alternatively, you can run **TREAT** directly from the folder where it is installed.
 
 ## How do you run TREAT
-To run TREAT, you can follow these steps:
-- activate conda environment by typing `conda activate treat`
-- you can run TREAT with `/path/to/treat/bin/TREAT.py -h`
+To run **TREAT**, you can follow these steps:
+- `conda activate treat         # activate the right conda environment`
+- `/path/to/treat/bin/TREAT.py -h         # run TREAT`
 
 ## Toolkit
-TREAT contains several tools to manipulate and analyze sequencing data. Three analysis strategies are available in TREAT:
-- `reads`: genotype the target region in the target genomes using single reads and a clustering framework. Genotypes are always given as the size of the region of interest.
-- `assembly`: genotype the target region in the target genomes with targeted local assembly of the single reads. Genotypes are always given as the size of the region of interest.
-- `merge`: can be used to combine multiple VCF. Genotypes are always given as the size of the region of interest.
+**TREAT** contains several tools to manipulate and analyze sequencing data. Three main analysis strategies are available in **TREAT**:
+- `reads`: genotype the target region in the target genomes using single reads and a clustering framework. Genotypes are always given as the size of the region of interest
+- `assembly`: genotype the target region in the target genomes with targeted local assembly of the single reads. Genotypes are always given as the size of the region of interest
+- `merge`: can be used to combine multiple VCF. Genotypes are always given as the size of the region of interest  
 Typing `/path/to/treat/bin/TREAT.py [reads/assembly/merge] -h` will show the help message specific to the analysis of interest, along with all available run parameters.
 
 ## Reads analysis
 The `reads` analysis take advantage of all sequencing reads aligning to the target regions to estimate genotypes. The procedure goes as it follows:
 1. extract the reads and relative sequences encompassing the target regions
 2. extract the corresponding sequence from the reference genome
-3. performs motif finding at the individual read level using tandem repeat finder (https://tandem.bu.edu/trf/trf.html)
+3. performs motif finding at the individual read level using [tandem repeat finder](https://tandem.bu.edu/trf/trf.html)
 4. performs phasing using SNPs (optional, skipped by default)
 5. performs haplotype calling
 
@@ -66,7 +72,7 @@ The `reads` analysis take advantage of all sequencing reads aligning to the targ
 The `assembly` analysis take advantage of all sequencing reads aligning to the target region to perform local assembly of the target regions. The procedure goes as it follows:
 1. extract the reads and relative sequences encompassing the target regions
 2. perform haplotype aware local assembly of the target regions in each sample
-3. performs motif finding at the individual assembly level using tandem repeat finder (https://tandem.bu.edu/trf/trf.html)
+3. performs motif finding at the individual assembly level using [tandem repeat finder](https://tandem.bu.edu/trf/trf.html)
 4. performs haplotype calling
 
 ### Required parameters
@@ -85,10 +91,10 @@ Same as for the `reads` analysis.
 ## Additional folders in the repository
 
 ### test_data folder
-The `test_data` folder contains test data that can be use to assess the correct functioning of TREAT. A basic test can be the following for a `reads` analysis:
-`TREAT.py reads -b test_data/example.bed -i test_data/example.bam -o test_output -r /path/to/reference_genome_hg38.fa`
-While for a `assembly` analysis, the following can be used:
-`TREAT.py assembly -b test_data/example.bed -i test_data/example.bam -o test_output_asm -r /path/to/reference_genome_hg38.fa -s otter`
+The `test_data` folder contains test data that can be use to assess the correct functioning of **TREAT**. A basic test can be the following for a `reads` analysis:
+`TREAT.py reads -b test_data/example.bed -i test_data/example.bam -o test_output -r /path/to/reference_genome_hg38.fa`  
+While for a `assembly` analysis, the following can be used:  
+`TREAT.py assembly -b test_data/example.bed -i test_data/example.bam -o test_output_asm -r /path/to/reference_genome_hg38.fa -s otter`  
 
 ### treat_application folder
-The `treat_application` folder contains several sub-folders related to the different projects from our group in which TREAT was used. Each sub-folder contains additional scripts and downstream analysis scripts that were used. Please look at the README in the specific sub-folders for additional information.
+The `treat_application` folder contains several sub-folders related to the different projects from our group in which **TREAT** was used. Each sub-folder contains additional scripts and downstream analysis scripts that were used. Please look at the README in the specific sub-folders for additional information.
