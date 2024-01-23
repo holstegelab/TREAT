@@ -16,7 +16,13 @@ import time
 # Functions
 ### Checking directories and log file
 # Read bed file
-def readBed(bed_dir):
+def readBed(bed_dir, out_dir):
+    # in any case, we should re-write the bed file as there are things to check: tab separated, and intervals should be of at least 1 bp
+    fout_name = '%s/correct_bed.bed' %(out_dir)
+    fout = open(fout_name, 'w')
+    # counter for valid and modified intervals
+    counter_valid = 0
+    counter_invalid = 0
     bed = {}
     count_reg = 0
     try:
@@ -30,14 +36,29 @@ def readBed(bed_dir):
                         chrom, start, end = line[0:3]
                         region_id = chrom + ':' + start + '-' + end
                         count_reg += 1
+                        # add chromosome label if not there
                         if 'chr' not in chrom:
                             chrom = 'chr' + str(chrom)
+                        # check size of interval, if 0 or negative, put 1
+                        if int(end) - int(start) <= 0:
+                            end = int(start) + 1
+                            counter_invalid += 1
+                        else:
+                            counter_valid += 1
+                        # add elements to the global dictionary
                         if chrom in bed.keys():
                             bed[chrom].append([start, end, region_id])
                         else:
                             bed[chrom] = [[start, end, region_id]]
+                        # add region to the new bed file
+                        fout.write('%s\t%s\t%s\n' %(chrom, start, end))
+        fout.close()
         print('** BED file: found %s regions in %s chromosomes' %(count_reg, len(bed)))
-        return bed, count_reg
+        if counter_invalid >0:
+            print('** Of these, %s are valid intervals, and %s are invalid. Invalid intervals have been fixed with end = start + 1' %(counter_valid, counter_invalid))
+        else:
+            print('** All intervals are valid.')
+        return bed, count_reg, fout_name
     except:
         print("\n!!! Input BED file is missing or wrongly formatted. Make sure to provide a genuine tab-separated BED file without header.\nExecution halted.")
         sys.exit(1)  # Exit the script with a non-zero status code
@@ -488,7 +509,7 @@ print(checkOutDir(outDir))
 # 1.2 Create Log file
 logfile = createLog(inBam_dir, bed_dir, outDir, ref, window, cpu, phasingData, mappingSNP, HaploDev, minimumSupport, minimumCoverage)
 # 1.3 Read bed file
-bed, count_reg = readBed(bed_dir)
+bed, count_reg, bed_dir = readBed(bed_dir, outDir)
 # 1.3 Check BAM files
 inBam = checkBAM(inBam_dir)
 
