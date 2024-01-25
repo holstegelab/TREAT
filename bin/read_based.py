@@ -41,21 +41,20 @@ def readBed(bed_dir, out_dir):
                             chrom = 'chr' + str(chrom)
                         # check size of interval, if 0 or negative, put 1
                         if int(end) - int(start) <= 0:
-                            end = int(start) + 1
                             counter_invalid += 1
                         else:
                             counter_valid += 1
-                        # add elements to the global dictionary
-                        if chrom in bed.keys():
-                            bed[chrom].append([start, end, region_id])
-                        else:
-                            bed[chrom] = [[start, end, region_id]]
-                        # add region to the new bed file
-                        fout.write('%s\t%s\t%s\n' %(chrom, start, end))
+                            # add region to the new bed file
+                            fout.write('%s\t%s\t%s\n' %(chrom, start, end))
+                            # add elements to the global dictionary
+                            if chrom in bed.keys():
+                                bed[chrom].append([start, end, region_id])
+                            else:
+                                bed[chrom] = [[start, end, region_id]]
         fout.close()
         print('** BED file: found %s regions in %s chromosomes' %(count_reg, len(bed)))
         if counter_invalid >0:
-            print('** Of these, %s are valid intervals, and %s are invalid. Invalid intervals have been fixed with end = start + 1' %(counter_valid, counter_invalid))
+            print('** Of these, %s are valid intervals, and %s are invalid. Invalid intervals (distance between start and end of 0) have been removed.' %(counter_valid, counter_invalid))
         else:
             print('** All intervals are valid.')
         return bed, count_reg, fout_name
@@ -589,7 +588,7 @@ df_trf_phasing_combined = pd.merge(df_trf_combined, combined_haplotags_df, left_
 ts = time.time()
 # 5.2 Output file for haplotyping
 outf = '%s/spanning_reads_trf_phasing.txt.gz' %(outDir)
-df_trf_phasing_combined.to_csv(outf, sep = "\t", index=False, na_rep='NA', compression='gzip')
+df_trf_phasing_combined.to_csv(outf, sep = " ", index=False, na_rep='NA', compression='gzip')
 print('** Data combined. Writing outputs')
 te = time.time()
 time_write = te-ts

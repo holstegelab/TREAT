@@ -277,7 +277,10 @@ def prepareOutputs(final_sbs, reference_motif_dic, r, type, depths):
     # check if 'chr' is in both the dictionary and the region of interest
     if 'chr' not in list(reference_motif_dic.keys())[0]:
         reference_motif_dic = {'chr' + key: value for key, value in reference_motif_dic.items()}
-    ref_motif, ref_len, ref_copies = reference_motif_dic[r]
+    if r in reference_motif_dic.keys():
+        ref_motif, ref_len, ref_copies = reference_motif_dic[r]
+    else:
+        ref_motif, ref_len, ref_copies = 'NA', int(end) - int(start), 'NA'
     info_field = '%s;%s' %(ref_motif, ref_copies)
     format_field = 'QC;GT;MOTIF;CN;CN_REF;DP'
     sam_gt = '|'.join(list(final_sbs['POLISHED_HAPLO'].map(str))) if final_sbs.shape[0] >1 else list(final_sbs["POLISHED_HAPLO"].map(str).apply(lambda x: x + "|" + x))[0]
@@ -341,6 +344,7 @@ def addDups(pol_sbs, dup_df, s, r, type):
     pol_sbs['type'] = type
     # subset of the duplicates of that sample and that region
     sbs_dups = dup_df[(dup_df['SAMPLE_NAME'] == s) & (dup_df['REGION'] == r)].copy()
+    sbs_dups = sbs_dups.dropna(subset=['LEN_SEQUENCE_FOR_TRF']).copy()
     if sbs_dups.shape[0] >0:
         n_haplo = len([x for x in list(pol_sbs['HAPLOTAG'].dropna().unique()) if x != 'NA'])
         if n_haplo == 1:
@@ -546,7 +550,7 @@ def writeOutputs(df_vcf, df_seq, seq_file, vcf_file):
     # then compress it
     os.system('gzip %s' %(vcf_file))
     # write sequence file
-    df_seq.to_csv(seq_file, header=True, index=False, sep='\t', compression = 'gzip')
+    #df_seq.to_csv(seq_file, header=True, index=False, sep='\t', compression = 'gzip')
     return
 
 # 1. arguments
@@ -559,7 +563,7 @@ min_support = int(sys.argv[6])
 
 # 2. read data
 print('** Read data')
-data = pd.read_csv(inpf, sep='\t', compression='gzip', low_memory=False)
+data = pd.read_csv(inpf, sep=' ', compression='gzip', low_memory=False)
 
 # 3. adjust the motif -- merge the same motifs
 print('** Adjust motifs')
