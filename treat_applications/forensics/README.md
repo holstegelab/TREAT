@@ -1,6 +1,6 @@
 # TREAT used in a forensic project
 
-![TREAT](/treat_applications/forensics/treat_forensics_logo.png)
+![TREAT](/treat_applications/forensics/Figure_TREAT.png)
 
 ## Idea of the project
 **TREAT** was used with the aim of genotyping short-tandem-repeats (STR) that are normally used in forensics. 
