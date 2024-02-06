@@ -19,6 +19,8 @@ import shutil
 import warnings
 import gzip
 
+##########################################################
+###### COMMON BASIC FUNCTIONS TO READS AND ASSEMBLY ANALYSIS
 ### FUNCTIONS FOR CHECKING FILES AND DIRECTORIES
 # Read bed file
 def readBed(bed_dir, out_dir):
@@ -101,8 +103,8 @@ def checkBAM(bam_dir):
         print("\n!!! Input BAM file is missing or wrongly formatted. Make sure to provide a genuine BAM file.\nExecution halted.")
         sys.exit(1)  # Exit the script with a non-zero status code
 
-# Function to create Log file
-def createLog(inBam, bed_dir, outDir, ref, window, cpu, phasingData, mappingSNP, HaploDev, minimumSupport, minimumCoverage):
+# Function to create Log file -- Reads analysis
+def createLogReads(inBam, bed_dir, outDir, ref, window, cpu, phasingData, mappingSNP, HaploDev, minimumSupport, minimumCoverage):
     foutname = open('%s/treat_run.log' %(outDir), 'w')
     foutname.write('Read-based analysis selected\n')
     foutname.write('** Required argument:\n')
@@ -124,6 +126,33 @@ def createLog(inBam, bed_dir, outDir, ref, window, cpu, phasingData, mappingSNP,
     print('** Log file written to %s/treat_run.log' %(outDir))
     return foutname
 
+# Function to create Log file -- Assembly analysis
+def createLogAsm(inBam, bed_dir, outDir, ref, window, cpu, windowAss, ploidy, software, HaploDev, minimumSupport, minimumCoverage):
+    foutname = open('%s/treat_run.log' %(outDir), 'w')
+    foutname.write('Assembly-based analysis selected\n')
+    foutname.write('** Required argument:\n')
+    foutname.write("\tInput BAM file(s): %s\n" %(inBam))
+    foutname.write("\tInput BED file: %s\n" %(bed_dir))
+    foutname.write("\tOutput directory: %s\n" %(outDir))
+    foutname.write("\tReference genome: %s\n" %(ref))
+    foutname.write('** Optional arguments:\n')
+    foutname.write("\tWindow: %s\n" %(window))
+    foutname.write("\tWindow for assembly: %s\n" %(windowAss))
+    foutname.write("\tNumber of threads: %s\n" %(cpu))
+    foutname.write("\tPloidy: %s\n" %(ploidy))
+    foutname.write("\tAssembler: %s\n" %(software))
+    foutname.write("\tHaplotyping deviation: %s\n" %(HaploDev))
+    foutname.write("\tMinimum supporting reads: %s\n" %(minimumSupport))
+    foutname.write("\tMinimum coverage: %s\n" %(minimumCoverage))
+    foutname.write("\n")
+    foutname.write('Effective command line:\nTREAT.py assembly -i %s -b %s -o %s -r %s -w %s -wAss %s -t %s -s %s -p %s -d %s -minSup %s -minCov %s\n' %(inBam, bed_dir, outDir, ref, window, windowAss, cpu, software, ploidy, HaploDev, minimumSupport, minimumCoverage))
+    foutname.close()
+    print('** Log file written to %s/treat_run.log' %(outDir))
+    return foutname
+
+##########################################################
+
+###### FUNCTIONS FOR READS ANALYSIS
 ### FUNCTIONS TO EXTRACT READS AND SEQUENCES
 # Function to extract reads using multiple processors
 def samtoolsExtract(x, bam, out_dir, temp_name):

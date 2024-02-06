@@ -19,7 +19,7 @@ ts_total = time.time()
 # 1.1 Check output directory
 print(checkOutDir(outDir))
 # 1.2 Create Log file
-logfile = createLog(inBam_dir, bed_dir, outDir, ref, window, cpu, phasingData, mappingSNP, HaploDev, minimumSupport, minimumCoverage)
+logfile = createLogReads(inBam_dir, bed_dir, outDir, ref, window, cpu, phasingData, mappingSNP, HaploDev, minimumSupport, minimumCoverage)
 # 1.3 Read bed file
 bed, count_reg, bed_dir = readBed(bed_dir, outDir)
 # 1.3 Check BAM files
