@@ -239,7 +239,7 @@ def run_trf_otter(index, all_fasta, distances, type):
     return complete_df
 
 # Otter pipeline
-def otterPipeline(outDir, cpu, ref, bed_dir, inBam, count_reg, windowAss):
+def otterPipeline(outDir, cpu, ref, bed_dir, inBam, count_reg, windowAss, window):
     print('** Assembler: otter')
     # create directory for outputs
     os.system('mkdir %s/otter_local_asm' %(outDir))
