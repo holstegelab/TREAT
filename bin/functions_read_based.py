@@ -564,9 +564,10 @@ def haplotyping_steps(data, n_cpu, thr_mad, min_support, type, outDir):
                 list_of_lists_of_lists_dups.append([])
         # pair non-duplicated and duplicated for parallelization, assuming list_of_lists_of_lists and list_of_lists_of_lists_dups have the same length
         list_pairs = zip(list_of_lists_of_lists, list_of_lists_of_lists_dups)
-        #for x in range(len(list_of_lists_of_lists)):
-        #    print(x)
-        #    haplo_results = haplotyping(list_of_lists_of_lists[x], s, thr_mad, type, sbs_dups, reference_motif_dic, intervals, min_support)
+        #for r in list(set(list(sbs['REGION']))):
+        #    yy = [] if r not in grouped_rows_dups.keys() else grouped_rows_dups[r]
+        #    xx = grouped_rows[r]
+        #    haplo_results = haplotyping([xx, yy], s, thr_mad, type, reference_motif_dic, intervals, min_support)
         #    sample_res.append(haplo_results)
         pool = multiprocessing.Pool(processes=n_cpu)
         haplo_fun = partial(haplotyping, s = s, thr_mad = thr_mad, type = type, reference_motif_dic = reference_motif_dic, intervals = intervals, min_support = min_support)
@@ -625,6 +626,7 @@ def haplotyping(pair, s, thr_mad, type, reference_motif_dic, intervals, min_supp
     columns = ['SAMPLE_NAME', 'REGION', 'READ_NAME', 'PASSES', 'READ_QUALITY', 'MAPPING_CONSENSUS', 'SEQUENCE_FOR_TRF', 'SEQUENCE_WITH_PADDINGS', 'LEN_SEQUENCE_FOR_TRF', 'LEN_SEQUENCE_WITH_PADDINGS', 'ID', 'EXPECTED_MOTIF', 'START_TRF', 'END_TRF', 'LENGTH_MOTIF_TRF', 'COPIES_TRF', 'TRF_CONSENSUS_SIZE', 'TRF_PERC_MATCH', 'TRF_PERC_INDEL', 'TRF_SCORE', 'TRF_A_PERC', 'TRF_C_PERC', 'TRF_G_PERC', 'TRF_T_PERC', 'TRF_ENTROPY', 'TRF_MOTIF', 'TRF_REPEAT_SEQUENCE', 'TRF_PADDING_BEFORE', 'TRF_PADDING_AFTER', 'HAPLOTAG', 'motif', 'UNIFORM_MOTIF', 'UNIQUE_NAME'] if type in ['reads', 'hifiasm'] else ['SAMPLE_NAME', 'REGION', 'READ_NAME', 'SEQUENCE_WITH_PADDINGS', 'LEN_SEQUENCE_WITH_PADDINGS', 'SEQUENCE_FOR_TRF', 'LEN_SEQUENCE_FOR_TRF', 'HAPLOTAG', 'PASSES', 'READ_QUALITY', 'MAPPING_CONSENSUS', 'ID', 'EXPECTED_MOTIF', 'START_TRF', 'END_TRF', 'LENGTH_MOTIF_TRF', 'COPIES_TRF', 'TRF_CONSENSUS_SIZE', 'TRF_PERC_MATCH', 'TRF_PERC_INDEL', 'TRF_SCORE', 'TRF_A_PERC', 'TRF_C_PERC', 'TRF_G_PERC', 'TRF_T_PERC', 'TRF_ENTROPY', 'TRF_MOTIF', 'TRF_REPEAT_SEQUENCE', 'TRF_PADDING_BEFORE', 'TRF_PADDING_AFTER', 'motif', 'UNIFORM_MOTIF', 'UNIQUE_NAME']
     # data of interest to dataframe
     sbs = pd.DataFrame(x, columns=columns)
+    #print(list(set(list(sbs['REGION'])))[0])
     # comment out this below to restore
     dup_df = pd.DataFrame(y, columns=columns)
     # extract region
@@ -682,43 +684,47 @@ def haplotyping(pair, s, thr_mad, type, reference_motif_dic, intervals, min_supp
 
 # function to call haplotypes for reads
 def readBased_size(sbs, r, chrom, min_support, thr_mad):
-    # get phasing information
-    haplotag_list = [x for x in list(sbs['HAPLOTAG']) if not isinstance(x, float) or not math.isnan(x)]
-    if len(haplotag_list) == 0:
-        haplo_center, haplo_id, deleted = kmeans_haplotyping(sbs, min_support, thr_mad, chrom, r)
-        # check if there were excluded reads
-        if len(deleted) == 0:
-            #sbs['HAPLO_CONFINT'] = haplo_confint
-            sbs['HAPLOTAG'] = haplo_id
-            sbs['POLISHED_HAPLO'] = haplo_center
+    # enclose in a try so that in case of errors nothing is stopped
+    try:
+        # get phasing information
+        haplotag_list = [x for x in list(sbs['HAPLOTAG']) if not isinstance(x, float) or not math.isnan(x)]
+        if len(haplotag_list) == 0:
+            haplo_center, haplo_id, deleted = kmeans_haplotyping(sbs, min_support, thr_mad, chrom, r)
+            # check if there were excluded reads
+            if len(deleted) == 0:
+                #sbs['HAPLO_CONFINT'] = haplo_confint
+                sbs['HAPLOTAG'] = haplo_id
+                sbs['POLISHED_HAPLO'] = haplo_center
+            else:
+                deleted_rows = sbs[sbs['LEN_SEQUENCE_FOR_TRF'].isin(deleted)].copy()
+                deleted_rows['HAPLOTAG'] = 'NA'
+                deleted_rows['POLISHED_HAPLO'] = 'NA'
+                kept_rows = sbs[~sbs['LEN_SEQUENCE_FOR_TRF'].isin(deleted)].copy()
+                kept_rows['HAPLOTAG'] = haplo_id
+                kept_rows['POLISHED_HAPLO'] = haplo_center
+                sbs = pd.concat([kept_rows, deleted_rows], axis=0)
         else:
-            deleted_rows = sbs[sbs['LEN_SEQUENCE_FOR_TRF'].isin(deleted)].copy()
-            deleted_rows['HAPLOTAG'] = 'NA'
-            deleted_rows['POLISHED_HAPLO'] = 'NA'
-            kept_rows = sbs[~sbs['LEN_SEQUENCE_FOR_TRF'].isin(deleted)].copy()
-            kept_rows['HAPLOTAG'] = haplo_id
-            kept_rows['POLISHED_HAPLO'] = haplo_center
-            sbs = pd.concat([kept_rows, deleted_rows], axis=0)
-    else:
-        if len(haplotag_list) == sbs.shape[0]:
-            # if all reads are phased, get polished haplotags as the median of the sizes per haplotype
-            pol = sbs.groupby('HAPLOTAG')['LEN_SEQUENCE_FOR_TRF'].median()
-            # then assign these values to the dataframe
-            sbs['POLISHED_HAPLO'] = sbs['HAPLOTAG'].map(pol)
-            # haplotags need to be either 0 or 1, so remove 1 from the current values
-            sbs['HAPLOTAG'] = sbs['HAPLOTAG'] - 1
-        else:
-            # otherwise assign the reads with unknown haplotag to those with a value
-            sbs['HAPLOTAG'] = sbs.apply(impute_hap, axis=1, df = sbs)
-            # then check for deviations
-            pol_sbs = checkDeviationPhasing(sbs, thr_mad)
-            # finally add the polished haplotypes
-            pol = pol_sbs.groupby('HAPLOTAG')['LEN_SEQUENCE_FOR_TRF'].median()
-            # then assign these values to the dataframe
-            pol_sbs['POLISHED_HAPLO'] = pol_sbs['HAPLOTAG'].map(pol)
-            # haplotags need to be either 0 or 1, so remove 1 from the current values
-            pol_sbs['HAPLOTAG'] = pol_sbs['HAPLOTAG'] - 1
-            sbs = pol_sbs
+            if len(haplotag_list) == sbs.shape[0]:
+                # if all reads are phased, get polished haplotags as the median of the sizes per haplotype
+                pol = sbs.groupby('HAPLOTAG')['LEN_SEQUENCE_FOR_TRF'].median()
+                # then assign these values to the dataframe
+                sbs['POLISHED_HAPLO'] = sbs['HAPLOTAG'].map(pol)
+                # haplotags need to be either 0 or 1, so remove 1 from the current values
+                sbs['HAPLOTAG'] = sbs['HAPLOTAG'] - 1
+            else:
+                # otherwise assign the reads with unknown haplotag to those with a value
+                sbs['HAPLOTAG'] = sbs.apply(impute_hap, axis=1, df = sbs)
+                # then check for deviations
+                pol_sbs = checkDeviationPhasing(sbs, thr_mad)
+                # finally add the polished haplotypes
+                pol = pol_sbs.groupby('HAPLOTAG')['LEN_SEQUENCE_FOR_TRF'].median()
+                # then assign these values to the dataframe
+                pol_sbs['POLISHED_HAPLO'] = pol_sbs['HAPLOTAG'].map(pol)
+                # haplotags need to be either 0 or 1, so remove 1 from the current values
+                pol_sbs['HAPLOTAG'] = pol_sbs['HAPLOTAG'] - 1
+                sbs = pol_sbs
+    except:
+        sbs['POLISHED_HAPLO'] = 'NA'
     return sbs
 
 # function to check deviation of the phasing imputation
@@ -857,7 +863,8 @@ def kmeans_haplotyping(sbs, min_support, thr_mad, chrom, r):
                     centers_kmeans, haplo_list = findHaplo_hetero(read_lengths, haplo_list, centers_kmeans)
                     centers_confint = []
         else:
-            centers_kmeans = []; centers_confint = []; haplo_list = []; deleted_all = []
+            centers_kmeans = []; centers_confint = []; haplo_list = []
+            deleted_all = [] if len(read_lengths) == 0 else [x for x in list(sbs['LEN_SEQUENCE_FOR_TRF']) if not isinstance(x, float) or not math.isnan(x)]
             loop = False
     return centers_kmeans, haplo_list, deleted_all
 
@@ -874,17 +881,24 @@ def prepareOutputs(final_sbs, reference_motif_dic, r, type, depths):
         ref_motif, ref_len, ref_copies = 'NA', int(end) - int(start), 'NA'
     info_field = '%s;%s' %(ref_motif, ref_copies)
     format_field = 'QC;GT;MOTIF;CN;CN_REF;DP'
-    sam_gt = '|'.join(list(final_sbs['POLISHED_HAPLO'].map(str))) if final_sbs.shape[0] >1 else list(final_sbs["POLISHED_HAPLO"].map(str).apply(lambda x: x + "|" + x))[0]
-    sam_mot = '|'.join(list(final_sbs['CONSENSUS_MOTIF'].map(str))) if final_sbs.shape[0] >1 else list(final_sbs["CONSENSUS_MOTIF"].map(str).apply(lambda x: x + "|" + x))[0]
-    sam_cop = '|'.join(list(final_sbs['CONSENSUS_MOTIF_COPIES'].map(str))) if final_sbs.shape[0] >1 else list(final_sbs["CONSENSUS_MOTIF_COPIES"].map(str).apply(lambda x: x + "|" + x))[0]
-    sam_cop_ref = '|'.join(list(final_sbs['REFERENCE_MOTIF_COPIES'].map(str))) if final_sbs.shape[0] >1 else list(final_sbs["REFERENCE_MOTIF_COPIES"].map(str).apply(lambda x: x + "|" + x))[0]
+    if final_sbs.shape[0] == 0:
+        sam_gt = 'NA|NA'; sam_mot = 'NA|NA'; sam_cop = 'NA|NA'; sam_cop_ref = 'NA|NA'
+        final_sbs['CONSENSUS_MOTIF'] = 'NA'; final_sbs['CONSENSUS_MOTIF_COPIES'] = 'NA' 
+    else:
+        sam_gt = '|'.join(list(final_sbs['POLISHED_HAPLO'].map(str))) if final_sbs.shape[0] >1 else list(final_sbs["POLISHED_HAPLO"].map(str).apply(lambda x: x + "|" + x))[0]
+        sam_mot = '|'.join(list(final_sbs['CONSENSUS_MOTIF'].map(str))) if final_sbs.shape[0] >1 else list(final_sbs["CONSENSUS_MOTIF"].map(str).apply(lambda x: x + "|" + x))[0]
+        sam_cop = '|'.join(list(final_sbs['CONSENSUS_MOTIF_COPIES'].map(str))) if final_sbs.shape[0] >1 else list(final_sbs["CONSENSUS_MOTIF_COPIES"].map(str).apply(lambda x: x + "|" + x))[0]
+        sam_cop_ref = '|'.join(list(final_sbs['REFERENCE_MOTIF_COPIES'].map(str))) if final_sbs.shape[0] >1 else list(final_sbs["REFERENCE_MOTIF_COPIES"].map(str).apply(lambda x: x + "|" + x))[0]
     if type == 'reads':
         sam_depth = '|'.join([str(x) for x in depths])
     elif type == 'hifiasm':
         sam_depth = 'Na|Na'
     elif type == 'otter':
         sam_depth = '|'.join(list(final_sbs["READ_NAME"].str.split("_").str[1])) if final_sbs.shape[0] >1 else list(final_sbs["READ_NAME"].str.split("_").str[1].apply(lambda x: x + "|" + x))[0]
-    sample_field = '%s;%s;%s;%s;%s;%s' %('PASS_ASM', sam_gt, sam_mot, sam_cop, sam_cop_ref, sam_depth)
+    if final_sbs.shape[0] == 0:
+        sample_field = '%s;%s;%s;%s;%s;%s' %('FAILED', sam_gt, sam_mot, sam_cop, sam_cop_ref, sam_depth)    
+    else:
+        sample_field = '%s;%s;%s;%s;%s;%s' %('PASS_ASM', sam_gt, sam_mot, sam_cop, sam_cop_ref, sam_depth)
     res_vcf = [chrom, start, r, ref_len, '.', '.', 'PASS', info_field, format_field, sample_field]
     # then prepare the sequence output
     if type == 'reads':
@@ -943,7 +957,7 @@ def addDups(pol_sbs, dup_df, s, r, type):
             sbs_dups['type'] = type
             sbs_dups['POLISHED_HAPLO'] = [x for x in list(pol_sbs['POLISHED_HAPLO'].dropna().unique()) if x != 'NA'][0]
             return pd.concat([pol_sbs, sbs_dups], axis=0)
-        else:
+        elif n_haplo == 2:
             h1_size = pol_sbs.loc[pol_sbs['HAPLOTAG'] == 0, 'POLISHED_HAPLO'].unique()
             h2_size = pol_sbs.loc[pol_sbs['HAPLOTAG'] == 1, 'POLISHED_HAPLO'].unique()
             target = list(sbs_dups['LEN_SEQUENCE_FOR_TRF'])
@@ -957,6 +971,8 @@ def addDups(pol_sbs, dup_df, s, r, type):
             combined = pd.concat([pol_sbs, sbs_dups], axis=0)
             combined = combined.drop_duplicates()
             return combined
+        else:
+            return pol_sbs
     else:
         return pol_sbs
 
