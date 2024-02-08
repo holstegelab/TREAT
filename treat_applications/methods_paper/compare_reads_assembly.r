@@ -1,5 +1,8 @@
 # Script to compare reads-based and assembly-based approached
 
+# Script to compare reads-based and assembly-based methods
+# This script accompanies Treat/Otter manuscript
+
 # Libraries
     library(data.table)
     library(stringr)
@@ -11,22 +14,28 @@
 # Functions
     # Function to read VCF, and restrict to region of interest
     readVCF <- function(rs_vcf, region){
-        # read vcf
-        d = fread(rs_vcf, h=T)
-        # restrict to region of interest
-        if (length(region) == 1 && (region == 'all')){ sub = d } else { sub = d[which(d$ID %in% region),] }
-        # check if region existed
-        if (nrow(sub) >0){
-            return(sub)
-        } else {
-            stop('The region you provided does not exists! Stopping.')
+        combined_data = data.frame()
+        for (vcf in rs_vcf){
+            print(paste0('** reading ', vcf))
+            # read vcf
+            d = fread(vcf, h=T)
+            # restrict to region of interest
+            if (length(region) == 1 && (region == 'all')){ sub = data.frame(d) } else { sub = data.frame(d[which(d$ID %in% region),]) }
+            # check if region existed
+            if (nrow(combined_data) == 0){
+                combined_data = sub
+            } else {
+                sub = sub[, c(3, ncol(sub))]
+                combined_data = merge(combined_data, sub, by = 'ID')
+            }
         }
+        return(combined_data)
     }
 
     # Function to extract sizes
     extractHaploSize = function(vcf){
         # restrict to samples and regions
-        tmp = select(vcf, 3, 10:ncol(vcf))
+        tmp = select(vcf, 1, 10:ncol(vcf))
         # split and keep genotypes
         tmp_split <- tmp %>% mutate(across(2:last_col(), ~str_split(., ";"))) %>% mutate(across(2:last_col(), ~sapply(., function(x) x[2])))
         # Reshape the dataframe from wide to long format, and add a column with the sample name
@@ -39,31 +48,52 @@
     }
 
 # Main
-    # 1. read read-based and assembly-based VCF files
-    read = readVCF('reads/sample.vcf.gz', 'all')
-    assembly = readVCF('assembly/sample.vcf.gz', 'all')
+    # 1. define paths
+        data_path = '/project/holstegelab/Share/nicco/paper_treat/20240206_final'
 
-    # 2. reformat: extract genotypes
-    read_gt = extractHaploSize(read)
-    assembly_gt = extractHaploSize(assembly)
+    # 2. create directory for comparative analysis
+        system(paste0('mkdir ', data_path, '/comparison_reads_asm'))
 
-    # 3. put data together
-    read_gt$Type = 'Read-based'
-    assembly_gt$Type = 'Assembly-based'
-    # add unique ID with the sample
-    read_gt$ID = paste(read_gt$ID, read_gt$Sample, sep='_')
-    assembly_gt$ID = paste(assembly_gt$ID, assembly_gt$Sample, sep='_')
-    # rename columns
-    colnames(read_gt)[2:length(colnames(read_gt))] = paste0(colnames(read_gt)[2:length(colnames(read_gt))], '_Read')
-    colnames(assembly_gt)[2:length(colnames(assembly_gt))] = paste0(colnames(assembly_gt)[2:length(colnames(assembly_gt))], '_Assembly')
-    combined = merge(read_gt, assembly_gt, by = 'ID')
+    # 3. identify the samples's data (individual data)
+        reads_vcf = system(paste0("find ", data_path, "/ -name '*vcf*' | grep reads"), intern=T)
+        asm_vcf = system(paste0("find ", data_path, "/ -name '*vcf*' | grep asm"), intern=T)
 
-    # 4. correlation
-    cor(combined$Short_Read[which(combined$Sample_Read == 'HG005')], combined$Short_Assembly[which(combined$Sample_Assembly == 'HG005')], use = 'complete', method = 'spearman')
-    cor(combined$Long_Read[which(combined$Sample_Read == 'HG005')], combined$Long_Assembly[which(combined$Sample_Assembly == 'HG005')], use = 'complete', method = 'spearman')
-    cor(combined$Sum_Read, combined$Sum_Assembly, use = 'complete', method = 'spearman')
+    # 4. iterate through files, read them and combine
+        reads_data = readVCF(reads_vcf, 'all')
+        asm_data = readVCF(asm_vcf, 'all')
 
-    # 5. plot
+    # 5. reformat: extract genotypes
+        reads_gt = extractHaploSize(reads_data)
+        asm_gt = extractHaploSize(asm_data)
+
+    # 6. put data together
+        reads_gt$Type = 'Read-based'
+        asm_gt$Type = 'Assembly-based'
+
+    # 7. add unique ID with the sample and the region
+        reads_gt$ID = paste(reads_gt$ID, reads_gt$Sample, sep='_')
+        asm_gt$ID = paste(asm_gt$ID, asm_gt$Sample, sep='_')
+
+    # 8. rename columns and combine reads and assembly
+        colnames(reads_gt)[2:length(colnames(reads_gt))] = paste0(colnames(reads_gt)[2:length(colnames(reads_gt))], '_Read')
+        colnames(asm_gt)[2:length(colnames(asm_gt))] = paste0(colnames(asm_gt)[2:length(colnames(asm_gt))], '_Assembly')
+        combined = merge(reads_gt, asm_gt, by = 'ID')
+
+    # 9. correlation
+        cor_all_samples_short = cor.test(combined$Short_Read, combined$Short_Assembly, use = 'complete', method = 'spearman')
+        cor_all_samples_long = cor(combined$Long_Read, combined$Long_Assembly, use = 'complete', method = 'spearman')
+        cor_all_samples_sum = cor(combined$Sum_Read, combined$Sum_Assembly, use = 'complete', method = 'spearman')
+
+    # 10. save workspace
+        save.image('20240207_workspace.RData')
+
+    # 11. plot
+        # randomly subsample for the plot
+        sampled_data <- combined %>% sample_n(100000)
+        # then plot
+        ggplot(data = sampled_data, aes(x = Short_Read, y = Short_Assembly)) + stat_density_2d(aes(fill = ..density..), geom = "raster", contour = FALSE) + scale_x_continuous(expand = c(0, 0)) + scale_y_continuous(expand = c(0, 0)) + theme(legend.position='none')
+
+
     ggplot(data = combined, aes(x = Short_Read, y = Short_Assembly)) + geom_point(stat = 'identity', alpha = 0.5) + geom_smooth(method = 'lm') + geom_abline(slope = 1, intercept = 0, linetype = 'dashed') + xlab('Read-based') + ylab('Assembly-based') + ggtitle('Short allele')
     ggplot(data = combined, aes(x = Long_Read, y = Long_Assembly)) + geom_point(stat = 'identity', alpha = 0.5) + geom_smooth(method = 'lm') + geom_abline(slope = 1, intercept = 0, linetype = 'dashed') + xlab('Read-based') + ylab('Assembly-based') + ggtitle('Long allele')
     ggplot(data = combined, aes(x = Sum_Read, y = Sum_Assembly)) + geom_point(stat = 'identity', alpha = 0.5) + geom_smooth(method = 'lm') + geom_abline(slope = 1, intercept = 0, linetype = 'dashed') + xlab('Read-based') + ylab('Assembly-based') + ggtitle('Sum of alleles')
@@ -83,9 +113,3 @@
     # check assembly and reads
     read[which(read$ID == 'chr1:54510616-54510666'),]
     assembly[which(assembly$ID == 'chr1:54510616-54510666'),]
-
-
-while (TRUE) {
-  print("ok")
-  Sys.sleep(20)
-}
