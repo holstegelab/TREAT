@@ -748,7 +748,7 @@ def haplotyping_steps(data, n_cpu, thr_mad, min_support, type, outDir):
         # use list_of_lists_of_lists below instead of list_pairs to restore
         haplo_results = pool.map(haplo_fun, list_pairs)
         pool.close()
-    sample_res.append(haplo_results)
+        sample_res.append(haplo_results)
     # STEP 7 IS TO COMPOSE THE OUTPUTS: VCF AND SEQUENCES
     df_vcf = pd.DataFrame([x[0] for x in sample_res[0]], columns=['#CHROM', 'POS', 'ID', 'REF', 'ALT', 'QUAL', 'FILTER', 'INFO', 'FORMAT', all_samples[0]])
     df_seq = pd.DataFrame([x for y in sample_res[0] for x in y[1]], columns=['READ_NAME', 'HAPLOTAG', 'REGION', 'PASSES', 'READ_QUALITY', 'LEN_SEQUENCE_FOR_TRF', 'START_TRF', 'END_TRF', 'type', 'SAMPLE_NAME', 'POLISHED_HAPLO', 'DEPTH', 'CONSENSUS_MOTIF', 'CONSENSUS_MOTIF_COPIES', 'MOTIF_REF', 'REFERENCE_MOTIF_COPIES', 'SEQUENCE_WITH_PADDINGS', 'SEQUENCE_FOR_TRF'])
