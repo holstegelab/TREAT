@@ -197,6 +197,7 @@ def run_trf_otter(index, all_fasta, distances, type):
     # loop on trf results and save them into a list of lists
     x = 0; trf_matches = []
     sample_name = re.sub(r'^a[a-z]\.tmp_', '', os.path.basename(all_fasta[index])).replace('.fa', '')
+    sample_name = 'reference' if 'reference' in sample_name else sample_name
     if type == 'otter':
         sample_name = sample_name.replace('_trf', '')
         if sample_name.split('_')[0] == 'reference':
@@ -222,7 +223,17 @@ def run_trf_otter(index, all_fasta, distances, type):
         df_seqs = pd.DataFrame(distances[index][0])
         df_seqs.columns = ['SAMPLE_NAME', 'REGION', 'READ_NAME', 'PASSES', 'READ_QUALITY', 'MAPPING_CONSENSUS', 'SEQUENCE_FOR_TRF', 'SEQUENCE_WITH_PADDINGS', 'LEN_SEQUENCE_FOR_TRF', 'LEN_SEQUENCE_WITH_PADDINGS']
     else:
-        df_seqs = pd.DataFrame(distances[index])
+        # identify the same sample
+        found = False
+        df_seqs = pd.DataFrame()
+        for s in distances:
+            if len(s) >0:
+                s_name = s[0][0]
+                if s_name == sample_name.replace('_trf', ''):
+                    df_seqs = pd.concat([df_seqs, pd.DataFrame(s)])
+                    found = True
+        if found == False:
+            df_seqs = pd.DataFrame([['NA' for i in range(7)]])
         if sample_name == 'reference':
             df_seqs.columns = ['SAMPLE_NAME', 'REGION', 'READ_NAME', 'PASSES', 'READ_QUALITY', 'MAPPING_CONSENSUS', 'SEQUENCE_FOR_TRF', 'SEQUENCE_WITH_PADDINGS', 'LEN_SEQUENCE_FOR_TRF', 'LEN_SEQUENCE_WITH_PADDINGS']
             df_seqs['HAPLOTAG'] = 1
@@ -235,7 +246,10 @@ def run_trf_otter(index, all_fasta, distances, type):
     # add id
     df_seqs['ID'] = df_seqs['READ_NAME'].str.cat(df_seqs['REGION'], sep='_')
     # merge trf dataframe and reads dataframes
-    complete_df = pd.merge(df_seqs, df, left_on = 'ID', right_on = 'ID', how = 'outer')
+    if sample_name == 'reference':
+        complete_df = pd.merge(df_seqs, df, left_on = 'ID', right_on = 'ID')
+    else:
+        complete_df = pd.merge(df_seqs, df, left_on = 'ID', right_on = 'ID', how = 'outer')
     return complete_df
 
 # Otter pipeline
@@ -270,7 +284,7 @@ def otterPipeline(outDir, cpu, ref, bed_dir, inBam, count_reg, windowAss, window
     index_fasta = [x for x in range(len(reads_fasta))]
     trf_results = pool.map(trf_fun, index_fasta)
     pool.close()
-    #xx = run_trf(index = 0, all_fasta = reads_fasta, distances = extract_results, type = 'otter')
+    #run_trf_otter(index = 5, all_fasta = reads_fasta, distances = extract_results, type = 'otter')
     # Combine df from different samples together
     df_trf_combined = pd.concat(trf_results)
     return df_trf_combined
@@ -979,8 +993,20 @@ def assemblyBased_size(sbs, r):
     elif n_contigs == 2:
         # heterozygous call
         sbs['HAPLOTAG'] = [1, 2]; sbs['type'] = 'assembly'
-    elif sbs.shape[0] >2:
-        print('\n!! More than 2 haps for --> %s' %(r))
+    elif n_contigs >2:
+        # Maybe this is an exception raising, try to fix and otherwise report
+        # check how many unique seeuence lengths there are
+        unique_seq_lengths = list(set(list(sbs['LEN_SEQUENCE_FOR_TRF'])))
+        if len(unique_seq_lengths) == 1:
+            sbs['HAPLOTAG'] = 1; sbs['type'] = 'assembly'
+        elif len(unique_seq_lengths) == 2:
+            sbs = sbs.copy()
+            sbs['HAPLOTAG'] = 1
+            sbs.loc[sbs['LEN_SEQUENCE_FOR_TRF'] == unique_seq_lengths[1], 'HAPLOTAG'] = 2
+            sbs = sbs.copy()
+            sbs['type'] = 'assembly'
+        else:
+            print('\n!! More than 2 haps for --> %s' %(r))
     return sbs
 
 # function to polish haplotypes
@@ -995,7 +1021,10 @@ def polishHaplo_asm(phased_sbs, r):
         pol_sbs = phased_sbs
         pol_sbs['POLISHED_HAPLO'] = pol_sbs['LEN_SEQUENCE_FOR_TRF']
     elif n_haplo >1 and n_contigs >2:
-        print('\n!! More than 1 haplo and more than 2 contigs for %s' %(r))
+        # for some reasons, sometimes there are 2 haplotags and 3 contigs, clean it here
+        pol_sbs = phased_sbs.drop_duplicates(subset=['HAPLOTAG'])
+        pol_sbs = pol_sbs.copy()
+        pol_sbs['POLISHED_HAPLO'] = pol_sbs['LEN_SEQUENCE_FOR_TRF']
     return pol_sbs
 
 # function to add duplicates back
