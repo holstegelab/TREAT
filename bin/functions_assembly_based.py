@@ -692,6 +692,7 @@ def haplotyping_steps(data, n_cpu, thr_mad, min_support, type, outDir):
     data['TRF_SCORE'] = pd.to_numeric(data['TRF_SCORE'], errors='coerce')
     # STEP 2 IS TO ADJUST THE MOTIFS IN THE DATA
     print('** Adjust motifs')
+    data['TRF_MOTIF'] = data['TRF_MOTIF'].replace("NA", np.nan)
     all_motifs = data['TRF_MOTIF'].dropna().unique()
     main_motifs = [permutMotif(motif) for motif in all_motifs]
     motifs_df = pd.DataFrame({'motif' : all_motifs, 'UNIFORM_MOTIF' : main_motifs})
