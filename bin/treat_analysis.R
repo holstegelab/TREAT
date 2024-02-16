@@ -173,6 +173,10 @@
         # put results in the dataframe for the sum of the alleles
         vcf_info_withRef$outliers_sum_allele = ifelse(rownames(vcf_info_withRef) %in% sum_allele_res[[1]], 'yes', NA)
         vcf_info_withRef$outliers_sum_allele_pvalue = ifelse(rownames(vcf_info_withRef) %in% sum_allele_res[[1]], sum_allele_res[[2]][match(rownames(vcf_info_withRef), as.character(sum_allele_res[[1]]))], NA)
+        # correct pvalues
+        vcf_info_withRef$outliers_short_allele_pvalue_bonf = p.adjust(vcf_info_withRef$outliers_short_allele_pvalue, 'bonferroni', n=nrow(vcf_info_withRef)*3)
+        vcf_info_withRef$outliers_long_allele_pvalue_bonf = p.adjust(vcf_info_withRef$outliers_long_allele_pvalue, 'bonferroni', n=nrow(vcf_info_withRef)*3)
+        vcf_info_withRef$outliers_sum_allele_pvalue_bonf = p.adjust(vcf_info_withRef$outliers_sum_allele_pvalue, 'bonferroni', n=nrow(vcf_info_withRef)*3) 
         # Remove NAs and add region
         vcf_info_withRef <- vcf_info_withRef[!(is.na(vcf_info_withRef$outliers_short_allele) & is.na(vcf_info_withRef$outliers_long_allele) & is.na(vcf_info_withRef$outliers_sum_allele)), ]
         if (nrow(vcf_info_withRef) >0){ vcf_info_withRef$region = region; vcf_info_withRef$mad_threshold = mad_thr }
