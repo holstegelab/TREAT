@@ -36,6 +36,9 @@ extract_results = pool.map(extract_fun, temp_bams)
 pool.close()
 print('** Exact SV intervals extracted')
 all_fasta = [outer_list[1] for outer_list in extract_results]
+all_clipping = [outer_list[2] for outer_list in extract_results]
+all_clipping_flatten = [item for sublist in all_clipping for item in sublist]
+all_clipping_df = pd.DataFrame(all_clipping_flatten, columns=['REGION', 'SAMPLE', 'READ_NAME'])
 # 2.3 Then do the same on the reference genome
 pool = multiprocessing.Pool(processes=cpu)
 extract_fun = partial(measureDistance_reference, window = window, ref = ref, output_directory = outDir)
@@ -99,7 +102,7 @@ df_trf_phasing_combined = pd.merge(df_trf_combined, combined_haplotags_df, left_
 
 # 5. Do directly the haplotyping so that we save on IO usage
 ts = time.time()
-print(haplotyping_steps(data = df_trf_phasing_combined, n_cpu = cpu, thr_mad = HaploDev, min_support = minimumSupport, type = 'reads', outDir = outDir))
+print(haplotyping_steps(data = df_trf_phasing_combined, n_cpu = cpu, thr_mad = HaploDev, min_support = minimumSupport, type = 'reads', outDir = outDir, all_clipping_df = all_clipping_df))
 te = time.time()
 time_write = te-ts
 print('*** Operation took %s seconds\t\t\t\t\t\t\t\t\t\t\t\t' %(round(time_write, 0)))

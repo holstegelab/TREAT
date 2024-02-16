@@ -293,10 +293,29 @@ def getSequenceInterval(regions_overlapping, tags, is_secondary, is_supplementar
             info_reads.append([sample_name, region, query_name, np, rq, mc, 'NA', 'NA', 'NA', 'NA'])
     return info_reads
 
+# Function to check for soft-clipping events
+def has_soft_clipping_in_interval(cigartuples, ref_start, ref_end, ref_chrom, bed):
+    # Iterate over regions
+    for chromosome, interval_list in bed.items():
+        for start, end, interval_str in interval_list:
+            # Convert start and end positions to integers
+            start_pos = int(start)
+            end_pos = int(end)
+            # Check if the read's reference interval overlaps with the region interval
+            if (chromosome == ref_chrom and ref_start < end_pos and ref_end > start_pos):
+                # Check if the read has soft-clipping at the beginning or end
+                if cigartuples[0][0] == 4 or cigartuples[-1][0] == 4:
+                    soft_clip_start = ref_start if cigartuples[0][0] == 4 else ref_start + cigartuples[0][1]
+                    soft_clip_end = ref_end if cigartuples[-1][0] == 4 else ref_end + cigartuples[-1][1]
+                    if (soft_clip_start < end_pos and soft_clip_end > start_pos) or (soft_clip_start < end_pos and soft_clip_end > end_pos) or (soft_clip_start < start_pos and soft_clip_end > start_pos):
+                        return True, interval_str
+    return False, None
+
 # Function to execute the sequence extraction in multiple processors
 def distributeExtraction(x, bed, window):
     # container for results
     tmp_results = []
+    clipping_events = []
     # get sample name
     sample_name = re.sub(r'^a[a-z]\.tmp_', '', os.path.basename(x)).replace('.bam', '')
     # loop over reads with pysam
@@ -306,10 +325,17 @@ def distributeExtraction(x, bed, window):
             try:
                 # extract read information
                 ref_chrom, ref_start, ref_end, query_name, query_sequence, cigartuples, tags, is_secondary, is_supplementary, cigarstring = read.reference_name, int(read.reference_start), int(read.reference_end), read.query_name, read.query_sequence, read.cigartuples, read.tags, read.is_supplementary, read.is_secondary, read.cigarstring
+                if query_name == 'm64043_201203_004011/38733353/ccs':
+                    break
                 # check how many regions we overlap with this read
                 regions_overlapping = checkIntervals(bed, ref_chrom, ref_start, ref_end, window)
                 # then get the sequence of the read in the interval
                 regions_overlapping_info = getSequenceInterval(regions_overlapping, tags, is_secondary, is_supplementary, query_name, query_sequence, window, ref_start, ref_end, cigartuples, sample_name)       
+                # if there are no overlaps, it can be that there are clipping events at the sides of the sequence
+                if len(regions_overlapping_info) == 0:
+                    temp_clipping = has_soft_clipping_in_interval(cigartuples, ref_start, ref_end, ref_chrom, bed)
+                    if temp_clipping[0] == True:
+                        clipping_events.append([temp_clipping[1], x.split('.tmp_')[-1].replace('.bam', ''), query_name])
                 # add to results
                 for lst in regions_overlapping_info:
                     tmp_results.append(lst)
@@ -319,7 +345,7 @@ def distributeExtraction(x, bed, window):
     fasta_name = x.replace('.bam', '.fa')
     # finally write fasta files
     writeFastaTRF(tmp_results, fasta_name)
-    return tmp_results, fasta_name
+    return tmp_results, fasta_name, clipping_events
 
 # Measure the distance in the reference genome
 def measureDistance_reference(bed_file, window, ref, output_directory):    
@@ -539,7 +565,7 @@ def combine_data_afterPhasing(outDir):
 
 # FUNCTIONS FOR HAPLOTYPING
 # main function that guides haplotyping
-def haplotyping_steps(data, n_cpu, thr_mad, min_support, type, outDir):
+def haplotyping_steps(data, n_cpu, thr_mad, min_support, type, outDir, all_clipping_df):
     # STEP 1 IS TO ADJUST THE DATA BEFORE WE START
     data['START_TRF'] = pd.to_numeric(data['START_TRF'], errors='coerce')
     data['END_TRF'] = pd.to_numeric(data['END_TRF'], errors='coerce')
@@ -593,17 +619,19 @@ def haplotyping_steps(data, n_cpu, thr_mad, min_support, type, outDir):
                 list_of_lists_of_lists_dups.append([])
         # pair non-duplicated and duplicated for parallelization, assuming list_of_lists_of_lists and list_of_lists_of_lists_dups have the same length
         list_pairs = zip(list_of_lists_of_lists, list_of_lists_of_lists_dups)
+        # also take any relevant clipping event in the sample and region of interest
+        temp_clipping = all_clipping_df[all_clipping_df['REGION'].isin(list(sbs['REGION'])) & all_clipping_df['SAMPLE'].isin(list(sbs['SAMPLE_NAME']))]
         #for r in list(set(list(sbs['REGION']))):
         #    yy = [] if r not in grouped_rows_dups.keys() else grouped_rows_dups[r]
         #    xx = grouped_rows[r]
         #    haplo_results = haplotyping([xx, yy], s, thr_mad, type, reference_motif_dic, intervals, min_support)
         #    sample_res.append(haplo_results)
         pool = multiprocessing.Pool(processes=n_cpu)
-        haplo_fun = partial(haplotyping, s = s, thr_mad = thr_mad, type = type, reference_motif_dic = reference_motif_dic, intervals = intervals, min_support = min_support)
+        haplo_fun = partial(haplotyping, s = s, thr_mad = thr_mad, type = type, reference_motif_dic = reference_motif_dic, intervals = intervals, min_support = min_support, temp_clipping = temp_clipping)
         # use list_of_lists_of_lists below instead of list_pairs to restore
         haplo_results = pool.map(haplo_fun, list_pairs)
         pool.close()
-    sample_res.append(haplo_results)
+        sample_res.append(haplo_results)
     # STEP 7 IS TO COMPOSE THE OUTPUTS: VCF AND SEQUENCES
     df_vcf = pd.DataFrame([x[0] for x in sample_res[0]], columns=['#CHROM', 'POS', 'ID', 'REF', 'ALT', 'QUAL', 'FILTER', 'INFO', 'FORMAT', all_samples[0]])
     df_seq = pd.DataFrame([x for y in sample_res[0] for x in y[1]], columns=['READ_NAME', 'HAPLOTAG', 'REGION', 'PASSES', 'READ_QUALITY', 'LEN_SEQUENCE_FOR_TRF', 'START_TRF', 'END_TRF', 'type', 'SAMPLE_NAME', 'POLISHED_HAPLO', 'DEPTH', 'CONSENSUS_MOTIF', 'CONSENSUS_MOTIF_COPIES', 'MOTIF_REF', 'REFERENCE_MOTIF_COPIES', 'SEQUENCE_WITH_PADDINGS', 'SEQUENCE_FOR_TRF'])
@@ -615,7 +643,8 @@ def haplotyping_steps(data, n_cpu, thr_mad, min_support, type, outDir):
                 if isinstance(region[-1], pd.DataFrame):
                     raw_seq_list.append(region[-1])
         # combine all dataframes and write as output
-        raw_seq_df = pd.concat(raw_seq_list, ignore_index=True)
+        if len(raw_seq_list) >0:
+            raw_seq_df = pd.concat(raw_seq_list, ignore_index=True)
         #raw_seq_df.to_csv('%s/sample.raw.txt.gz' %(outDir), sep="\t", compression = 'gzip', header=True, index=False)
     # if there are more samples, write them as well
     if len(sample_res) >1:
@@ -647,8 +676,17 @@ def permutMotif(motif):
     sel_motif = sorted(comb_motifs)[0]
     return sel_motif
 
+# Function to do qc based on clipping events
+def clippingQC(sbs, temp_clipping_r):
+    n_spanning = sbs.shape[0]
+    n_clipped = temp_clipping_r.shape[0]
+    n_total = n_spanning + n_clipped
+    # rule: if total number of clipped reads is larger than 30% of all the reads, do not pass qc
+    qc = False if (n_clipped/n_total >= 0.30) else True
+    return(qc)
+
 # function to guide haplotyping
-def haplotyping(pair, s, thr_mad, type, reference_motif_dic, intervals, min_support):
+def haplotyping(pair, s, thr_mad, type, reference_motif_dic, intervals, min_support, temp_clipping):
     # recover information for the reads and duplicates -- comment this and add dup_df as argument for the function to restore to previous, also look few lines below
     x, y = pair
     # define columns based on the data type
@@ -662,6 +700,8 @@ def haplotyping(pair, s, thr_mad, type, reference_motif_dic, intervals, min_supp
     r = list(sbs['REGION'].unique())[0]
     # exclude nas
     sbs = sbs.dropna(subset=['LEN_SEQUENCE_FOR_TRF'])
+    # extract clipping events
+    temp_clipping_r = temp_clipping[temp_clipping['REGION'] == r]
     # check if there are rows
     if sbs.shape[0] >0:
         if type in ['otter', 'hifiasm']:
@@ -682,25 +722,34 @@ def haplotyping(pair, s, thr_mad, type, reference_motif_dic, intervals, min_supp
         elif type == 'reads':
             # check minimum support: minimum support is for alleles --> 2*min_support is the total minimum coverage required for autosomal regions. For sex-regions, we will use min_support directly
             # find chromosome to adapt coverage
-            chrom = r.split(':')[0]
-            minimum_coverage = min_support if chrom in ['chrY', 'Y'] else min_support*2
-            # check if there is minimum support
-            if int(sbs.shape[0]) >= int(minimum_coverage):
-                # identify haplotypes
-                warnings.filterwarnings("ignore", category=RuntimeWarning)
-                pol_sbs = readBased_size(sbs, r, chrom, min_support, thr_mad)
-                warnings.resetwarnings()
-                # add duplicates
-                all_sbs = addDups(pol_sbs, dup_df, s, r, type)
-                # finally look at the motif
-                final_sbs_h1, depth_h1 = sampleMotifs(r, all_sbs, reference_motif_dic, 0, type)
-                final_sbs_h2, depth_h2 = sampleMotifs(r, all_sbs, reference_motif_dic, 1, type)
-                final_sbs = pd.concat([final_sbs_h1, final_sbs_h2], axis=0)
-                # prepare for file writing
-                tmp_vcf, tmp_seq = prepareOutputs(final_sbs, reference_motif_dic, r, type, [depth_h1, depth_h2])
-                return tmp_vcf, tmp_seq, all_sbs
+            # first do qc based on the clipping events
+            qc_clip = clippingQC(sbs, temp_clipping_r)
+            if qc_clip == True:
+                chrom = r.split(':')[0]
+                minimum_coverage = min_support if chrom in ['chrY', 'Y'] else min_support*2
+                # check if there is minimum support
+                if int(sbs.shape[0]) >= int(minimum_coverage):
+                    # identify haplotypes
+                    warnings.filterwarnings("ignore", category=RuntimeWarning)
+                    pol_sbs = readBased_size(sbs, r, chrom, min_support, thr_mad)
+                    warnings.resetwarnings()
+                    # add duplicates
+                    all_sbs = addDups(pol_sbs, dup_df, s, r, type)
+                    # finally look at the motif
+                    final_sbs_h1, depth_h1 = sampleMotifs(r, all_sbs, reference_motif_dic, 0, type)
+                    final_sbs_h2, depth_h2 = sampleMotifs(r, all_sbs, reference_motif_dic, 1, type)
+                    final_sbs = pd.concat([final_sbs_h1, final_sbs_h2], axis=0)
+                    # prepare for file writing
+                    tmp_vcf, tmp_seq = prepareOutputs(final_sbs, reference_motif_dic, r, type, [depth_h1, depth_h2])
+                    return tmp_vcf, tmp_seq, all_sbs
+                else:
+                    tmp_vcf = [chrom, r.split(':')[1].split('-')[0], r, reference_motif_dic[r][1], '.', '.', 'LOW_COVERAGE', '%s;%s' %(reference_motif_dic[r][0], reference_motif_dic[r][2]), 'QC;GT;MOTIF;CN;CN_REF;DP', 'QC_ISSUE;NA|NA;NA|NA;NA|NA;NA|NA;%s|0' %(sbs.shape[0])]
+                    tmp_seq = []
+                    all_sbs = []
+                    return tmp_vcf, tmp_seq, all_sbs
             else:
-                tmp_vcf = [chrom, r.split(':')[1].split('-')[0], r, reference_motif_dic[r][1], '.', '.', 'LOW_COVERAGE', '%s;%s' %(reference_motif_dic[r][0], reference_motif_dic[r][2]), 'QC;GT;MOTIF;CN;CN_REF;DP', 'QC_ISSUE;NA|NA;NA|NA;NA|NA;NA|NA;%s|0' %(sbs.shape[0])]
+                chrom = r.split(':')[0]
+                tmp_vcf = [chrom, r.split(':')[1].split('-')[0], r, reference_motif_dic[r][1], '.', '.', 'PASS', '%s;%s' %(reference_motif_dic[r][0], reference_motif_dic[r][2]), 'QC;GT;MOTIF;CN;CN_REF;DP', 'QC_ISSUE;NA|NA;NA|NA;NA|NA;NA|NA;%s|0' %(sbs.shape[0])]
                 tmp_seq = []
                 all_sbs = []
                 return tmp_vcf, tmp_seq, all_sbs
