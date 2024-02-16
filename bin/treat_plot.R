@@ -239,7 +239,7 @@
         # run function to get dendrogram
         dendro = clustering_info[[1]]; ordered_labs = clustering_info[[2]]
         # plot
-        dendro %>% set("labels_cex", 1.50) %>% set("labels", ordered_labs) %>% plot(yaxt = 'none', horiz = T, center = T, cex.lab = 1.20)
+        dendro %>% set("labels_cex", 1.50) %>% set("labels", ordered_labs) %>% plot(yaxt = 'none', horiz = T, center = T, cex.lab = 1.20, ylim = c(0, nrow(vcf_info_withRef) +2))
         
       # Third plot is the TR sizes
         par(mar=c(4, 0, 0, 0))
