@@ -621,11 +621,6 @@ def haplotyping_steps(data, n_cpu, thr_mad, min_support, type, outDir, all_clipp
         list_pairs = zip(list_of_lists_of_lists, list_of_lists_of_lists_dups)
         # also take any relevant clipping event in the sample and region of interest
         temp_clipping = all_clipping_df[all_clipping_df['REGION'].isin(list(sbs['REGION'])) & all_clipping_df['SAMPLE'].isin(list(sbs['SAMPLE_NAME']))]
-        #for r in list(set(list(sbs['REGION']))):
-        #    yy = [] if r not in grouped_rows_dups.keys() else grouped_rows_dups[r]
-        #    xx = grouped_rows[r]
-        #    haplo_results = haplotyping([xx, yy], s, thr_mad, type, reference_motif_dic, intervals, min_support)
-        #    sample_res.append(haplo_results)
         pool = multiprocessing.Pool(processes=n_cpu)
         haplo_fun = partial(haplotyping, s = s, thr_mad = thr_mad, type = type, reference_motif_dic = reference_motif_dic, intervals = intervals, min_support = min_support, temp_clipping = temp_clipping)
         # use list_of_lists_of_lists below instead of list_pairs to restore
@@ -682,7 +677,7 @@ def clippingQC(sbs, temp_clipping_r):
     n_clipped = temp_clipping_r.shape[0]
     n_total = n_spanning + n_clipped
     # rule: if total number of clipped reads is larger than 30% of all the reads, do not pass qc
-    qc = False if (n_clipped/n_total >= 0.30) else True
+    qc = False if (n_clipped/n_total >= 0.20) else True
     return(qc)
 
 # function to guide haplotyping
@@ -1031,9 +1026,15 @@ def addDups(pol_sbs, dup_df, s, r, type):
     if sbs_dups.shape[0] >0:
         n_haplo = len([x for x in list(pol_sbs['HAPLOTAG'].dropna().unique()) if x != 'NA'])
         if n_haplo == 1:
-            sbs_dups['HAPLOTAG'] = [x for x in list(pol_sbs['HAPLOTAG'].dropna().unique()) if x != 'NA'][0]
-            sbs_dups['type'] = type
-            sbs_dups['POLISHED_HAPLO'] = [x for x in list(pol_sbs['POLISHED_HAPLO'].dropna().unique()) if x != 'NA'][0]
+            tmp_list_haplo = []
+            for index, row in sbs_dups.iterrows():
+                if row['READ_NAME'] in list(pol_sbs['READ_NAME']):
+                    tmp_list_haplo.append(list(pol_sbs.loc[pol_sbs['READ_NAME'] == row['READ_NAME'], 'HAPLOTAG'])[0])
+                else:
+                    tmp_list_haplo.append('NA')
+            #sbs_dups['HAPLOTAG'] = [x for x in list(pol_sbs['HAPLOTAG'].dropna().unique()) if x != 'NA'][0]
+            #sbs_dups['type'] = type
+            #sbs_dups['POLISHED_HAPLO'] = [x for x in list(pol_sbs['POLISHED_HAPLO'].dropna().unique()) if x != 'NA'][0]
             return pd.concat([pol_sbs, sbs_dups], axis=0)
         elif n_haplo == 2:
             h1_size = pol_sbs.loc[pol_sbs['HAPLOTAG'] == 0, 'POLISHED_HAPLO'].unique()

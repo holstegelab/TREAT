@@ -79,10 +79,10 @@
       # take the transpose of this
       sub_trans = t(sub)
       # split columns
-      sub_trans_df = data.frame(str_split_fixed(sub_trans[, 1], ';', 5))
+      sub_trans_df = data.frame(str_split_fixed(sub_trans[, 1], ';', 6))
       sub_trans_df$sample = rownames(sub_trans)
       # rename columns
-      colnames(sub_trans_df) = c('qc', 'haplo', 'motifs', 'copies', 'copies_reference', 'sample')
+      colnames(sub_trans_df) = c('qc', 'haplo', 'motifs', 'copies', 'copies_reference', 'depth', 'sample')
       # add phased values for short and long haplo
       sub_trans_df$haplo_h1 = as.numeric(str_split_fixed(sub_trans_df$haplo, '\\|', 2)[, 1])
       sub_trans_df$haplo_h2 = as.numeric(str_split_fixed(sub_trans_df$haplo, '\\|', 2)[, 2])
@@ -96,18 +96,18 @@
             # motifs
             sub_trans_df$short_allele_motif[x] = str_split_fixed(sub_trans_df$motifs[x], '\\|', 2)[, 2]; sub_trans_df$long_allele_motif[x] = str_split_fixed(sub_trans_df$motifs[x], '\\|', 2)[, 1]
             # copy number
-            sub_trans_df$short_allele_cn[x] = as.numeric(str_split_fixed(sub_trans_df$copies[x], '\\|', 2)[, 2]); sub_trans_df$long_allele_cn[x] = str_split_fixed(sub_trans_df$copies[x], '\\|', 2)[, 1]
+            sub_trans_df$short_allele_cn[x] = as.numeric(str_split_fixed(sub_trans_df$copies[x], '\\|', 2)[, 2]); sub_trans_df$long_allele_cn[x] = as.numeric(str_split_fixed(sub_trans_df$copies[x], '\\|', 2)[, 1])
             # copy number of reference
-            sub_trans_df$short_allele_cn_ref[x] = as.numeric(str_split_fixed(sub_trans_df$copies_reference[x], '\\|', 2)[, 2]); sub_trans_df$long_allele_cn_ref[x] = str_split_fixed(sub_trans_df$copies_reference[x], '\\|', 2)[, 1]
+            sub_trans_df$short_allele_cn_ref[x] = as.numeric(str_split_fixed(sub_trans_df$copies_reference[x], '\\|', 2)[, 2]); sub_trans_df$long_allele_cn_ref[x] = as.numeric(str_split_fixed(sub_trans_df$copies_reference[x], '\\|', 2)[, 1])
           } else {
             # haplotype size
             sub_trans_df$short_allele[x] = sub_trans_df$haplo_h1[x]; sub_trans_df$long_allele[x] = sub_trans_df$haplo_h2[x]
             # motifs
             sub_trans_df$short_allele_motif[x] = str_split_fixed(sub_trans_df$motifs[x], '\\|', 2)[, 1]; sub_trans_df$long_allele_motif[x] = str_split_fixed(sub_trans_df$motifs[x], '\\|', 2)[, 2]
             # copy number
-            sub_trans_df$short_allele_cn[x] = as.numeric(str_split_fixed(sub_trans_df$copies[x], '\\|', 2)[, 1]); sub_trans_df$long_allele_cn[x] = str_split_fixed(sub_trans_df$copies[x], '\\|', 2)[, 2]
+            sub_trans_df$short_allele_cn[x] = as.numeric(str_split_fixed(sub_trans_df$copies[x], '\\|', 2)[, 1]); sub_trans_df$long_allele_cn[x] = as.numeric(str_split_fixed(sub_trans_df$copies[x], '\\|', 2)[, 2])
             # copy number of reference
-            sub_trans_df$short_allele_cn_ref[x] = as.numeric(str_split_fixed(sub_trans_df$copies_reference[x], '\\|', 2)[, 1]); sub_trans_df$long_allele_cn_ref[x] = str_split_fixed(sub_trans_df$copies_reference[x], '\\|', 2)[, 2]
+            sub_trans_df$short_allele_cn_ref[x] = as.numeric(str_split_fixed(sub_trans_df$copies_reference[x], '\\|', 2)[, 1]); sub_trans_df$long_allele_cn_ref[x] = as.numeric(str_split_fixed(sub_trans_df$copies_reference[x], '\\|', 2)[, 2])
           }
         } else {
             # haplotype size
@@ -139,8 +139,22 @@
       return(vcf_info)
     }
 
+    # Function to find outliers based on distance
+    findOutliers_distance = function(size, mad_thr){
+      mean_size <- mean(size, na.rm=T)
+      covariance_matrix <- var(size, na.rm=T)
+      # Compute Mahalanobis distance
+      mahalanobis_dist <- abs(size - mean_size) / sqrt(covariance_matrix)
+      # Identify outliers
+      outliers <- which(mahalanobis_dist > mad_thr)
+      # Compute p-values using chi-squared distribution
+      p_values <- 1 - pchisq(mahalanobis_dist^2, df = 1)
+      outliers <- which(p_values < 0.05)
+      return(list(outliers, p_values))
+    }
+
     # Function to find thresholds for outlier analysis
-    findOutliers = function(size, mad_thr = 3){
+    findOutliers = function(size, mad_thr){
         # Compute the modified Z-scores
         med <- median(size, na.rm=TRUE)
         mad <- mad(size, constant = 1.4826, na.rm=TRUE)
@@ -157,13 +171,16 @@
     }
 
     # Function to run the outlier analysis
-    outlierAnal = function(vcf_info_withRef, region, mad_thr = 3){
+    outlierAnal = function(vcf_info_withRef, region, mad_thr){
         # score outliers based on the short allele
-        short_allele_res = findOutliers(vcf_info_withRef$short_allele, mad_thr)
+        #short_allele_res = findOutliers(vcf_info_withRef$short_allele, mad_thr)
+        short_allele_res = findOutliers_distance(vcf_info_withRef$short_allele, mad_thr)
         # score outliers based on the long allele
-        long_allele_res = findOutliers(vcf_info_withRef$long_allele, mad_thr)
+        #long_allele_res = findOutliers(vcf_info_withRef$long_allele, mad_thr)
+        long_allele_res = findOutliers_distance(vcf_info_withRef$long_allele, mad_thr)
         # score outliers based on the sum of the alleles
-        sum_allele_res = findOutliers(vcf_info_withRef$short_allele + vcf_info_withRef$long_allele, mad_thr)
+        #sum_allele_res = findOutliers(vcf_info_withRef$short_allele + vcf_info_withRef$long_allele, mad_thr)
+        sum_allele_res = findOutliers_distance(vcf_info_withRef$short_allele + vcf_info_withRef$long_allele, mad_thr)
         # put results in the dataframe for short allele
         vcf_info_withRef$outliers_short_allele = ifelse(rownames(vcf_info_withRef) %in% short_allele_res[[1]], 'yes', NA)
         vcf_info_withRef$outliers_short_allele_pvalue = ifelse(rownames(vcf_info_withRef) %in% short_allele_res[[1]], short_allele_res[[2]][match(rownames(vcf_info_withRef), as.character(short_allele_res[[1]]))], NA)
@@ -173,10 +190,6 @@
         # put results in the dataframe for the sum of the alleles
         vcf_info_withRef$outliers_sum_allele = ifelse(rownames(vcf_info_withRef) %in% sum_allele_res[[1]], 'yes', NA)
         vcf_info_withRef$outliers_sum_allele_pvalue = ifelse(rownames(vcf_info_withRef) %in% sum_allele_res[[1]], sum_allele_res[[2]][match(rownames(vcf_info_withRef), as.character(sum_allele_res[[1]]))], NA)
-        # correct pvalues
-        vcf_info_withRef$outliers_short_allele_pvalue_bonf = p.adjust(vcf_info_withRef$outliers_short_allele_pvalue, 'bonferroni', n=nrow(vcf_info_withRef)*3)
-        vcf_info_withRef$outliers_long_allele_pvalue_bonf = p.adjust(vcf_info_withRef$outliers_long_allele_pvalue, 'bonferroni', n=nrow(vcf_info_withRef)*3)
-        vcf_info_withRef$outliers_sum_allele_pvalue_bonf = p.adjust(vcf_info_withRef$outliers_sum_allele_pvalue, 'bonferroni', n=nrow(vcf_info_withRef)*3) 
         # Remove NAs and add region
         vcf_info_withRef <- vcf_info_withRef[!(is.na(vcf_info_withRef$outliers_short_allele) & is.na(vcf_info_withRef$outliers_long_allele) & is.na(vcf_info_withRef$outliers_sum_allele)), ]
         if (nrow(vcf_info_withRef) >0){ vcf_info_withRef$region = region; vcf_info_withRef$mad_threshold = mad_thr }
