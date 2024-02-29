@@ -90,8 +90,8 @@
         system(paste0('mkdir ', data_path, '/comparison_reads_asm'))
 
     # 3. identify the samples's data (individual data)
-        reads_vcf = system(paste0("find ", data_path, "/ -name '*vcf*' | grep reads"), intern=T)
-        asm_vcf = system(paste0("find ", data_path, "/ -name '*vcf*' | grep asm"), intern=T)
+        reads_vcf = system(paste0("find ", data_path, "/ -name '*vcf*' | grep _reads"), intern=T)
+        asm_vcf = system(paste0("find ", data_path, "/ -name '*vcf*' | grep _asm"), intern=T)
 
     # 4. iterate through files, read them and combine
         reads_data = readVCF(reads_vcf, 'all')
@@ -131,12 +131,6 @@
             ggplot(data = combined, aes(x = Long_Read, y = Long_Assembly)) + geom_point(stat = 'identity', alpha = 0.5) + geom_smooth(method = 'lm') + geom_abline(slope = 1, intercept = 0, linetype = 'dashed') + xlab('Read-based') + ylab('Assembly-based') + ggtitle('Long allele')
             ggplot(data = combined, aes(x = Sum_Read, y = Sum_Assembly)) + geom_point(stat = 'identity', alpha = 0.5) + geom_smooth(method = 'lm') + geom_abline(slope = 1, intercept = 0, linetype = 'dashed') + xlab('Read-based') + ylab('Assembly-based') + ggtitle('Sum of alleles')
             ggarrange(short_plot, long_plot, sum_plot, nrow = 1, ncol = 3)
-        # alternatively, a correlation plot could also be ok
-            corr_mt_spe = cor(combined[, c('Short_Read', 'Long_Read', 'Sum_Read', 'Short_Assembly', 'Long_Assembly', 'Sum_Assembly')], method = 'spearman', use = 'complete.obs')
-            corr_mt_pea = cor(combined[, c('Short_Read', 'Long_Read', 'Sum_Read', 'Short_Assembly', 'Long_Assembly', 'Sum_Assembly')], method = 'pearson', use = 'complete.obs')
-            corrplot(corr = corr_mt_pea)
-        # maybe, just not show a plot
-
     # 12. in a subset of cases there is deviation between reads and assembly - check a few examples
         # some deviation in the long ones
             combined$Difference_Reads_Asm = abs(combined$Sum_Assembly - combined$Sum_Read)
@@ -145,24 +139,20 @@
             summary(combined$Difference_Reads_Asm)
             # multiple divergence at chr2:41686495-41686521: the reads analysis seems to be missing an allele -- extract the bam files and check
             system('mkdir /project/holstegelab/Share/nicco/paper_treat/20240206_final/comparison_reads_asm/examples_divergence')
-            system('samtools view -b /project/holstegelab/Share/pacbio/public_data/hpc/hifi/alignments/mm2/grch38/HG03098.bam chr2:41686495-41686521 > /project/holstegelab/Share/nicco/paper_treat/20240206_final/comparison_reads_asm/examples_divergence/HG03098_divergence_example.bam')
-            system('samtools index /project/holstegelab/Share/nicco/paper_treat/20240206_final/comparison_reads_asm/examples_divergence/HG03098_divergence_example.bam')
-            # in conclusion, it looks heterozygous with an insertion, but there's only 1 read spanning the large insertion, the others are left clipped. Maybe in similar cases, detect that a problem may arise and report this in the VCF file.
-    # 13. pca with population information
-        # extract samples information
-            samples_info = fread('/project/holstegelab/Share/nicco/paper_treat/20240206_final/population_analysis/samples_info_hprc.txt', h=T, stringsAsFactors=F)
-        # we should do some qc on the data - use function for it
-            combined_data_forPCA_res = QC_beforePCA(combined, 'reads')
-            subset_variable = combined_data_forPCA_res[[1]]
-            all_variables = combined_data_forPCA_res[[2]]
-        # do pca
-            pca = prcomp(subset_variable))
-            pca_all = prcomp(all_variables)
-        # add samples information
-            pca_components = pca$x
-            pca_components = merge(pca_components, samples_info, by.x = 'row.names', by.y = 'Sample')
-            pca_components_all = pca_all$x
-            pca_components_all = merge(pca_components_all, samples_info, by.x = 'row.names', by.y = 'Sample')
-        # plot
-            ggplot(data = pca_components, aes(x = PC1, y = PC2, color = Superpopulation)) + geom_point(stat = 'identity', size = 5, alpha = 0.7) + scale_color_manual(values = RColorBrewer::brewer.pal(n = 10, name = "Dark"))
-            ggplot(data = pca_components_all, aes(x = PC1, y = PC2, color = Superpopulation)) + geom_point(stat = 'identity', size = 5, alpha = 0.7) + scale_color_manual(values = RColorBrewer::brewer.pal(n = 10, name = "Paired"))
+            system('samtools view -b /project/holstegelab/Share/pacbio/public_data/hpc/hifi/alignments/mm2/grch38/HG01358.bam chr4:59465562-59465594 > /project/holstegelab/Share/nicco/paper_treat/20240206_final/comparison_reads_asm/examples_divergence/HG01358_divergence_example.bam')
+            system('samtools index /project/holstegelab/Share/nicco/paper_treat/20240206_final/comparison_reads_asm/examples_divergence/HG01358_divergence_example.bam')
+            # a source of discrepancy is when there's a large insertion/deletion in the flanks around the region -- in principle it could be solved:
+                # one way is to compare the distribution of the LEN_SEQUENCE_FOR_TRF with LEN_SEQUENCE_WITH_PADDINGS and if this is significant, then use LEN_SEQUENCE_WITH_PADDINGS
+                # another way is to always use the LEN_SEQUENCE_WITH_PADDINGS
+                # pros and cons in both cases
+    # 13. outlier analysis summary
+        # downstream analysis of outlier analysis on the 47 HPC samples + 2 CANVAS samples and 35 clinically relevant TR
+        analysis = read.table('/project/holstegelab/Share/nicco/paper_treat/20240206_final/clinical_regions/HPC_CANVAS/analysis/treat_analysis_output.txt', h=T, stringsAsFactors=F, sep="\t")
+        # focus on the joint allele only
+        analysis_join = analysis[which(analysis$outliers_sum_allele_pvalue <= 0.05),]
+        analysis_join[, c('sample', 'region', 'outliers_sum_allele_pvalue')]
+        dim(analysis_join)
+        table(analysis_join$region)
+        # sort by p-value
+        analysis_join = analysis_join[order(analysis_join$outliers_sum_allele_pvalue),]
+        head(analysis_join)

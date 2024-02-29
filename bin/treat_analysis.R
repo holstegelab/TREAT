@@ -1,5 +1,3 @@
-#!/usr/bin/Rscript
-
 # Libraries
     library(data.table)
     library(stringr)

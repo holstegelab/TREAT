@@ -1,17 +1,15 @@
-#!/usr/bin/Rscript
-
 # Libraries
   suppressPackageStartupMessages(library(data.table))
   suppressPackageStartupMessages(library(stringr))
   suppressPackageStartupMessages(library(ggplot2))
-  suppressPackageStartupMessages(library(openxlsx))
+  #suppressPackageStartupMessages(library(openxlsx))
   suppressPackageStartupMessages(library(berryFunctions))
   suppressPackageStartupMessages(library(dendextend))
-  suppressPackageStartupMessages(library(viridis))
+  #suppressPackageStartupMessages(library(viridis))
   suppressPackageStartupMessages(library(dplyr))
   suppressPackageStartupMessages(library(ggsci))
   suppressPackageStartupMessages(library(ggpubr))
-  suppressPackageStartupMessages(library(parallel))
+  #suppressPackageStartupMessages(library(parallel))
   suppressPackageStartupMessages(library(argparse))
 
 # Functions

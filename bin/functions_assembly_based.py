@@ -11,11 +11,11 @@ import math
 import time
 from Bio.Seq import reverse_complement
 import numpy as np
-import itertools
-import scipy.stats as stats
-import statistics
-from sklearn.cluster import KMeans
-import shutil
+#import itertools
+#import scipy.stats as stats
+#import statistics
+#from sklearn.cluster import KMeans
+#import shutil
 import warnings
 import gzip
 
@@ -192,7 +192,7 @@ def writeFastaTRF(all_seqs, fasta_name):
 # Run TRF given a sequence
 def run_trf_otter(index, all_fasta, distances, type):
     # then run tandem repeat finder
-    cmd = 'trf4.10.0-rc.2.linux64.exe %s 2 7 7 80 10 50 200 -ngs -h' %(all_fasta[index])
+    cmd = 'trf %s 2 7 7 80 10 50 200 -ngs -h' %(all_fasta[index])
     trf = [x for x in os.popen(cmd).read().split('\n') if x != '']
     # loop on trf results and save them into a list of lists
     x = 0; trf_matches = []

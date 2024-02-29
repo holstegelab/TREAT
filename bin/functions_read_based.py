@@ -11,11 +11,11 @@ import math
 import time
 from Bio.Seq import reverse_complement
 import numpy as np
-import itertools
+#import itertools
 import scipy.stats as stats
 import statistics
 from sklearn.cluster import KMeans
-import shutil
+#import shutil
 import warnings
 import gzip
 
@@ -398,7 +398,7 @@ def writeFastaTRF(all_seqs, fasta_name):
 # Run TRF given a sequence -- a problem may be that we pass the distances object here -- this is only done for a merging operation, maybe we can do the perging operation outside the multiprocessing
 def run_trf(index, all_fasta, type):
     # then run tandem repeat finder
-    cmd = '~/.conda/envs/treat/bin/trf4.10.0-rc.2.linux64.exe %s 2 7 7 80 10 50 200 -ngs -h' %(all_fasta[index])
+    cmd = 'trf %s 2 7 7 80 10 50 200 -ngs -h' %(all_fasta[index])
     trf = [x for x in os.popen(cmd).read().split('\n') if x != '']
     # loop on trf results and save them into a list of lists
     x = 0; trf_matches = []
