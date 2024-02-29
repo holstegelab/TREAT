@@ -82,7 +82,7 @@ dependencies:
   - python_abi=3.6=2_cp36m
   - r-base=4.3.0=hfabd6f2_1
   - readline=8.2=h8228510_1
-  - samtools=1.5=1
+  - samtools=1.11
   - sed=4.8=he412f7d_0
   - setuptools=58.0.4=py36h5fab9bb_2
   - sqlite=3.45.1=h2c6b66d_0
