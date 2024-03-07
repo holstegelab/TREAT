@@ -1,4 +1,4 @@
-name: newtreat
+name: treat
 channels:
   - bioconda
   - conda-forge
