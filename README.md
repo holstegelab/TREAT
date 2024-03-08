@@ -1,10 +1,20 @@
 # TREAT (Tandem REpeat Annotation Toolkit)
 
 ## TREAT in a nutshell
-**TREAT** is a command line tool written in **Python** and **R** (for plotting) that can be used to work with tandem repeats and structural variants from long-read sequencing data.
+**TREAT** is a command line tool written in **Python** and **R** (for plotting) that can be used to work with tandem repeats and structural variants from long-read sequencing data. **TREAT** was developed specifically for long-read sequencing data. However, it can potentially be used with any sequencing data, including PacBio, Oxford Nanopore, and Illumina.
 
-## What data can be used with TREAT
-Although **TREAT** was developed for PacBio long-read sequencing data, it can be used with other long-read sequencing technologies (for example, Oxford Nanopore) and potentially short-read sequencing data.
+## How do you install TREAT
+The easiest way to install **TREAT** in your system is to clone the repository in your system, and use the `INSTALL.sh` script. You can do so by typing:  
+`git clone https://github.com/holstegelab/treat.git`
+`cd treat/bin`
+`sh INSTALL.sh`
+This script assumes you have `conda` correctly installed in your system. If you are not familiar with Conda, please see [here](https://conda.io/projects/conda/en/latest/user-guide/getting-started.html).
+This script will install:
+- `treat environment through conda`, which contains all required packages to execute treat
+- `htslib-1.19.1`, which contains `htslib`, required to run `otter` 
+- `otter`, which is a novel targeted local assembler. Additional information about `otter` is available at [here](https://github.com/holstegelab/otter).
+
+Alternatively, you can independently install the required packages by `TREAT`. These are listed in the `treat.yml`, and main consists of `samtools`, `python 3.6`, `R`, `trf`, and the python packages `pysam`, `pandas`, `scikit-learn`, `numpy`, `biopython`. Please see `otter` [installation](https://github.com/holstegelab/otter) for more information about how to properly install `otter`.
 
 ## What do you need to run TREAT
 To run **TREAT**, you need:
@@ -20,23 +30,10 @@ To run **TREAT**, you need:
 - `sample.seq.txt.gz`: this file contains the same information as the VCF file, but in a tab-delimited format
 - `sample.raw.txt.gz`: this file contains the raw read- or contig-specific information
 
-## How do you install TREAT
-The easiest way to install **TREAT** in your system is to clone the repository in your system. You can do so by typing:  
-`git clone https://github.com/holstegelab/treat.git`  
-All you need for running **TREAT** is inside the repository.  
-It is *fundamental* to install all the tools **TREAT** uses: this include, among others, aligners (*minimap2*), assembler (*otter*, *hifiasm*), *samtools* and *tandem repeat finder*. Although it is possible to install all software packages separately, we highly encourage to use the provided Conda environment. If you are not familiar with Conda, please see [here](https://conda.io/projects/conda/en/latest/user-guide/getting-started.html).  
-The easiest way to install all softwares required by **TREAT** is to replicate the provided Conda environment. You can do so by typing:  
-`conda env create -f treat_environment.yml`  
-To make **TREAT** executable, you may need to type:  
-`chmod +x path/to/TREAT.py`  
-In addition, you may want to add **TREAT** directory to your bash_profile by typing:  
-`export PATH="/path/to/treat/bin/:$PATH"`  
-Alternatively, you can run **TREAT** directly from the folder where it is installed.
-
 ## How do you run TREAT
 To run **TREAT**, you can follow these steps:
 - `conda activate treat         # activate the right conda environment`
-- `/path/to/treat/bin/TREAT.py -h         # run TREAT`
+- `TREAT.py -h         # run TREAT`
 
 ## Toolkit
 **TREAT** contains several tools to manipulate and analyze sequencing data. Three main analysis strategies are available in **TREAT**:
