@@ -408,7 +408,7 @@ def run_trf(index, all_fasta, type):
         if trf[x].startswith('@'):
             # if so, save the corresponding information depending on the type of input
             if type != 'otter' or sample_name == 'reference':
-                region, sample, read_id = trf[x].split(';')
+                region, sample, read_id = trf[x].split(';')[0:3]
             else:
                 read_id, region, seq_size_with_padding, seq_size = trf[x].split(';')
                 read_id = '@>' + read_id
