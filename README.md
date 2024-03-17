@@ -1,13 +1,15 @@
 # TREAT (Tandem REpeat Annotation Toolkit)
 
+![TREAT](/Figure_TREAT_original.png)
+
 ## TREAT in a nutshell
 **TREAT** is a command line tool written in **Python** and **R** (for plotting) that can be used to work with tandem repeats and structural variants from long-read sequencing data. **TREAT** was developed specifically for long-read sequencing data. However, it can potentially be used with any sequencing data, including PacBio, Oxford Nanopore, and Illumina.
 
 ## How do you install TREAT
 The easiest way to install **TREAT** in your system is to clone the repository in your system, and use the `INSTALL.sh` script. You can do so by typing:  
-`git clone https://github.com/holstegelab/treat.git`
-`cd treat/bin`
-`sh INSTALL.sh`
+`git clone https://github.com/holstegelab/treat.git`  
+`cd treat/bin`  
+`sh INSTALL.sh`  
 This script assumes you have `conda` correctly installed in your system. If you are not familiar with Conda, please see [here](https://conda.io/projects/conda/en/latest/user-guide/getting-started.html).
 This script will install:
 - `treat environment through conda`, which contains all required packages to execute treat

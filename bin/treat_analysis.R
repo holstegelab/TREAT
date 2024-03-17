@@ -1,7 +1,15 @@
-# Libraries
-    library(data.table)
-    library(stringr)
-    library(argparse)
+# Libraries: check if the required packages are installed, and if not, install them
+  packages <- c("data.table", "stringr", "argparse")
+  check_install_packages <- function(packages) {
+    for (package in packages) {
+      if (!require(package, character.only = TRUE)) {
+        install.packages(package)
+        library(package, character.only = TRUE)
+      }
+    }
+  }
+  check_install_packages(packages)
+
 
 # Functions
     # Pipeline to analyze repeats

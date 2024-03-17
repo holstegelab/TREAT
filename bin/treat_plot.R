@@ -1,16 +1,14 @@
-# Libraries
-  suppressPackageStartupMessages(library(data.table))
-  suppressPackageStartupMessages(library(stringr))
-  suppressPackageStartupMessages(library(ggplot2))
-  #suppressPackageStartupMessages(library(openxlsx))
-  suppressPackageStartupMessages(library(berryFunctions))
-  suppressPackageStartupMessages(library(dendextend))
-  #suppressPackageStartupMessages(library(viridis))
-  suppressPackageStartupMessages(library(dplyr))
-  suppressPackageStartupMessages(library(ggsci))
-  suppressPackageStartupMessages(library(ggpubr))
-  #suppressPackageStartupMessages(library(parallel))
-  suppressPackageStartupMessages(library(argparse))
+# Libraries: check if the required packages are installed, and if not, install them
+  packages <- c("data.table", "stringr", "argparse", "ggplot2", "berryFunctions", "dendextend", "dplyr", "ggsci", "ggpubr")
+    check_install_packages <- function(packages) {
+      for (package in packages) {
+        if (!require(package, character.only = TRUE)) {
+          install.packages(package)
+          library(package, character.only = TRUE)
+        }
+      }
+    }
+  check_install_packages(packages)
 
 # Functions
   # Pipelines: set of functions
