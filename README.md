@@ -1,6 +1,6 @@
 # TREAT (Tandem REpeat Annotation Toolkit)
 
-![TREAT](/Figure_TREAT_original.pdf)
+![TREAT](/Figure_TREAT_original.png)
 
 ## TREAT in a nutshell
 **TREAT** is a command line tool written in **Python** and **R** (for plotting) that can be used to work with tandem repeats and structural variants from long-read sequencing data. **TREAT** was developed specifically for long-read sequencing data. However, it can potentially be used with any sequencing data, including PacBio, Oxford Nanopore, and Illumina.
