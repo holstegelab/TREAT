@@ -14,7 +14,7 @@
 # Functions
   # Pipelines: set of functions
     # Pipeline to plot repeats
-    plotRepeatsComplete <- function(rs_vcf, out_dir, out_name, plotFormat, custom_colors, region){
+    plotRepeatsComplete <- function(rs_vcf, out_dir, out_name, plotFormat, custom_colors, region, path){
       cat('\n')
       # Disable warnings
       defaultW <- getOption("warn"); options(warn = -1)
@@ -47,7 +47,7 @@
         plotname_af = file.path(out_dir, plt_name_af)
         # Plot tandem repeat
         pdf(plotname, height = 10, width = 12)
-        plotComplete(vcf_info_withRef, clustering_info, custom_colors = custom_colors, region = r)
+        plotComplete(vcf_info_withRef, clustering_info, custom_colors = custom_colors, region = r, path = path)
         dev.off()
         # Plot allele frequency
         pdf(plotname_af, height = 7, width = 12)
@@ -189,7 +189,7 @@
     }
 
     # Function to plot TR of the samples -- plotted motif is the consensus motif
-    plotComplete <- function(vcf_info_withRef, clustering_info, custom_colors = 'None', region = r){
+    plotComplete <- function(vcf_info_withRef, clustering_info, custom_colors = 'None', region = r, path){
       # Find info about position of interest
       chrom = str_split_fixed(region, ':', 2)[, 1]; start = str_split_fixed(str_split_fixed(region, ':', 2)[, 2], '-', 2)[, 1]; stop = str_split_fixed(str_split_fixed(region, ':', 2)[, 2], '-', 2)[, 2]
       
@@ -198,7 +198,7 @@
       max_len <- ceiling(max(na.omit(vcf_info_withRef$long_allele)) + max(na.omit(vcf_info_withRef$long_allele))*0.15)
         
       # Parse the chromosomal band
-      chr_bands <- fread("/project/holstegelab/Software/nicco/bin/treat/bin/hg38_cytogenetic_bands.txt", h=T)
+      chr_bands <- fread(paste0(path, "/hg38_cytogenetic_bands.txt"), h=T)
       tmp_band <- chr_bands[which(chr_bands$`#chrom` == chrom),]
       # assign colors depending on transcription levels
       tmp_band$col <- "white"; tmp_band$col[which(tmp_band$gieStain == "gpos25")] <- "grey90";tmp_band$col[which(tmp_band$gieStain == "gpos50")] <- "grey60"; tmp_band$col[which(tmp_band$gieStain == "gpos75")] <- "grey40"; tmp_band$col[which(tmp_band$gieStain == "gpos100")] <- "black"; tmp_band$col[which(tmp_band$gieStain == "acen")] <- "deepskyblue3"
@@ -354,6 +354,8 @@
   parser$add_argument("--plotformat", default = 'pdf', help = "File format of output plot. Choices are png or pdf. Default value is pdf.")
   # add arguments: --customColors accepts a file with 2 columns: sample name (same as in the data) and an additional column. Samples will be colored.
   parser$add_argument("--customColors", default = 'None', help = "Custom file for coloring options. Accepts a file with 2 columns, i.e sample name and a grouping variable.")
+  # add arguments: --path gives the path to the rscript
+  parser$add_argument("--path", default = 'None', help = "Path to the Rscript")
 
 # Read arguments
   args <- parser$parse_args()
@@ -375,6 +377,7 @@
   # region
   region = args$region
   # region = 'chr4:39348425-39348483'
+  path = args$path
 
 # Check arguments
   # stop if no input data is provided
@@ -393,5 +396,5 @@
     x = summaryRun(rs_vcf, out_dir, out_name, plotFormat, custom_colors, region)
 
     # Pipeline to plot repeats
-    plotRepeatsComplete(rs_vcf, out_dir, out_name, plotFormat, custom_colors, region)
+    plotRepeatsComplete(rs_vcf, out_dir, out_name, plotFormat, custom_colors, region, path)
   }

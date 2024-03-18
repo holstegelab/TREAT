@@ -255,6 +255,6 @@ if RUN == True:
     elif script_path == 'treat_analysis.R':
         main_script = 'Rscript %s/%s --vcf %s --out %s --outname %s --region %s --madThr %s' %(main_path, script_path, arguments[0], arguments[1], arguments[2], arguments[3], arguments[4])
     elif script_path == 'treat_plot.R':
-        main_script = 'Rscript %s/%s --vcf %s --out %s --outname %s --region %s --plotformat %s --customColors %s' %(main_path, script_path, arguments[0], arguments[1], arguments[2], arguments[3], arguments[4], arguments[5])
+        main_script = 'Rscript %s/%s --vcf %s --out %s --outname %s --region %s --plotformat %s --customColors %s --path %s' %(main_path, script_path, arguments[0], arguments[1], arguments[2], arguments[3], arguments[4], arguments[5], main_path)
     os.system(main_script)
 ###########################################################
