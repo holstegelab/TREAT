@@ -3,6 +3,7 @@
     check_install_packages <- function(packages) {
       for (package in packages) {
         if (!require(package, character.only = TRUE)) {
+          options(repos = c(CRAN = "https://cran.rstudio.com/"))
           install.packages(package)
           library(package, character.only = TRUE)
         }

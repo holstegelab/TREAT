@@ -4,7 +4,7 @@ echo "**** Installing Conda environment for TREAT"
 
 conda env create -f treat.yml
 
-echo "**** Conda installation done"
+echo "**** TREAT successfully installed"
 
 conda activate treat
 
