@@ -8,7 +8,7 @@
 
 
 ## How do you install TREAT
-The easiest way to install **TREAT** in your system is to clone the repository in your system, and use the `INSTALL.sh` script. You can do so by typing:  
+The easiest way to install **TREAT** in your system is to clone the repository in your system, and use the `INSTALL.sh` script. This will install a fresh version of Python and R, along with the required packages. You can do so by typing:  
 `git clone https://github.com/holstegelab/treat.git`  
 `cd treat/bin`  
 `sh INSTALL.sh`  
