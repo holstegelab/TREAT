@@ -52,9 +52,9 @@ readAnal.add_argument('-w', '--window', type = int, help = 'Integer. Will extend
 # number of threads
 readAnal.add_argument('-t', '--cpu', type = int, help = 'Number of parallel threads to be used.', required = False, default = 2)
 # phasing: path to snp data
-readAnal.add_argument('-p', '--phasingData', type = str, help = 'The path to SNP data (in PLINK2 format).', required = False, default = 'None')
+readAnal.add_argument('-p', '--phasingData', type = str, help = 'The path to SNP data (in PLINK2 format). Beta version', required = False, default = 'None')
 # phasing: path to mapping file between snp data and sequencing data
-readAnal.add_argument('-m', '--mappingSNP', type = str, help = 'Path to a 2-column file with SNP IDs and sequencing IDs. If not provided, will assume the IDs are the same.', required = False, default = 'None')
+readAnal.add_argument('-m', '--mappingSNP', type = str, help = 'Path to a 2-column file with SNP IDs and sequencing IDs. If not provided, will assume the IDs are the same. Beta version', required = False, default = 'None')
 # haplotyping: deviation
 readAnal.add_argument('-d', '--HaploDev', type = float, help = 'During haplotying analysis, median absolute deviation to assign reads to the same allele.', required = False, default = 0.10)
 # haplotyping: minimum supporting read number
@@ -92,7 +92,7 @@ asseAnal.add_argument('-wAss', '--windowAssembly', type = int, help = 'Integer. 
 # ploidy
 asseAnal.add_argument('-p', '--ploidy', type = int, help = 'Integer. Estimated ploidy of the sample.', required = False, default = 2)
 # software
-asseAnal.add_argument('-s', '--software', type = str, help = 'Software to use for assembly (otter / hifiasm).', required = False, default = 'otter')
+asseAnal.add_argument('-s', '--software', type = str, help = 'Software to use for assembly (otter / hifiasm). Not tested for hifiasm.', required = False, default = 'otter')
 ###########################################################
 
 ###########################################################
