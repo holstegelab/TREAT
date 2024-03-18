@@ -8,7 +8,7 @@
 
 
 ## How do you install TREAT
-The easiest way to install **TREAT** in your system is to clone the repository in your system, and use the `INSTALL.sh` script. This will install a fresh version of Python and R, along with the required packages. You can do so by typing:  
+The easiest way to install **TREAT** in your system is to clone the repository in your system, and use the `INSTALL.sh` script. This will install a fresh version of Python along with the required packages. You can do so by typing:  
 `git clone https://github.com/holstegelab/treat.git`  
 `cd treat/bin`  
 `sh INSTALL.sh`  
@@ -17,11 +17,13 @@ This script will install:
 - `treat environment through conda`, which contains all required packages to execute treat (including Python 3.6 and R)
 - `htslib-1.19.1`, which contains `htslib`, required to run `otter` 
 - `otter`, which is a novel targeted local assembler. Additional information about `otter` is available at [here](https://github.com/holstegelab/otter).  
-At the end of the installation, you may need to re-run the following lines to enable `TREAT` and `otter` system-wide (otherwise, you need to run the tools using the full path):
+Note that `R` needs to be installed in your system. When running the `plot` or `analysis` modules of `TREAT`, it will automatically install the required packages, if not present (`data.table`, `stringr`, `argparse`, `ggplot2`, `dplyr`, `dendextend`, `berryFunctions`). 
+
+You can independently install the required packages by `TREAT` without using the provided `INSTALL.sh`. These are listed in the `treat.yml`, and consists of `samtools`, `python 3.6`, `trf`, and the python packages `pysam`, `pandas`, `scikit-learn`, `numpy`, `biopython`. Please see `otter` [installation](https://github.com/holstegelab/otter) for more information about how to properly install `otter`.
+
+At the end of the installation, you may need to re-run the following lines to enable `TREAT` and `otter` system-wide (otherwise, you need to run the tools using the full path):  
 `export PATH=$PWD/:$PATH`  
 `export PATH=$PWD/otter/build/:$PATH`  
-
-Alternatively, you can independently install the required packages by `TREAT`. These are listed in the `treat.yml`, and main consists of `samtools`, `python 3.6`, `R`, `trf`, and the python packages `pysam`, `pandas`, `scikit-learn`, `numpy`, `biopython`. Please see `otter` [installation](https://github.com/holstegelab/otter) for more information about how to properly install `otter`.
 
 ## What do you need to run TREAT
 To run **TREAT**, you need:
