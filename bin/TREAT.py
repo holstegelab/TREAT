@@ -207,31 +207,12 @@ elif args.cmd == 'merge':
     script_path = 'merge_vcf.py'
     arguments = [args.vcf, args.outDir, args.outName]
 elif args.cmd == 'analysis':
-    print('Analysis of VCF selected')
-    print('** Required argument:')
-    print("   Input VCF file(s): ", args.vcf)
-    print('** Optional arguments:')
-    print("   Output directory: ", args.outDir)
-    print("   Output name: ", args.outName)
-    print("   Region to analyze: ", args.region)
-    print("   Outlier threshold: ", args.madThr)
-    print("\n")
     # set flag to true
     RUN = True
     # define script to run and arguments
     script_path = 'treat_analysis.R'
     arguments = [args.vcf, args.outDir, args.outName, args.region, args.madThr]
 elif args.cmd == 'plot':
-    print('Plot TR')
-    print('** Required argument:')
-    print("   Input VCF file(s): ", args.vcf)
-    print('** Optional arguments:')
-    print("   Output directory: ", args.outDir)
-    print("   Output name: ", args.outName)
-    print("   Region to analyze: ", args.region)
-    print("   Plot format: ", args.plotformat)
-    print("   Color palette: ", args.customColors)
-    print("\n")
     # set flag to true
     RUN = True
     # define script to run and arguments
