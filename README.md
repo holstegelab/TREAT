@@ -16,7 +16,10 @@ This script assumes you have `conda` correctly installed in your system. If you 
 This script will install:
 - `treat environment through conda`, which contains all required packages to execute treat (including Python 3.6 and R)
 - `htslib-1.19.1`, which contains `htslib`, required to run `otter` 
-- `otter`, which is a novel targeted local assembler. Additional information about `otter` is available at [here](https://github.com/holstegelab/otter).
+- `otter`, which is a novel targeted local assembler. Additional information about `otter` is available at [here](https://github.com/holstegelab/otter).  
+At the end of the installation, you may need to re-run the following lines to enable `TREAT` and `otter` system-wide (otherwise, you need to run the tools using the full path):
+`export PATH=$PWD/:$PATH`  
+`export PATH=$PWD/otter/build/:$PATH`  
 
 Alternatively, you can independently install the required packages by `TREAT`. These are listed in the `treat.yml`, and main consists of `samtools`, `python 3.6`, `R`, `trf`, and the python packages `pysam`, `pandas`, `scikit-learn`, `numpy`, `biopython`. Please see `otter` [installation](https://github.com/holstegelab/otter) for more information about how to properly install `otter`.
 
