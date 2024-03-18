@@ -1,14 +1,16 @@
 # Libraries: check if the required packages are installed, and if not, install them
   packages <- c("data.table", "stringr", "argparse")
   check_install_packages <- function(packages) {
-    for (package in packages) {
-      if (!require(package, character.only = TRUE)) {
-        options(repos = c(CRAN = "https://cran.rstudio.com/"))
-        install.packages(package)
-        library(package, character.only = TRUE)
+      installed_packages <- installed.packages()
+      for (package in packages){
+        if (package %in% installed_packages){
+          suppressPackageStartupMessages(library(package, character.only = TRUE))
+        } else {
+          install.packages(package)
+          suppressPackageStartupMessages(library(package, character.only = TRUE))
+        }
       }
     }
-  }
   check_install_packages(packages)
 
 
