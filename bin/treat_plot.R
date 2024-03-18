@@ -1,14 +1,15 @@
 # Libraries: check if the required packages are installed, and if not, install them
   packages <- c("data.table", "stringr", "argparse", "ggplot2", "berryFunctions", "dendextend", "dplyr", "ggsci", "ggpubr")
     check_install_packages <- function(packages) {
-      suppressPackageStartupMessages({
-        for (pkg in packages) {
-          if (!requireNamespace(pkg, quietly = TRUE)) {
-            install.packages(pkg, dependencies = TRUE)
-          }
+      installed_packages <- installed.packages()
+      for (package in packages){
+        if (package %in% installed_packages){
+          suppressPackageStartupMessages(library(package, character.only = TRUE))
+        } else {
+          install.packages(package)
+          suppressPackageStartupMessages(library(package, character.only = TRUE))
         }
-        lapply(packages, requireNamespace, quietly = TRUE)
-      })
+      }
     }
   check_install_packages(packages)
 
