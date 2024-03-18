@@ -1,3 +1,5 @@
+#!/bin/bash
+
 echo "** Installing TREAT and Otter"
 
 echo "**** Installing Conda environment for TREAT"

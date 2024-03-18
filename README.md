@@ -12,7 +12,7 @@ The easiest way to install **TREAT** in your system is to clone the repository i
 You can run the script by typing:  
 `git clone https://github.com/holstegelab/treat.git`  
 `cd treat/bin`  
-`sh INSTALL.sh`  
+`source INSTALL.sh`  
 This script will install:
 - `treat environment through conda`, which contains all required packages to execute treat (including Python 3.6 and R)
 - `htslib-1.19.1`, which contains `htslib`, required to run `otter` 
