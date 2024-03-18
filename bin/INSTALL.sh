@@ -8,6 +8,7 @@ conda env create -f treat.yml
 
 echo "**** TREAT successfully installed"
 
+chmod +x $PWD/TREAT.py
 conda activate treat
 
 echo "**** Now installing HTS lib"
