@@ -8,11 +8,11 @@
 
 
 ## How do you install TREAT
-The easiest way to install **TREAT** in your system is to clone the repository in your system, and use the `INSTALL.sh` script. This will install a fresh version of Python along with the required packages. You can do so by typing:  
+The easiest way to install **TREAT** in your system is to clone the repository in your system, and use the `INSTALL.sh` script. This will install a fresh version of Python along with the required packages, in a separate environment. This script assumes you have `conda` correctly installed in your system. If you are not familiar with Conda, please see [here](https://conda.io/projects/conda/en/latest/user-guide/getting-started.html).
+You can run the script by typing:  
 `git clone https://github.com/holstegelab/treat.git`  
 `cd treat/bin`  
 `sh INSTALL.sh`  
-This script assumes you have `conda` correctly installed in your system. If you are not familiar with Conda, please see [here](https://conda.io/projects/conda/en/latest/user-guide/getting-started.html).
 This script will install:
 - `treat environment through conda`, which contains all required packages to execute treat (including Python 3.6 and R)
 - `htslib-1.19.1`, which contains `htslib`, required to run `otter` 
@@ -30,14 +30,12 @@ To run **TREAT**, you need:
 - **TREAT** correctly installed and working in your system
 - the target regions of interest in the form of a BED file. Please see BED file specifications [here](https://genome.ucsc.edu/FAQ/FAQformat.html#format1)
 - the target genomes in the form of aligned BAM file(s). Please see BAM file specifications [here](https://genome.ucsc.edu/goldenPath/help/bam.html)
-- the reference genomes that was used to align genomes, in the form of a FASTA file. Please see FASTA file specifications [here](https://www.ncbi.nlm.nih.gov/genbank/fastaformat/)
+- the reference genomes that was used to align genomes, in the form of a FASTA file. Please see FASTA file specifications [here](https://www.ncbi.nlm.nih.gov/genbank/fastaformat/). GRCh38 is available [here](https://hgdownload.soe.ucsc.edu/goldenPath/hg38/bigZips/)
 
 ## What do you get as output
 **TREAT** output consists of:
 - `treat_run.log`: a recapitulation of the job along with a replicable command
 - `sample.vcf.gz`: the main VCF file summarizing the genotype of the target regions in the target genomes
-- `sample.seq.txt.gz`: this file contains the same information as the VCF file, but in a tab-delimited format
-- `sample.raw.txt.gz`: this file contains the raw read- or contig-specific information
 
 ## How do you run TREAT
 To run **TREAT**, you can follow these steps:
