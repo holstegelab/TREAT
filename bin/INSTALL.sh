@@ -22,15 +22,17 @@ cd ..
 export CPATH=$CPATH:$PWD/htslib-1.19.1
 export LIBRARY_PATH=$LIBRARY_PATH:$PWD/htslib-1.19.1
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$PWD/htslib-1.19.1
+echo export CPATH=$CPATH:$PWD/htslib-1.19.1 > $PWD/activate_env.sh
+echo export LIBRARY_PATH=$LIBRARY_PATH:$PWD/htslib-1.19.1 >> $PWD/activate_env.sh
+echo export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$PWD/htslib-1.19.1 >> $PWD/activate_env.sh
 git clone https://github.com/holstegelab/otter.git && cd otter
 mkdir build
 make packages
 make
 
-echo "** Activating treat environment"
-conda activate treat
-
 echo "** Exporting packages to main path"
 cd ..
-export PATH=$PWD/:$PATH
-export PATH=$PWD/otter/build/:$PATH
+echo export PATH=$PWD/:$PATH >> $PWD/activate_env.sh
+echo export PATH=$PWD/otter/build/:$PATH >> $PWD/activate_env.sh
+chmod +x $PWD/activate_env.sh
+mv $PWD/activate_env.sh $CONDA_PREFIX/etc/conda/activate.d/
