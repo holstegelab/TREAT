@@ -1,5 +1,5 @@
 # Libraries: check if the required packages are installed, and if not, install them
-  packages <- c("data.table", "stringr", "argparse", "ggplot2", "berryFunctions", "dendextend", "dplyr", "ggsci")
+  packages <- c("data.table", "stringr", "argparse", "ggplot2", "berryFunctions", "dendextend", "dplyr")
     check_install_packages <- function(packages) {
       installed_packages <- installed.packages()
       for (package in packages){
