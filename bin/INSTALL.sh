@@ -34,9 +34,9 @@ make packages
 make
 
 echo "** Exporting packages to main path"
-cd ..
+cd ../../
 
-echo export PATH=$PWD:$PATH >> $PWD/activate_env.sh
-echo export PATH=$PWD/otter/build/:$PATH >> $PWD/activate_env.sh
-chmod +x $PWD/activate_env.sh
-mv $PWD/activate_env.sh $CONDA_PREFIX/etc/conda/activate.d/
+echo export PATH=$PWD/bin/otter/build/:$PATH >> $PWD/bin/activate_env.sh
+echo export PATH=$PWD/bin/:$PATH >> $PWD/bin/activate_env.sh
+chmod +x $PWD/bin/activate_env.sh
+mv $PWD/bin/activate_env.sh $CONDA_PREFIX/etc/conda/activate.d/
