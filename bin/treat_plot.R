@@ -1,5 +1,5 @@
 # Libraries: check if the required packages are installed, and if not, install them
-  packages <- c("data.table", "stringr", "argparse", "ggplot2", "berryFunctions", "dendextend", "dplyr", "ggsci", "ggpubr")
+  packages <- c("data.table", "stringr", "argparse", "ggplot2", "berryFunctions", "dendextend", "dplyr", "ggsci")
     check_install_packages <- function(packages) {
       installed_packages <- installed.packages()
       for (package in packages){
@@ -245,7 +245,7 @@
         # background plot
         plot(x = 0, 0, pch=16, col="white", xlim=c(min_len, max_len), cex.axis = 1.80, cex.lab = 2, ylim = c(0, nrow(vcf_info_withRef) + 2), xlab = "Size of Tandem Repeat", ylab = "", yaxt="none")
         # get nejm colors
-        color = get_palette(palette = 'nejm', 3)
+        color = c('navy', 'orange', 'red')
         # grid
         for (x in 1:nrow(vcf_info_withRef)){ abline(h = x, lwd=0.4, col='grey80') }
         # add dashed line for the reference
