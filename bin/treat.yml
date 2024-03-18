@@ -86,7 +86,6 @@ dependencies:
   - pthread-stubs=0.4=h36c2ea0_1001
   - python=3.6.15=hb7a2778_0_cpython
   - python_abi=3.6=2_cp36m
-  - r-base=3.6.3=hbcea092_8
   - readline=8.1=h46c0cb4_0
   - samtools=1.11=h6270b1f_0
   - sed=4.8=he412f7d_0
