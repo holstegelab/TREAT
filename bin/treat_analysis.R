@@ -32,7 +32,7 @@
           vcf = merge(vcf, tmp, by = 'ID', all=T)
         }
       }
-      # Identify the regions to be plotted
+      # Identify the regions to be analysed
       all_regions = unique(vcf$ID)
       # Create an empty dataframe for the results
       outlier_results = data.frame()
@@ -53,7 +53,59 @@
       cat('\n')
     }
 
+    # Function for the case-control analysis
+    caseControlPipeline <- function(rs_vcf, out_dir, out_name, region, labels){
+      cat('\n')
+      # Disable warnings
+      defaultW <- getOption("warn"); options(warn = -1)
+      # Read VCF
+      vcf = data.frame()
+      print(rs_vcf)
+      for (v in rs_vcf){
+        tmp = readVCF(v, region)
+        if (nrow(vcf) == 0){
+          vcf = tmp
+        } else {
+          columns_to_select = c('ID', colnames(tmp)[10:ncol(tmp)])
+          tmp = tmp[, ..columns_to_select]
+          vcf = merge(vcf, tmp, by = 'ID', all=T)
+        }
+      }
+      # Compare labels with sample's names
+      print(vcf)
+      # Identify the regions to be analysed
+      all_regions = unique(vcf$ID)
+      # Create an empty dataframe for the results
+      casecontrol_results = data.frame()
+      # The iterate over all regions
+      for (r in all_regions){
+        # Extract sizes
+        vcf_info = extractHaploSize(vcf[which(vcf$ID == r),])
+        # Extract Reference and add it to the data
+        vcf_info_withRef = extractReference(vcf, r, vcf_info)
+        # Outlier analysis
+        vcf_info_withRef = outlierAnal(vcf_info_withRef, r, mad_thr = mad_thr)
+        # Add to dataframe
+        outlier_results = rbind(outlier_results, vcf_info_withRef)
+      }
+    }
+
     # Single functions
+    # Function to check labels for the case-control analysis
+    checkLabels <- function(labels){
+      cat('\n\n')
+      # Disable warnings
+      defaultW <- getOption("warn"); options(warn = -1)
+      tryCatch({
+        # Attempt to read the file
+        cc_labels <- read.csv(labels, h=F)
+        return(cc_labels)
+      }, error = function(e) {
+        # Handle the error if the file doesn't exist
+        return(NULL)
+      })
+    }
+
     # Function to read VCF, and restrict to region of interest
     readVCF <- function(rs_vcf, region){
       # read vcf
@@ -69,15 +121,20 @@
     }
 
     # Function to print summary of the run
-    summaryRun <- function(rs_vcf, out_dir, out_name, region, mad_thr){
+    summaryRun <- function(rs_vcf, out_dir, out_name, region, mad_thr, analysis, labels){
         cat('\n********************')
         cat('\n** TREAT analysis **')
         cat('\n*** Arguments:')
+        cat(paste0('\n*** Analysis: ', paste(analysis, collapse = ',')))
         cat(paste0('\n*** Input VCF: ', paste(rs_vcf, collapse = ',')))
         cat(paste0('\n*** Region(s): ', paste(region, collapse = ', ')))
-        cat(paste0('\n*** MAD threshold: ', mad_thr))
         cat(paste0('\n*** Output directory: ', out_dir))
         cat(paste0('\n*** Output name: ', out_name))
+        if (analysis == 'outlier'){
+          cat(paste0('\n*** MAD threshold: ', mad_thr))
+        } else if (analysis == 'case-control'){
+          cat(paste0('\n*** Case-control labels: ', labels))
+        }
         return('\n*** Analysis started!')
     }
 
@@ -207,6 +264,10 @@
 
 # Arguments definition
     parser <- ArgumentParser()
+    # add arguments: --analysis is type of analysis to perform: [outlier / case-control]
+    parser$add_argument("--analysis", default = 'None', help = "Type of analysis to perform: [outlier / case-control]")
+    # add arguments: --labels is the file containing the labels of the samples for comparison
+    parser$add_argument("--labels", default = 'None', help = "File including the case-control labels for each sample. This should be a tab-separated file with 2 columns and no header, reporting sample name and a binary label.")
     # add arguments: --reads_spannning is the VCF file of the output of read_spanning_analysis
     parser$add_argument("--vcf", default = 'None', help = "VCF file output of TREAT. Multiple files should be comma-separated.")
     # add arguments: --out is the output directory
@@ -220,6 +281,10 @@
 
 # Read arguments
     args <- parser$parse_args()
+    # analysis type
+    analysis = args$analysis
+    # eventually the case-control labels
+    labels = args$labels
     # vcf of read-spanning analysis
     rs_vcf = args$vcf; rs_vcf = unlist(strsplit(rs_vcf, ','))
     # rs_vcf = 'samples_genotypes.vcf'
@@ -234,7 +299,6 @@
     # region = 'all'
     # madThr
     mad_thr = as.numeric(args$madThr)
-
 # Check arguments and stop if no input data is provided
     run = 'false'
     if ((length(rs_vcf) == 1) && (rs_vcf == 'None')){ stop("Input error: Missing input file(s)!!") } else if (!is.numeric(mad_thr)){ "The --madThr should be numeric" } else { run = 'true'}
@@ -245,8 +309,22 @@ if (run == 'true'){
     # Create directory if not present
     if (!dir.exists(out_dir)){ system(paste0('mkdir ', out_dir)) }
     # Print summary of the run
-    x = summaryRun(rs_vcf, out_dir, out_name, region, mad_thr)
+    x = summaryRun(rs_vcf, out_dir, out_name, region, mad_thr, analysis, labels)
 
-    # Pipeline to plot repeats
-    analysisPipeline(rs_vcf, out_dir, out_name, region, mad_thr)
+    # Pipeline to do outlier analysis
+    if (analysis == 'outlier'){
+      # run outlier analysis pipeline
+      analysisPipeline(rs_vcf, out_dir, out_name, region, mad_thr)
+    } else if (analysis == 'case-control'){
+      # check the labels file
+      cc_labels = checkLabels(labels)
+      if (is.null(cc_labels)){
+        stop("Error: The labels file does not exist or is unreadable. This should be a tab-separated file with 2 columns and no header, reporting sample name and a binary label.")
+      } else {
+        cat('\n*** File including labels looks OK')
+        # then run the case-control analysis if label file is ok
+        caseControlPipeline(rs_vcf, out_dir, out_name, region, cc_labels)
+      }
+      print('stay tuned')
+    }
   }

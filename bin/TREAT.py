@@ -13,6 +13,7 @@ print("**********************************************\n")
 # Libraries
 import argparse
 import os
+import sys
 ###########################################################
 
 ###########################################################
@@ -111,10 +112,12 @@ mergeAnal.add_argument('-n', '--outName', help='Name of the combined VCF file. I
 # Define the arguments for analysis
 # required arguments
 # add arguments: --reads_spannning is the VCF file of the output of read_spanning_analysis
-analAnal.add_argument("-a", "--analysis", required = True, help = "Type of analysis to perform: [outlier / case-control / quantitative]")
+analAnal.add_argument("-a", "--analysis", required = True, choices=["outlier", "case-control"], help = "Type of analysis to perform: [outlier / case-control]")
 # add arguments: --reads_spannning is the VCF file of the output of read_spanning_analysis
 analAnal.add_argument("-v", "--vcf", default = 'None', help = "VCF file output of TREAT. Multiple files should be comma-separated.", required = True)
 # optional arguments
+# add arguments: --file is the case-control labels (mandatory if case-control is selected)
+analAnal.add_argument("-l", "--labels", required=False, help = "Labels for case-control association. Only valid if case-control analysis is selected. This should be a tab-separated file with 2 columns and no header, reporting sample name and a binary label.")
 # add arguments: --out is the output directory
 analAnal.add_argument("-o", "--outDir", default = './', help = "Output directory where output will be placed. Default is the current directory.", required = False)
 # add arguments: --outname is the name of the output file
@@ -213,7 +216,10 @@ elif args.cmd == 'analysis':
     RUN = True
     # define script to run and arguments
     script_path = 'treat_analysis.R'
-    arguments = [args.analysis, args.vcf, args.outDir, args.outName, args.region, args.madThr]
+    arguments = [args.analysis, args.vcf, args.outDir, args.outName, args.region, args.madThr, args.labels]
+    # validate the arguments
+    if args.analysis == "case-control" and not args.labels:
+        sys.exit("Error: 'case-control' analysis was selected, but no files including labels was given. This should be a tab-separated file with 2 columns and no header, reporting sample name and a binary label.")
 elif args.cmd == 'plot':
     # set flag to true
     RUN = True
@@ -236,7 +242,7 @@ if RUN == True:
     if script_path in ['read_based.py', 'assembly_based.py', 'merge_vcf.py']:
         main_script = 'python3.6 %s/%s %s' %(main_path, script_path, ' '.join(arguments))
     elif script_path == 'treat_analysis.R':
-        main_script = 'Rscript %s/%s --analysis %s --vcf %s --out %s --outname %s --region %s --madThr %s' %(main_path, script_path, arguments[0], arguments[1], arguments[2], arguments[3], arguments[4], arguments[5])
+        main_script = 'Rscript %s/%s --analysis %s --vcf %s --out %s --outname %s --region %s --madThr %s --labels %s' %(main_path, script_path, arguments[0], arguments[1], arguments[2], arguments[3], arguments[4], arguments[5], arguments[6])
     elif script_path == 'treat_plot.R':
         main_script = 'Rscript %s/%s --vcf %s --out %s --outname %s --region %s --plotformat %s --customColors %s --path %s' %(main_path, script_path, arguments[0], arguments[1], arguments[2], arguments[3], arguments[4], arguments[5], main_path)
     os.system(main_script)
