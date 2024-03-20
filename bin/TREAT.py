@@ -108,8 +108,10 @@ mergeAnal.add_argument('-n', '--outName', help='Name of the combined VCF file. I
 ###########################################################
 
 ###########################################################
-# Define the arguments for outlier analysis
+# Define the arguments for analysis
 # required arguments
+# add arguments: --reads_spannning is the VCF file of the output of read_spanning_analysis
+analAnal.add_argument("-a", "--analysis", required = True, help = "Type of analysis to perform: [outlier / case-control / quantitative]")
 # add arguments: --reads_spannning is the VCF file of the output of read_spanning_analysis
 analAnal.add_argument("-v", "--vcf", default = 'None', help = "VCF file output of TREAT. Multiple files should be comma-separated.", required = True)
 # optional arguments
@@ -211,7 +213,7 @@ elif args.cmd == 'analysis':
     RUN = True
     # define script to run and arguments
     script_path = 'treat_analysis.R'
-    arguments = [args.vcf, args.outDir, args.outName, args.region, args.madThr]
+    arguments = [args.analysis, args.vcf, args.outDir, args.outName, args.region, args.madThr]
 elif args.cmd == 'plot':
     # set flag to true
     RUN = True
@@ -234,7 +236,7 @@ if RUN == True:
     if script_path in ['read_based.py', 'assembly_based.py', 'merge_vcf.py']:
         main_script = 'python3.6 %s/%s %s' %(main_path, script_path, ' '.join(arguments))
     elif script_path == 'treat_analysis.R':
-        main_script = 'Rscript %s/%s --vcf %s --out %s --outname %s --region %s --madThr %s' %(main_path, script_path, arguments[0], arguments[1], arguments[2], arguments[3], arguments[4])
+        main_script = 'Rscript %s/%s --analysis %s --vcf %s --out %s --outname %s --region %s --madThr %s' %(main_path, script_path, arguments[0], arguments[1], arguments[2], arguments[3], arguments[4], arguments[5])
     elif script_path == 'treat_plot.R':
         main_script = 'Rscript %s/%s --vcf %s --out %s --outname %s --region %s --plotformat %s --customColors %s --path %s' %(main_path, script_path, arguments[0], arguments[1], arguments[2], arguments[3], arguments[4], arguments[5], main_path)
     os.system(main_script)
