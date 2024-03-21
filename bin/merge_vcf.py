@@ -16,7 +16,7 @@ def checkOutDir(outDir):
         return("** Output directory valid. Will output files in the current directory")
     else:
         # see whether directory exists
-        if os.path.isdir(out_dir) == True:
+        if os.path.isdir(outDir) == True:
             return("** Output directory valid. Will output files %s" %(outDir))
         else:
             # create directory and put files there
