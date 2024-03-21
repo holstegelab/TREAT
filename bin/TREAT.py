@@ -126,6 +126,8 @@ analAnal.add_argument("-n", "--outName", default = 'treat_analysis_output.txt', 
 analAnal.add_argument("-r", "--region", default = 'all', help = "Name of the region to analyze. By default, all regions will be analyzed.", required = False)
 # add arguments: --madThr is the value to call outliers
 analAnal.add_argument("-t", "--madThr", default = 3, help = "Median Absolute deviation value used to call outliers.", required = False)
+# add arguments: --cpu is the number of cpus to use
+analAnal.add_argument("-c", "--cpu", default = 1, help = "Number of CPUs to use (Default: 1)", required = False)
 ###########################################################
 
 ###########################################################
@@ -216,7 +218,7 @@ elif args.cmd == 'analysis':
     RUN = True
     # define script to run and arguments
     script_path = 'treat_analysis.R'
-    arguments = [args.analysis, args.vcf, args.outDir, args.outName, args.region, args.madThr, args.labels]
+    arguments = [args.analysis, args.vcf, args.outDir, args.outName, args.region, args.madThr, args.labels, args.cpu]
     # validate the arguments
     if args.analysis == "case-control" and not args.labels:
         sys.exit("Error: 'case-control' analysis was selected, but no files including labels was given. This should be a tab-separated file with 2 columns and no header, reporting sample name and a binary label.")
@@ -242,7 +244,7 @@ if RUN == True:
     if script_path in ['read_based.py', 'assembly_based.py', 'merge_vcf.py']:
         main_script = 'python3.6 %s/%s %s' %(main_path, script_path, ' '.join(arguments))
     elif script_path == 'treat_analysis.R':
-        main_script = 'Rscript %s/%s --analysis %s --vcf %s --out %s --outname %s --region %s --madThr %s --labels %s' %(main_path, script_path, arguments[0], arguments[1], arguments[2], arguments[3], arguments[4], arguments[5], arguments[6])
+        main_script = 'Rscript %s/%s --analysis %s --vcf %s --out %s --outname %s --region %s --madThr %s --labels %s --cpu %s' %(main_path, script_path, arguments[0], arguments[1], arguments[2], arguments[3], arguments[4], arguments[5], arguments[6], arguments[7])
     elif script_path == 'treat_plot.R':
         main_script = 'Rscript %s/%s --vcf %s --out %s --outname %s --region %s --plotformat %s --customColors %s --path %s' %(main_path, script_path, arguments[0], arguments[1], arguments[2], arguments[3], arguments[4], arguments[5], main_path)
     os.system(main_script)
