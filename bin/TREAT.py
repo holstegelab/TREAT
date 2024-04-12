@@ -133,6 +133,8 @@ analAnal.add_argument("-c", "--cpu", default = 1, help = "Number of CPUs to use 
 ###########################################################
 # add arguments: --reads_spannning is the VCF file of the output of read_spanning_analysis
 plotAnal.add_argument("-v", "--vcf", default = 'None', help = "VCF file output of TREAT. Multiple files should be comma-separated.", required = True)
+# add arguments: --type is the type of plot
+plotAnal.add_argument("-t", "--type", default = 'population', help = "Type of plot to be made. Default is population", required = False)
 # add arguments: --out is the output directory
 plotAnal.add_argument("-o", "--outDir", default = './', help = "Output directory where output will be placed. Default is the current directory.", required = False)
 # add arguments: --outname is the name of the output file
@@ -227,7 +229,7 @@ elif args.cmd == 'plot':
     RUN = True
     # define script to run and arguments
     script_path = 'treat_plot.R'
-    arguments = [args.vcf, args.outDir, args.outName, args.region, args.plotformat, args.customColors]
+    arguments = [args.vcf, args.outDir, args.outName, args.region, args.plotformat, args.customColors, args.type]
 else:
     print('!! Invalid run_type. Quitting.')
     print("\n")
@@ -246,6 +248,6 @@ if RUN == True:
     elif script_path == 'treat_analysis.R':
         main_script = 'Rscript %s/%s --analysis %s --vcf %s --out %s --outname %s --region %s --madThr %s --labels %s --cpu %s' %(main_path, script_path, arguments[0], arguments[1], arguments[2], arguments[3], arguments[4], arguments[5], arguments[6], arguments[7])
     elif script_path == 'treat_plot.R':
-        main_script = 'Rscript %s/%s --vcf %s --out %s --outname %s --region %s --plotformat %s --customColors %s --path %s' %(main_path, script_path, arguments[0], arguments[1], arguments[2], arguments[3], arguments[4], arguments[5], main_path)
+        main_script = 'Rscript %s/%s --vcf %s --out %s --outname %s --region %s --plotformat %s --customColors %s --path %s --type %s' %(main_path, script_path, arguments[0], arguments[1], arguments[2], arguments[3], arguments[4], arguments[5], main_path, arguments[6])
     os.system(main_script)
 ###########################################################
