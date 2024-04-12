@@ -60,13 +60,63 @@
       cat('\n')
     }
 
+    # Pipeline to plot Blood-Brain-Child
+    PipelinePlotBBC <- function(rs_vcf, out_dir, out_name, plotFormat, custom_colors, region, path){
+      cat('\n')
+      # Disable warnings
+      defaultW <- getOption("warn"); options(warn = -1)
+      # Read VCF
+      vcf = data.frame()
+      for (v in rs_vcf){
+        tmp = readVCF(v, region)
+        if (nrow(vcf) == 0){
+          vcf = tmp
+        } else {
+          columns_to_select = c('ID', colnames(tmp)[10:ncol(tmp)])
+          tmp = tmp[, ..columns_to_select]
+          vcf = merge(vcf, tmp, by = 'ID', all=T)
+        }
+      }
+      # Identify the regions to be plotted
+      all_regions = unique(vcf$ID)
+      # The iterate over all regions
+      for (r in all_regions){
+        # Extract sizes
+        vcf_info = extractHaploSize(vcf[which(vcf$ID == r),])
+        # Extract Reference and add it to the data
+        vcf_info_withRef = extractReference(vcf, r, vcf_info)
+        # Plot name
+        plt_name = paste0(out_name, '_', r, '.', plotFormat)
+        plt_name_af = paste0(out_name, '_', r, '_Freq.', plotFormat)
+        plotname = file.path(out_dir, plt_name)
+        plotname_af = file.path(out_dir, plt_name_af)
+        # Plot tandem repeat
+        pdf(plotname, height = 10, width = 10.5)
+        plotBBC(vcf_info_withRef, custom_colors = custom_colors, region = r, path = path)
+        dev.off()
+        # Plot allele frequency
+        pdf(plotname_af, height = 7, width = 12)
+        print(plotAlleleFrequency(vcf_info_withRef, custom_colors = custom_colors, region = r))
+        dev.off()
+        cat('\nPlots done --> ', plotname, ' + ', plotname_af)
+      }
+      cat('\n')
+    }
+
   # Single functions used in the pipelines
     # Function to read VCF, and restrict to region of interest
     readVCF <- function(rs_vcf, region){
       # read vcf
       d = fread(rs_vcf, h=T, sep="\t")
       # restrict to region of interest
-      if (length(region) == 1 && (region == 'all')){ sub = d } else { sub = d[which(d$ID %in% region),] }
+      if (length(region) == 1 && (region == 'all')){ 
+        sub = d 
+      } else if (length(grep(',', region)) >=1){
+        region_list = strsplit(region, ',')[[1]]
+        sub = d[which(d$ID %in% region_list),]
+      } else { 
+        sub = d[which(d$ID %in% region),] 
+      }
       # check if region existed
       if (nrow(sub) >0){
         return(sub)
@@ -328,8 +378,235 @@
         }
     }
 
+    # Function to plot TR for the BBC
+    plotBBC <- function(vcf_info_withRef, custom_colors = 'None', region = r, path){
+      # Find info about position of interest
+      chrom = str_split_fixed(region, ':', 2)[, 1]; start = str_split_fixed(str_split_fixed(region, ':', 2)[, 2], '-', 2)[, 1]; stop = str_split_fixed(str_split_fixed(region, ':', 2)[, 2], '-', 2)[, 2]
+      
+      # Define maximum and minimum allele sizes
+      min_len <- floor(min(na.omit(vcf_info_withRef$short_allele)) - min(na.omit(vcf_info_withRef$short_allele))*0.15); if (min_len == 0){ min_len = -1}
+      max_len <- ceiling(max(na.omit(vcf_info_withRef$long_allele)) + max(na.omit(vcf_info_withRef$long_allele))*0.15)
+        
+      # Parse the chromosomal band
+      chr_bands <- fread(paste0(path, "/hg38_cytogenetic_bands.txt"), h=T)
+      tmp_band <- chr_bands[which(chr_bands$`#chrom` == chrom),]
+      # assign colors depending on transcription levels
+      tmp_band$col <- "white"; tmp_band$col[which(tmp_band$gieStain == "gpos25")] <- "grey90";tmp_band$col[which(tmp_band$gieStain == "gpos50")] <- "grey60"; tmp_band$col[which(tmp_band$gieStain == "gpos75")] <- "grey40"; tmp_band$col[which(tmp_band$gieStain == "gpos100")] <- "black"; tmp_band$col[which(tmp_band$gieStain == "acen")] <- "deepskyblue3"
+          
+      # Layout of the plot: chromosome band and location at the top -- main plot with samples' size of TR -- on the right side, motif information
+      layout(matrix(c(1,2,2,2,2,2,2,2, 1,2,2,2,2,2,2,2, 1,2,2,2,2,2,2,2, 1,3,3,3,3,3,3,3, 1,3,3,3,3,3,3,3), nrow = 8, ncol = 5, byrow = F))
+        
+      # First plot: chromosomal band
+        # define width of chromosome and graphical parameters
+        w = 0.15; par(mar=c(0, 6, 2, 0))
+        # background plot
+        plot(0,0, pch=16, col="white", xlim=c(0, max(tmp_band$chromEnd) + max(tmp_band$chromEnd)*0.20), ylim=c(0, 1), bty="n", xaxt="none", yaxt="none", ylab="", xlab="", xaxs = "i", yaxs = "i")
+        # draw chromosomal bands -- first rounded rectangle until centromere -- need to find position of the centromere
+        index_centromere = which(tmp_band$gieStain == "acen")
+        if (length(index_centromere) >0){
+          # draw chromosomal bands before centromere and rectangle around it
+          for (i in 1:(index_centromere[1] - 1)){ rect(xleft = tmp_band$chromStart[i], ybottom = 0.5 - w, xright = tmp_band$chromEnd[i], ytop = 0.5 + w, col = tmp_band$col[i], border = NA) }
+          roundedRect(xleft = 0, ybottom = 0.5-w, xright = max(tmp_band$chromEnd[(index_centromere[1])]), ytop = 0.5 + w, lwd=3, rounding = 0.20, xpd=T)
+          # draw chromosomal bands after centromere and rectangle around it
+          for (i in (index_centromere[2] + 1):nrow(tmp_band)){ rect(xleft = tmp_band$chromStart[i], ybottom = 0.5 - w, xright = tmp_band$chromEnd[i], ytop = 0.5 + w, col = tmp_band$col[i], border = NA) }
+          roundedRect(xleft = max(tmp_band$chromEnd[(index_centromere[1])]), ybottom = 0.5-w, xright = max(tmp_band$chromEnd), ytop = 0.5 + w, lwd=3, rounding = 0.20, xpd=T)
+          # draw centromere
+          points(x = tmp_band$chromStart[index_centromere[2]], y = 0.5, type = "p", bg=tmp_band$col[which(tmp_band$gieStain == "acen")], pch=21, cex=5, lwd=3)
+          # highlight region of interest with some padding
+          pd = 10000
+          rect(xleft = as.numeric(start) - pd, ybottom = 0.5 - w*3/2, xright = as.numeric(stop) + pd, ytop = 0.5 + w*3/2, border = "red", lwd=4)
+          # finally the title
+          text(x = max(tmp_band$chromEnd)/2, y = 1, labels = paste(chrom, start, stop, sep = " ~ "), cex=3, xpd=T, adj= 0.5, font=4)
+        } else {
+          text(x = 0, y = 0, labels = "Not mapping a any autosomal chromosome", pos = 4, xpd=T)    
+        } 
+        
+      # Second plot is the TR sizes
+        par(mar=c(4, 8, 0, 0))
+        # background plot
+        plot(x = 0, 0, pch=16, col="white", xlim=c(min_len, max_len), cex.axis = 1.80, cex.lab = 2, ylim = c(0, 45), xlab = "Size of Tandem Repeat", ylab = "", yaxt="none")
+        # get nejm colors
+        color = c('navy', 'orange', 'red')
+        # grid
+        for (x in 1:41){ abline(h = x, lwd=0.4, col='grey80') }
+        for (x in c(1, 5, 9, 13, 17, 21, 25, 29, 33, 37, 41)){ abline(h = x, lwd=1.5, col='grey60') }
+        # add dashed line for the reference
+        segments(x0 = vcf_info_withRef$short_allele[which(vcf_info_withRef$sample == 'GRCh38')], y0 = 1, x1 = vcf_info_withRef$short_allele[which(vcf_info_withRef$sample == 'GRCh38')], y1 = 41, col = 'black', lty = 2)
+        # main loop across trios
+        y_value = 2
+        for (s in c(1, 2, 3, 4, 5, 6, 7, 9, 10, 11)){
+          # get samples' data
+            # blood
+              blood = vcf_info_withRef[which(vcf_info_withRef$sample == paste0('c', s, '_blood.merged.hifi.hg38')),]
+            # brain
+              brain = vcf_info_withRef[which(vcf_info_withRef$sample == paste0('c', s, '_brain.merged.hifi.hg38')),]
+            # child
+              child = vcf_info_withRef[which(vcf_info_withRef$sample == paste0('c', s, '_child.merged.hifi.hg38')),]
+          # use 2 colors for heterozygous, 1 for homozygous
+          gt_type_blood = ifelse(blood$short_allele == blood$long_allele, 'homo', 'hetero')
+          gt_type_brain = ifelse(brain$short_allele == brain$long_allele, 'homo', 'hetero')
+          gt_type_child = ifelse(child$short_allele == child$long_allele, 'homo', 'hetero')
+          # add points for the haplotype sizes
+            # blood
+            if (is.na(gt_type_blood)){ text(x = min_len, y = y_value, labels = 'NA', font = 2) } else if (gt_type_blood == 'homo'){ points(x = blood$short_allele, y = y_value, bg = color[1], col='black', pch = 21, cex = 1.80) } else { points(x = blood$short_allele, y = y_value, bg = color[2], pch = 21, col = 'black', cex = 1.80); points(x = blood$long_allele, y = y_value, bg = color[3], pch = 21, col = 'black', cex = 1.80) }
+            # rectangle
+            rect(xleft = min_len-(max_len*0.035), ybottom = y_value - 0.5, xright = min_len-(max_len*0.015), ytop = y_value + 0.5, col = 'white', border = 'black', xpd=T)
+            y_value = y_value + 1
+            # brain
+            if (is.na(gt_type_brain)){ text(x = min_len, y = y_value, labels = 'NA', font = 2) } else if (gt_type_brain == 'homo'){ points(x = brain$short_allele, y = y_value, bg = color[1], pch = 21, col = 'black', cex = 1.80) } else { points(x = brain$short_allele, y = y_value, bg = color[2], pch = 21, col = 'black', cex = 1.80); points(x = brain$long_allele, y = y_value, bg = color[3], pch = 21, col = 'black', cex = 1.80) }
+            # rectangle
+            rect(xleft = min_len-(max_len*0.035), ybottom = y_value - 0.5, xright = min_len-(max_len*0.015), ytop = y_value + 0.5, col = 'grey80', border = 'black', xpd=T)
+            y_value = y_value + 1
+            # child
+            if (is.na(gt_type_child)){ text(x = min_len, y = y_value, labels = 'NA', font = 2) } else if (gt_type_child == 'homo'){ points(x = child$short_allele, y = y_value, bg = color[1], pch = 21, col = 'black', cex = 1.80) } else { points(x = child$short_allele, y = y_value, bg = color[2], pch = 21, col = 'black', cex = 1.80); points(x = child$long_allele, y = y_value, col = 'black', bg = color[3], pch = 21, cex = 1.80) }
+            # rectangle
+            rect(xleft = min_len-(max_len*0.035), ybottom = y_value - 0.5, xright = min_len-(max_len*0.015), ytop = y_value + 0.5, col = 'black', border = 'black', xpd=T)
+            # line
+            segments(x0 = min_len-(max_len*0.05), y0 = y_value-2.5, x1 = min_len-(max_len*0.05), y1 = y_value + 0.5, lwd = 0.5, col = 'grey60', xpd = T)
+            text(x = min_len-(max_len*0.07), y = y_value-1, label = paste0('C', s), srt = 90, adj = 0.5, xpd = T, cex = 1.5)
+            y_value = y_value + 2
+        }
+        # Legend 
+        legend('top', legend = c('Homozygous', 'Allele 1', 'Allele 2', 'Reference', 'Blood', 'Brain', 'Child'), x.intersp = 0.2, pch = c(21, 21, 21, NA, 22, 22, 22), col = c('black'), pt.bg = c(color, NA, 'white', 'grey80', 'black'), lty = c(NA, NA, NA, 2, NA, NA, NA), bty = 'n', ncol=3, cex = 1.50, pt.cex=2)
+        
+      # Third plot is about the motifs -- reference motif with attached the estimated number of copies
+        par(mar=c(4, 0, 0, 0))
+        # to set the plot limits, need to check the motif
+        ref_motif = unique(vcf_info_withRef$short_allele_motif[which(vcf_info_withRef$sample == 'GRCh38')])
+        xlim_max = 50
+        # background plot
+        plot(x = 0, 0, pch=16, col="white", xlim=c(0, xlim_max), ylim = c(0, 45), xlab = "", ylab = "", xaxt='none', yaxt="none", bty = 'n')
+        # grid
+        colors_rects = rep(c('grey80', 'white'), 200)
+        for (x in seq(2, 41, 2)){ rect(xleft = 0, ybottom = x-0.5, xright = xlim_max, ytop = x+0.5, col = 'grey80', border = NA) }
+        for (x in c(1, 5, 9, 13, 17, 21, 25, 29, 33, 37, 41)){ abline(h = x, lwd=1.5, col='grey60') }
+        # middle line to divide reference-based and sample-based
+        segments(x0 = xlim_max/2, y0 = 0.5, x1 = xlim_max/2, y1 = 41.5, lwd = 2, col = 'grey60')
+        # text at the top
+        text(x = xlim_max/4, y = 43, labels = 'Haplotype 1', font = 2, cex = 1.5, xpd=T)
+        text(x = xlim_max/2 + xlim_max/4, y = 43, labels = 'Haplotype 2', font = 2, cex = 1.5, xpd=T)
+        text(x = xlim_max/2, y = 45, labels = 'Motif composition', font = 2, cex = 1.75, xpd=T)
+        # the size of the motif rectangle depends on the size of the motif
+        max_size_motif = max(nchar(vcf_info_withRef$short_allele_motif), nchar(vcf_info_withRef$long_allele_motif), na.rm=T)
+        w = ifelse(max_size_motif <10, 0.8, 0.5); sz_bp = ifelse(max_size_motif <10, 0.8, 0.6); wy = 0.5
+        # define the colors for the bp
+        colors_nt = c("A" = 'blue', "C" = 'red', "G" = 'green', "T" = 'yellow')# main loop across samples
+        y_value = 2
+        for (s in c(1, 2, 3, 4, 5, 6, 7, 9, 10, 11)){
+          # get samples data
+            # blood
+              sb_blood = vcf_info_withRef[which(vcf_info_withRef$sample == paste0('c', s, '_blood.merged.hifi.hg38')),]
+              if (is.na(sb_blood$short_allele_motif)){
+                # just report NA
+                text(x = 1, y = y_value, labels = 'NA', adj = c(0, 0.5), font = 2); text(x = xlim_max/2+1, y = y_value, labels = 'NA', adj = c(0, 0.5), font = 2)
+              } else {        
+                # haplotype 1
+                if (nchar(sb_blood$short_allele_motif) >15){
+                  # if the motif is too long (>15bp) report that motif is too large
+                  text(x = 1, y = y_value, labels = 'Motif too large (>15bp)', adj = c(0, 0.5)); text(x = xlim_max/2-1, y = y_value, labels = paste0('(', round(as.numeric(sb_blood$short_allele_cn), 1), ')'), adj = c(1, 0.5))
+                } else {
+                  # split the letters
+                  df_bp = data.frame(letter = strsplit(sb_blood$short_allele_motif, "")[[1]], pos = seq(1, length(strsplit(sb_blood$short_allele_motif, "")[[1]])*(w*2), w*2))
+                  # assign colors of bp
+                  for (i in 1:nrow(df_bp)){ df_bp$colors[i] = colors_nt[df_bp$letter[i]] }; df_bp$colors[is.na(df_bp$colors)] = 'black'
+                  # draw rectangles and add text
+                  for (i in 1:nrow(df_bp)){ rect(xleft = df_bp$pos[i]-w, xright = df_bp$pos[i]+w, ybottom = y_value-wy, ytop = y_value+wy, col = alpha(df_bp$colors[i], 0.6)); text(x = df_bp$pos[i], y = y_value, labels = df_bp$letter[i], cex = sz_bp, font=2) }
+                  # finally the copy number
+                  text(x = xlim_max/2-1, y = y_value, labels = paste0('(', round(as.numeric(sb_blood$short_allele_cn), 1), ')'), font = 2, adj = c(1, 0.5))
+                }
+                # haplotype 2
+                if (nchar(sb_blood$long_allele_motif) >15){
+                  # if the motif is too long (>15bp) report that motif is too large
+                  text(x = xlim_max/2+1, y = y_value, labels = 'Motif too large (>15bp)', adj = c(0, 0.5)); text(x = xlim_max-1, y = y_value, labels = paste0('(', round(as.numeric(sb_blood$long_allele_cn), 1), ')'), adj = c(1, 0.5))
+                } else {
+                  # split the letters
+                  df_bp = data.frame(letter = strsplit(sb_blood$long_allele_motif, "")[[1]], pos = seq(1, length(strsplit(sb_blood$long_allele_motif, "")[[1]])*(w*2), w*2))
+                  # assign colors of bp
+                  for (i in 1:nrow(df_bp)){ df_bp$colors[i] = colors_nt[df_bp$letter[i]] }; df_bp$colors[is.na(df_bp$colors)] = 'black'
+                  # draw rectangles and add text
+                  for (i in 1:nrow(df_bp)){ rect(xleft = xlim_max/2+df_bp$pos[i]-w, xright = xlim_max/2+df_bp$pos[i]+w, ybottom = y_value-wy, ytop = y_value+wy, col = alpha(df_bp$colors[i], 0.6)); text(x = xlim_max/2+df_bp$pos[i], y = y_value, labels = df_bp$letter[i], font = 2, cex = sz_bp) }
+                  # finally the copy number
+                  text(x = xlim_max-1, y = y_value, labels = paste0('(', round(as.numeric(sb_blood$long_allele_cn), 1), ')'), font = 2, adj = c(1, 0.5))
+                }
+              } 
+              y_value = y_value + 1
+            # brain
+              sb_brain = vcf_info_withRef[which(vcf_info_withRef$sample == paste0('c', s, '_brain.merged.hifi.hg38')),]
+              if (is.na(sb_brain$short_allele_motif)){
+                # just report NA
+                text(x = 1, y = y_value, labels = 'NA', adj = c(0, 0.5), font = 2); text(x = xlim_max/2+1, y = y_value, labels = 'NA', adj = c(0, 0.5), font = 2)
+              } else {        
+                # haplotype 1
+                if (nchar(sb_brain$short_allele_motif) >15){
+                  # if the motif is too long (>15bp) report that motif is too large
+                  text(x = 1, y = y_value, labels = 'Motif too large (>15bp)', adj = c(0, 0.5)); text(x = xlim_max/2-1, y = y_value, labels = paste0('(', round(as.numeric(sb_brain$short_allele_cn), 1), ')'), adj = c(1, 0.5))
+                } else {
+                  # split the letters
+                  df_bp = data.frame(letter = strsplit(sb_brain$short_allele_motif, "")[[1]], pos = seq(1, length(strsplit(sb_brain$short_allele_motif, "")[[1]])*(w*2), w*2))
+                  # assign colors of bp
+                  for (i in 1:nrow(df_bp)){ df_bp$colors[i] = colors_nt[df_bp$letter[i]] }; df_bp$colors[is.na(df_bp$colors)] = 'black'
+                  # draw rectangles and add text
+                  for (i in 1:nrow(df_bp)){ rect(xleft = df_bp$pos[i]-w, xright = df_bp$pos[i]+w, ybottom = y_value-wy, ytop = y_value+wy, col = alpha(df_bp$colors[i], 0.6)); text(x = df_bp$pos[i], y = y_value, labels = df_bp$letter[i], cex = sz_bp, font=2) }
+                  # finally the copy number
+                  text(x = xlim_max/2-1, y = y_value, labels = paste0('(', round(as.numeric(sb_brain$short_allele_cn), 1), ')'), font = 2, adj = c(1, 0.5))
+                }
+                # haplotype 2
+                if (nchar(sb_brain$long_allele_motif) >15){
+                  # if the motif is too long (>15bp) report that motif is too large
+                  text(x = xlim_max/2+1, y = y_value, labels = 'Motif too large (>15bp)', adj = c(0, 0.5)); text(x = xlim_max-1, y = y_value, labels = paste0('(', round(as.numeric(sb_brain$long_allele_cn), 1), ')'), adj = c(1, 0.5))
+                } else {
+                  # split the letters
+                  df_bp = data.frame(letter = strsplit(sb_brain$long_allele_motif, "")[[1]], pos = seq(1, length(strsplit(sb_brain$long_allele_motif, "")[[1]])*(w*2), w*2))
+                  # assign colors of bp
+                  for (i in 1:nrow(df_bp)){ df_bp$colors[i] = colors_nt[df_bp$letter[i]] }; df_bp$colors[is.na(df_bp$colors)] = 'black'
+                  # draw rectangles and add text
+                  for (i in 1:nrow(df_bp)){ rect(xleft = xlim_max/2+df_bp$pos[i]-w, xright = xlim_max/2+df_bp$pos[i]+w, ybottom = y_value-wy, ytop = y_value+wy, col = alpha(df_bp$colors[i], 0.6)); text(x = xlim_max/2+df_bp$pos[i], y = y_value, labels = df_bp$letter[i], font = 2, cex = sz_bp) }
+                  # finally the copy number
+                  text(x = xlim_max-1, y = y_value, labels = paste0('(', round(as.numeric(sb_brain$long_allele_cn), 1), ')'), font = 2, adj = c(1, 0.5))
+                }
+              } 
+              y_value = y_value + 1
+            # child
+              sb_child = vcf_info_withRef[which(vcf_info_withRef$sample == paste0('c', s, '_child.merged.hifi.hg38')),]
+              if (is.na(sb_child$short_allele_motif)){
+                # just report NA
+                text(x = 1, y = y_value, labels = 'NA', adj = c(0, 0.5), font = 2); text(x = xlim_max/2+1, y = y_value, labels = 'NA', adj = c(0, 0.5), font = 2)
+              } else {        
+                # haplotype 1
+                if (nchar(sb_child$short_allele_motif) >15){
+                  # if the motif is too long (>15bp) report that motif is too large
+                  text(x = 1, y = y_value, labels = 'Motif too large (>15bp)', adj = c(0, 0.5)); text(x = xlim_max/2-1, y = y_value, labels = paste0('(', round(as.numeric(sb_child$short_allele_cn), 1), ')'), adj = c(1, 0.5))
+                } else {
+                  # split the letters
+                  df_bp = data.frame(letter = strsplit(sb_child$short_allele_motif, "")[[1]], pos = seq(1, length(strsplit(sb_child$short_allele_motif, "")[[1]])*(w*2), w*2))
+                  # assign colors of bp
+                  for (i in 1:nrow(df_bp)){ df_bp$colors[i] = colors_nt[df_bp$letter[i]] }; df_bp$colors[is.na(df_bp$colors)] = 'black'
+                  # draw rectangles and add text
+                  for (i in 1:nrow(df_bp)){ rect(xleft = df_bp$pos[i]-w, xright = df_bp$pos[i]+w, ybottom = y_value-wy, ytop = y_value+wy, col = alpha(df_bp$colors[i], 0.6)); text(x = df_bp$pos[i], y = y_value, labels = df_bp$letter[i], cex = sz_bp, font=2) }
+                  # finally the copy number
+                  text(x = xlim_max/2-1, y = y_value, labels = paste0('(', round(as.numeric(sb_child$short_allele_cn), 1), ')'), font = 2, adj = c(1, 0.5))
+                }
+                # haplotype 2
+                if (nchar(sb_child$long_allele_motif) >15){
+                  # if the motif is too long (>15bp) report that motif is too large
+                  text(x = xlim_max/2+1, y = y_value, labels = 'Motif too large (>15bp)', adj = c(0, 0.5)); text(x = xlim_max-1, y = y_value, labels = paste0('(', round(as.numeric(sb_child$long_allele_cn), 1), ')'), adj = c(1, 0.5))
+                } else {
+                  # split the letters
+                  df_bp = data.frame(letter = strsplit(sb_child$long_allele_motif, "")[[1]], pos = seq(1, length(strsplit(sb_child$long_allele_motif, "")[[1]])*(w*2), w*2))
+                  # assign colors of bp
+                  for (i in 1:nrow(df_bp)){ df_bp$colors[i] = colors_nt[df_bp$letter[i]] }; df_bp$colors[is.na(df_bp$colors)] = 'black'
+                  # draw rectangles and add text
+                  for (i in 1:nrow(df_bp)){ rect(xleft = xlim_max/2+df_bp$pos[i]-w, xright = xlim_max/2+df_bp$pos[i]+w, ybottom = y_value-wy, ytop = y_value+wy, col = alpha(df_bp$colors[i], 0.6)); text(x = xlim_max/2+df_bp$pos[i], y = y_value, labels = df_bp$letter[i], font = 2, cex = sz_bp) }
+                  # finally the copy number
+                  text(x = xlim_max-1, y = y_value, labels = paste0('(', round(as.numeric(sb_child$long_allele_cn), 1), ')'), font = 2, adj = c(1, 0.5))
+                }
+              }
+            y_value = y_value + 2 
+        }
+    }
+
     # Function to print summary of the run
-    summaryRun <- function(rs_vcf, out_dir, out_name, plotFormat, custom_colors, region){
+    summaryRun <- function(rs_vcf, out_dir, out_name, plotFormat, custom_colors, region, type){
       cat('\n********************')
       cat('\n*** TREAT plot *****')
       cat('\n*** Arguments:')
@@ -339,6 +616,7 @@
       cat(paste0('\n*** Output name: ', out_name))
       cat(paste0('\n*** Plot format: ', plotFormat))
       cat(paste0('\n*** Custom colors: ', custom_colors))
+      cat(paste0('\n*** Type of plot: ', type))
       return('\n*** Analysis started!')
     }
 
@@ -346,6 +624,8 @@
   parser <- ArgumentParser()
   # add arguments: --reads_spannning is the VCF file of the output of read_spanning_analysis
   parser$add_argument("--vcf", default = 'None', help = "VCF file output of TREAT. Multiple files should be comma-separated.")
+  # add arguments: --type is the type of plot (population, case-control, bbc)
+  parser$add_argument("--type", default = 'population', help = "Type of plot to be made: population (all samples with clustering), case-control (attach case-control label), bbc (blood-brain-child)")
   # add arguments: --out is the output directory
   parser$add_argument("--out", default = './', help = "Output directory where output will be placed. Default is the current directory.")
   # add arguments: --outname is the name of the output file
@@ -380,6 +660,8 @@
   region = args$region
   # region = 'chr4:39348425-39348483'
   path = args$path
+  # type 
+  ploType = args$type
 
 # Check arguments
   # stop if no input data is provided
@@ -395,8 +677,12 @@
     # Split regions
     region = unlist(strsplit(region, ','))
     # Print summary of the run
-    x = summaryRun(rs_vcf, out_dir, out_name, plotFormat, custom_colors, region)
+    x = summaryRun(rs_vcf, out_dir, out_name, plotFormat, custom_colors, region, type)
 
     # Pipeline to plot repeats
-    plotRepeatsComplete(rs_vcf, out_dir, out_name, plotFormat, custom_colors, region, path)
+    if (type == 'population'){
+      plotRepeatsComplete(rs_vcf, out_dir, out_name, plotFormat, custom_colors, region, path)
+    } else if (type == 'bbc'){
+      plotBBC(rs_vcf, out_dir, out_name, plotFormat, custom_colors, region, path)
+    }
   }
