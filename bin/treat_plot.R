@@ -677,12 +677,12 @@
     # Split regions
     region = unlist(strsplit(region, ','))
     # Print summary of the run
-    x = summaryRun(rs_vcf, out_dir, out_name, plotFormat, custom_colors, region, type)
+    x = summaryRun(rs_vcf, out_dir, out_name, plotFormat, custom_colors, region, ploType)
 
     # Pipeline to plot repeats
-    if (type == 'population'){
+    if (ploType == 'population'){
       plotRepeatsComplete(rs_vcf, out_dir, out_name, plotFormat, custom_colors, region, path)
-    } else if (type == 'bbc'){
-      plotBBC(rs_vcf, out_dir, out_name, plotFormat, custom_colors, region, path)
+    } else if (ploType == 'bbc'){
+      PipelinePlotBBC(rs_vcf, out_dir, out_name, plotFormat, custom_colors, region, path)
     }
   }
