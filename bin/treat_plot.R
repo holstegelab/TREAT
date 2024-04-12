@@ -221,7 +221,7 @@
       return(sub_trans_df)
     }
 
-  # Function to do hierarchical clustering on the TR sizes and eventually motifs
+    # Function to do hierarchical clustering on the TR sizes and eventually motifs
     cluster_TR <- function(vcf_info_withRef){
       # create data for clustering
       sb_data = vcf_info_withRef[, c('short_allele', 'long_allele')]
