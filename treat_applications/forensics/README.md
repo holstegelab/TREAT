@@ -24,10 +24,11 @@ STR were excluded in case of low coverage or when no matching alleles were found
 
 ## Reproducibility
 To reproduce our analysis, please first run **TREAT**:
-`TREAT.py reads -b bed_file.bed -i samples_genome.bam -o output_directory -w 20 -r path/to/reference_genome_hg38.fa -d 0.005`
+`TREAT.py reads -b bed_file.bed -i samples_genome.bam -o output_directory -w 20 -r path/to/reference_genome_hg38.fa -d 0.005 -rawSeq True`
 And then you can run the supplementary script for the adapted version. As the script does multiple operations, we recommend to run it interactively line-by-line through a python console.
 `python Adapted_version.py`
 
 ## Additional files
 - `database_allele.txt`: this file represents the forensics allele catalog as derived from [NFI website](https://www.fdstools.nl/strnaming/updates/nl-hym-pyg-v100.html)
 - `forensic_hg38.extended.bed`: this file represents the input BED file for **TREAT**. It contains the location of all STR considered for forensics purposes and included in the project.
+- `validation_data.txt`: this file represents the validated STR alleles using standard forensics procedures. The file is not present on GitHub as it contains sensible information. Can be requested to the authors of the manuscript.
