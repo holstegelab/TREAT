@@ -154,7 +154,7 @@ def assembly_otter(s, output_directory, ref_fasta, bed_file, number_threads, win
     # define output name with the right directory
     outname = s.split('/')[-1].replace('.bam', '.fa')
     # run otter
-    cmd = 'otter assemble -b %s -r %s %s -t %s -o %s > %s/otter_local_asm/%s' %(bed_file, ref_fasta, s, number_threads, windowAss, output_directory, outname)
+    cmd = 'otter assemble -l -b %s -r %s %s -t %s -o %s > %s/otter_local_asm/%s' %(bed_file, ref_fasta, s, number_threads, windowAss, output_directory, outname)
     os.system(cmd)
     # collect otter sequences
     f_open = [x.rstrip() for x in open('%s/otter_local_asm/%s' %(output_directory, outname), 'r').readlines()]
