@@ -75,8 +75,13 @@
       # Identify the regions to be analysed
       all_regions = unique(vcf$ID)
       # Do association
-      assoc_results = rbindlist(mclapply(all_regions, casecontrolAssoc, vcf = vcf, vcf_sample_labels = vcf_sample_labels, mc.cores = cpu))
-      # Define the path to the output file
+      #assoc_results = rbindlist(mclapply(all_regions, casecontrolAssoc, vcf = vcf, vcf_sample_labels = vcf_sample_labels, mc.cores = cpu))
+      assoc_results = list()
+      for (r in all_regions){
+     	tmp = casecontrolAssoc(r, vcf, vcf_sample_labels)
+      	assoc_results[[(length(assoc_results) + 1)]] = tmp
+      }
+      assoc_results = rbindlist(assoc_results)      # Define the path to the output file
       output_file = file.path(out_dir, out_name)
       write.table(assoc_results, output_file, sep="\t", quote=F, row.names=F)
       cat(paste0('\n** Analysis finished: output table is ', output_file))
@@ -86,6 +91,7 @@
     # Single functions
     # Function to do case-control association 
     casecontrolAssoc <- function(r, vcf, vcf_sample_labels){
+      cat(paste0('**** Analysis of ', r, '\n'))
       tryCatch({
         # Extract sizes
         vcf_info = extractHaploSize(vcf[which(vcf$ID == r),])
