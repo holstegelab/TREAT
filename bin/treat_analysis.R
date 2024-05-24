@@ -86,6 +86,7 @@
     # Single functions
     # Function to do case-control association 
     casecontrolAssoc <- function(r, vcf, vcf_sample_labels){
+      cat(paste0('**** Analysis of ', r, '\n'))
       tryCatch({
         # Extract sizes
         vcf_info = extractHaploSize(vcf[which(vcf$ID == r),])
