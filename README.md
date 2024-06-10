@@ -74,8 +74,7 @@ The `reads` analysis take advantage of all sequencing reads aligning to the targ
 1. extract the reads and relative sequences encompassing the target regions
 2. extract the corresponding sequence from the reference genome
 3. performs motif finding at the individual read level using [tandem repeat finder](https://tandem.bu.edu/trf/trf.html)
-4. performs phasing using SNPs (optional, skipped by default)
-5. performs haplotype calling
+4. performs haplotype calling
 
 ### Required parameters
 - `-b / --bed`: the target regions encoded in a BED file
