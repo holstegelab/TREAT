@@ -18,6 +18,9 @@ import numpy as np
 #import shutil
 import warnings
 import gzip
+import pyfastx
+import pyfaidx
+import pytrf
 
 ### FUNCTIONS TO CHECK DIRECTORIES AND FILES
 # Read bed file
@@ -179,6 +182,17 @@ def assembly_otter(s, output_directory, ref_fasta, bed_file, number_threads, win
     trf_input.close()
     return tmp_res
 
+def assembly_otter_opt(s, output_directory, ref_fasta, bed_file, number_threads, windowAss):
+    # define output name with the right directory
+    outname = s.split('/')[-1].replace('.bam', '.fa')
+    # run otter
+    cmd = 'otter assemble -l -b %s -r %s %s -t %s -o %s > %s/otter_local_asm/%s' %(bed_file, ref_fasta, s, number_threads, windowAss, output_directory, outname)
+    os.system(cmd)
+    # adjust otter sequences
+    cmd = "sed 's/ /_/g' %s/otter_local_asm/%s > %s/otter_local_asm/%s" %(output_directory, outname, output_directory, outname.replace('.fa', '_adj.fa'))
+    os.system(cmd)
+    return '%s/otter_local_asm/%s' %(output_directory, outname.replace('.fa', '_adj.fa'))
+
 # Function to write fasta files for TRF
 def writeFastaTRF(all_seqs, fasta_name):
     # define container for fasta outputs
@@ -252,6 +266,40 @@ def run_trf_otter(index, all_fasta, distances, type):
         complete_df = pd.merge(df_seqs, df, left_on = 'ID', right_on = 'ID', how = 'outer')
     return complete_df
 
+def run_trf_ref_opt(x):
+    res = []
+    for k in x:
+        name, seq = k[1], k[-4]
+        # run approximate TRFinder
+        temp = [list(i) for i in pytrf.ATRFinder(name, seq, min_motif_size=1, max_motif_size=100).as_list()]
+        if len(temp) >0:
+            for x in temp:
+                x.append(seq)
+                x.append(len(seq))
+                x.append('REFERENCE')
+                res.append(x)
+        else:
+            temp = [name, 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', seq, len(seq), 'REFERENCE']
+            res.append(temp)
+    return res
+
+def run_trf_asm_opt(x, w):
+    sample_name = os.path.basename(x).replace('_adj.fa', '')
+    res = []
+    fa = pyfastx.Fastx(x, uppercase=True)
+    for name, seq in fa:
+        tmp = [list(i) for i in pytrf.ATRFinder(name, seq[w:-w], min_motif_size = 1, max_motif_size=100).as_list()]
+        if len(tmp) >0:
+            for x in tmp:
+                x.append(seq[w:-w])
+                x.append(len(seq[w:-w]))
+                x.append(sample_name)
+                res.append(x)
+        else:
+            tmp = [name, 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', seq[w:-w], len(seq[w:-w]), sample_name]
+            res.append(tmp)
+    return res
+
 # Otter pipeline
 def otterPipeline(outDir, cpu, ref, bed_dir, inBam, count_reg, windowAss, window):
     print('** Assembler: otter')
@@ -289,6 +337,63 @@ def otterPipeline(outDir, cpu, ref, bed_dir, inBam, count_reg, windowAss, window
     df_trf_combined = pd.concat(trf_results)
     return df_trf_combined
 
+def otterPipeline_opt(outDir, cpu, ref, bed_dir, inBam, count_reg, windowAss, window, bed):
+    print('** Assembler: otter')
+    # create directory for outputs
+    os.system('mkdir %s/otter_local_asm' %(outDir))
+    # run local assembly in multiprocessing -- optimized
+    pool = multiprocessing.Pool(processes=cpu)
+    otter_fun = partial(assembly_otter_opt, output_directory = outDir, ref_fasta = ref, bed_file = bed_dir, number_threads = cpu, windowAss = windowAss)
+    extract_results = pool.map(otter_fun, inBam)
+    pool.close()
+    # do the same on the reference genome -- optimized
+    all_regions = [entry[2] for chromosome in bed for entry in bed[chromosome]]
+    # divide into n lists based on the number of regions
+    regions_list = [all_regions[i * (len(all_regions) // cpu) + min(i, len(all_regions) % cpu):(i + 1) * (len(all_regions) // cpu) + min(i + 1, len(all_regions) % cpu)] for i in range(cpu)]
+    pool = multiprocessing.Pool(processes=cpu)
+    extract_fun = partial(measureDistance_reference_opt, ref = ref, w = window)
+    extract_results_ref = pool.map(extract_fun, regions_list)
+    pool.close()
+    # run trf on reference
+    pool = multiprocessing.Pool(processes=cpu)
+    trf_ref = pool.map(run_trf_ref_opt, extract_results_ref)
+    pool.close()
+    # run trf on the assemblies
+    pool = multiprocessing.Pool(processes=cpu)
+    trf_asm = partial(run_trf_asm_opt, w = window)
+    trf_asm_res = pool.map(trf_asm, extract_results)
+    pool.close()
+    # Combine df from different samples together
+    # flatten the lists first
+    flattened_ref = [sublist for sublist_list in trf_ref for sublist in sublist_list]
+    flattened_asm = [sublist for sublist_list in trf_asm_res for sublist in sublist_list]
+    # make dataframes
+    df_asm = pd.DataFrame(flattened_asm, columns = ['ID', 'SEED_START', 'SEED_END', 'MOTIF', 'MOTIF_SIZE', 'SEED_REPEAT', 'ATR_START', 'ATR_END', 'ATR_REPEAT', 'ATR_SIZE', 'MATCHES', 'SUBSTITUTIONS', 'INSERTIONS', 'DELETIONS', 'IDENTITY', 'SEQUENCE', 'SEQUENCE_LEN', 'SAMPLE'])
+    df_ref = pd.DataFrame(flattened_ref, columns = ['REGION', 'SEED_START', 'SEED_END', 'MOTIF', 'MOTIF_SIZE', 'SEED_REPEAT', 'ATR_START', 'ATR_END', 'ATR_REPEAT', 'ATR_SIZE', 'MATCHES', 'SUBSTITUTIONS', 'INSERTIONS', 'DELETIONS', 'IDENTITY', 'SEQUENCE', 'SEQUENCE_LEN', 'SAMPLE'])
+    # add HAPLOTYPE to reference -- 1
+    df_ref['HAPLOTYPE'] = 1
+    # add sequence
+    df_asm['REGION'] = df_asm['ID'].str.extract(r'(^.+?-[^_]+)')
+    # isolate duplicated based on the ID
+    df_asm_dups = df_asm[df_asm.duplicated(subset='ID')]
+    df_asm_dups['IS_DUPLICATED'] = 'Yes'
+    # Remove the duplicated rows from the original dataframe
+    df_asm_unique = df_asm.drop_duplicates(subset='ID').copy()
+    # add Haplotype
+    df_asm_unique['HAPLOTYPE'] = df_asm_unique.groupby('REGION').cumcount() + 1
+    # add duplicates back in, adding the relative haplotype information
+    df_asm = pd.concat([df_asm_unique, df_asm_dups])
+    # Create a dictionary mapping 'ID' to 'HAPLOTYPE' from df2
+    haplotype_mapping = df_asm_unique.set_index('ID')['HAPLOTYPE'].to_dict()
+    # Fill the 'HAPLOTYPE' column in concatenated_df based on the mapping
+    df_asm['HAPLOTYPE'] = df_asm['ID'].map(haplotype_mapping)
+    # extract coverage
+    df_asm[['COVERAGE_HAPLO', 'TOTAL_COVERAGE']] = df_asm['ID'].str.split('_', expand=True, n=4).iloc[:, 1:3]
+    # finally concatenate with reference info
+    df_all = pd.concat([df_asm, df_ref])
+    # add coverage for the sample-
+    return df_all
+
 # Measure the distance in the reference genome
 def measureDistance_reference(bed_file, window, ref, output_directory):    
     # sequence with paddings
@@ -321,6 +426,17 @@ def measureDistance_reference(bed_file, window, ref, output_directory):
     outfasta = '%s/reference_%s.fa' %(output_directory, bed_file.split('.')[-1])
     writeFastaTRF(distances, outfasta)
     return distances, outfasta
+
+def measureDistance_reference_opt(x, ref, w):    
+    distances = []
+    # open the fasta
+    fa = pyfaidx.Fasta(ref)
+    # x is a list of regions -- iterate through these regions
+    for i in x:
+        chrom, start, end = i.split(':')[0], int(i.split(':')[-1].split('-')[0]), int(i.split(':')[-1].split('-')[1])
+        tmp = fa[chrom][start - w : end + w]
+        distances.append(['reference', i, 'reference', 'NA', 'NA', 'NA', str(tmp[w:-w]), str(tmp), len(tmp[w:-w]), len(tmp)])
+    return distances
 
 # Function to split bed file in n bed files
 def splitBed(bed_dir, n, outDir, count_reg):
@@ -794,6 +910,60 @@ def haplotyping_steps(data, n_cpu, thr_mad, min_support, type, outDir):
     writeOutputs(df_vcf, df_seq, seq_file, vcf_file, all_samples)
     return('Haplotyping analysis done!')
 
+def haplotyping_steps_opt(data, n_cpu, thr_mad, min_support, type, outDir):
+    # Adjust the motifs in the data to find a uniform representation
+    #data['UNIQUE_NAME'] = data.apply(lambda row: str(row['SAMPLE']) + '___' + str(row['REGION']) + '___' + str(row['HAPLOTYPE']), axis = 1)
+    print('** Adjust motifs')
+    data['MOTIF'] = data['MOTIF'].replace("NA", np.nan)
+    all_motifs = data['MOTIF'].dropna().unique()
+    main_motifs = [permutMotif(motif) for motif in all_motifs]
+    motifs_df = pd.DataFrame({'motif' : all_motifs, 'UNIFORM_MOTIF' : main_motifs})
+    data = pd.merge(data, motifs_df, left_on='MOTIF', right_on='motif', how='left')
+    # Check motifs of the reference
+    ref = data[data['SAMPLE'] == 'REFERENCE'].copy()
+    ref['POLISHED_HAPLO'] = ref['SEQUENCE_LEN']
+    ref_ok = ref.drop_duplicates(subset='REGION', keep=False)
+    ref_ok_dic = {row['REGION']: [row['MOTIF'], row['ATR_REPEAT'], row['SEQUENCE_LEN']] for _, row in ref_ok.iterrows()}
+    ref_tocheck = ref[ref.duplicated(subset='REGION', keep=False)]
+    # Only adjust motifs that need to be adjusted
+    all_regions = list(ref_tocheck['REGION'].dropna().unique())
+    pool = multiprocessing.Pool(processes=n_cpu)
+    motif_fun = partial(referenceMotifs_opt, ref = ref_tocheck, intervals = intervals)
+    motif_res = pool.map(motif_fun, all_regions)
+    pool.close()
+    # combine dictionaries
+    reference_motif_dic = {k: v for d in motif_res for k, v in d.items()}
+    reference_motif_dic.update(ref_ok_dic)
+    # Then move to the sample(s)
+    data_sample = data[data['SAMPLE'] != 'REFERENCE'].copy()
+    data_sample['POLISHED_HAPLO'] = data_sample['SEQUENCE_LEN']
+    # Only adjust motifs that need to be adjusted
+    data_sample_ok = data_sample.drop_duplicates(subset='ID', keep=False).copy()
+    data_sample_ok['CONSENSUS_MOTIF'] = data_sample_ok['UNIFORM_MOTIF']
+    data_sample_ok['CONSENSUS_MOTIF_COPIES'] = data_sample_ok['ATR_REPEAT']
+    # fix those that need to be fixed
+    data_sample_tocheck = data_sample[data_sample.duplicated(subset='ID', keep=False)]
+    ids_to_fix = list(data_sample_tocheck['ID'].dropna().unique())
+    pool = multiprocessing.Pool(processes=n_cpu)
+    motif_fun = partial(sampleMotifs_opt, df = data_sample_tocheck)
+    motif_res = pool.map(motif_fun, ids_to_fix)
+    pool.close()
+    # generate a final dataframe
+    data_temp = pd.concat(motif_res, ignore_index=True)
+    data_final = pd.concat([data_sample_ok, data_temp])
+    # prepare data for output
+    all_regions = list(data_final['REGION'].dropna().unique())
+    pool = multiprocessing.Pool(processes=n_cpu)
+    prep_fun = partial(prepareOutputs_opt, final_sbs = data_final, reference_motif_dic = reference_motif_dic)
+    vcf = pool.map(prep_fun, all_regions)
+    pool.close()
+    # create dataframe
+    df_vcf = pd.DataFrame(vcf, columns = ['#CHROM', 'POS', 'ID', 'REF', 'ALT', 'QUAL', 'FILTER', 'INFO', 'FORMAT', all_samples[0]])
+    # write vcf
+    vcf_file = '%s/sample.vcf' %(outDir)
+    writeOutputs_opt(df_vcf, vcf_file, all_samples)
+    return('Haplotyping analysis done!')
+
 # function to make permutations
 def permutMotif(motif):
     # standard motif
@@ -833,6 +1003,21 @@ def referenceMotifs(r, ref, intervals):
     tmp_dic = {row["REGION"]: [row["CONSENSUS_MOTIF"], row["POLISHED_HAPLO"], row['CONSENSUS_MOTIF_COPIES']] for _, row in sbs.iterrows()}
     return tmp_dic
 
+def referenceMotifs_opt(r, ref, intervals):
+    # subset of reference data
+    sbs = ref[ref['REGION'] == r].copy()
+    # if there's only 1 motif, we are done
+    if sbs.shape[0] == 1:
+        sbs['CONSENSUS_MOTIF'] = sbs['UNIFORM_MOTIF']
+        sbs['CONSENSUS_MOTIF_COPIES'] = sbs['ATR_REPEAT']
+    elif sbs.shape[0] >1:
+        # first align motifs
+        sbs = sbs[sbs['HAPLOTYPE'] == 1].copy()
+        sbs = motif_generalization_opt(sbs, r)
+    # in the end, take only what we need to bring along
+    tmp_dic = {row["REGION"]: [row["CONSENSUS_MOTIF"], row["POLISHED_HAPLO"], row['CONSENSUS_MOTIF_COPIES']] for _, row in sbs.iterrows()}
+    return tmp_dic
+
 # function to generate consensus motif using majority rule
 def motif_generalization(haplo_data, r):
     # calculate fraction of sequence covered
@@ -865,6 +1050,37 @@ def motif_generalization(haplo_data, r):
     haplo_data['END_TRF'] = end
     return haplo_data
 
+def motif_generalization_opt(haplo_data, r):
+    # calculate fraction of sequence covered
+    haplo_data['COVERAGE_TR'] = (haplo_data['ATR_END'] - haplo_data['ATR_START'] + 1) / haplo_data['SEQUENCE_LEN']
+    haplo_data = haplo_data.sort_values('COVERAGE_TR', ascending=False)
+    # if >95% of the sequence is covered, stop
+    high_coverage = haplo_data[haplo_data['COVERAGE_TR'] >0.95].copy()
+    if high_coverage.shape[0] == 1:
+        best_motif = list(high_coverage['UNIFORM_MOTIF'])[0]
+        copies = list(high_coverage['ATR_REPEAT'])[0]
+        start = list(high_coverage['ATR_START'])[0]
+        end = list(high_coverage['ATR_END'])[0]
+    elif high_coverage.shape[0] >1:
+        high_coverage['MOTIF_SCORE'] = high_coverage['COVERAGE_TR'] * high_coverage['IDENTITY']
+        high_coverage = high_coverage.sort_values('MOTIF_SCORE', ascending=False)
+        best_motif = high_coverage['UNIFORM_MOTIF'].iloc[0]
+        copies = high_coverage['ATR_REPEAT'].iloc[0]
+        start = high_coverage['ATR_START'].iloc[0]
+        end = high_coverage['ATR_END'].iloc[0]
+    elif haplo_data['motif'].isna().all():
+        best_motif, copies, indexes, start, end = 'NA', 'NA', 'NA', 'NA', 'NA'
+    else:
+        best_motif, copies, indexes = combineMotifs_opt(haplo_data, r)
+        start, end = indexes[0], indexes[-1]
+    # then combine with haplotype data
+    haplo_data = haplo_data.iloc[[0]]
+    haplo_data['CONSENSUS_MOTIF'] = best_motif
+    haplo_data['CONSENSUS_MOTIF_COPIES'] = copies
+    haplo_data['ATR_START'] = start
+    haplo_data['ATR_END'] = end
+    return haplo_data
+
 # function to combine motifs
 def combineMotifs(haplo_data, r):
     # take the most representative motif
@@ -890,6 +1106,59 @@ def combineMotifs(haplo_data, r):
             tmp_motif = haplo_data['UNIFORM_MOTIF'].iloc[i]
             tmp_motif_copies = haplo_data['COPIES_TRF'].iloc[i]
             tmp_motif_index = range(int(haplo_data['START_TRF'].iloc[i]), int(haplo_data['END_TRF'].iloc[i]))
+            # find the length of the intersection
+            intersection_length = max(0, min(best_motif_index.stop, tmp_motif_index.stop) - max(best_motif_index.start, tmp_motif_index.start))
+            # calculate the percentage of overlap
+            fraction_overlap = intersection_length / len(tmp_motif_index)
+            # if the fraction is below 90%, then we should combine the motifs
+            if fraction_overlap < 0.90:
+                # update best_motif and index: this is a combination of the two motifs
+                if best_motif == tmp_motif:
+                    # here the simple case: motif is the same
+                    best_motif_index = range(min(best_motif_index.start, tmp_motif_index.start), max(best_motif_index.stop, tmp_motif_index.stop))
+                    best_motif_copies = len(list(best_motif_index))/len(best_motif)
+                else:
+                    # here the more tricky case: motifs are different
+                    not_in_best = [x for x in tmp_motif_index if x not in best_motif_index]
+                    # find list of consecutive numbers
+                    consecutive_seq = is_consecutive(not_in_best)
+                    # iterate over each subsequence: if a motif can be fit, add it, otherwise skip
+                    for subs in consecutive_seq:
+                        if len(subs) > len(tmp_motif):
+                            sub_copies = len(subs)/len(tmp_motif)
+                            best_motif = '%s+%s' %(best_motif, tmp_motif)
+                            best_motif_copies = '%s+%s' %(best_motif_copies, sub_copies)
+                            best_motif_index = range(min(best_motif_index.start, subs[0]), max(best_motif_index.stop, subs[-1]))
+            else:
+                best_motif_index = best_motif_index
+        except:
+            pass
+    return best_motif, best_motif_copies, best_motif_index
+
+def combineMotifs_opt(haplo_data, r):
+    # take the most representative motif
+    haplo_data['MOTIF_SCORE'] = haplo_data['COVERAGE_TR'] * haplo_data['IDENTITY']
+    haplo_data = haplo_data.sort_values('MOTIF_SCORE', ascending=False)
+    best_motif = haplo_data['UNIFORM_MOTIF'].iloc[0]
+    # check if the best motif is NA: if so, then try to use any motif that's in there
+    if pd.isna(best_motif):
+        # extract all motifs non NA motifs
+        all_motifs = [value for value in list(set(haplo_data['UNIFORM_MOTIF'])) if not (isinstance(value, float) and math.isnan(value))]
+        if len(all_motifs) >0:
+            # consider the longest non-NA motif as the best motif
+            sorted_list = sorted(all_motifs, key=len, reverse=True)
+            best_motif = sorted_list[0]
+            # reorder dataframe based on this
+            haplo_data = haplo_data.sort_values(by='UNIFORM_MOTIF', ascending=(haplo_data['UNIFORM_MOTIF'] != best_motif).any())
+    best_motif_copies = haplo_data['ATR_REPEAT'].iloc[0]
+    best_motif_index = range(int(haplo_data['ATR_START'].iloc[0]), int(haplo_data['ATR_END'].iloc[0]))
+    # loop on the other motifs
+    for i in range(1, haplo_data.shape[0]):
+        try:
+            # take corresponding motif and range
+            tmp_motif = haplo_data['UNIFORM_MOTIF'].iloc[i]
+            tmp_motif_copies = haplo_data['ATR_REPEAT'].iloc[i]
+            tmp_motif_index = range(int(haplo_data['ATR_START'].iloc[i]), int(haplo_data['ATR_END'].iloc[i]))
             # find the length of the intersection
             intersection_length = max(0, min(best_motif_index.stop, tmp_motif_index.stop) - max(best_motif_index.start, tmp_motif_index.start))
             # calculate the percentage of overlap
@@ -1093,6 +1362,12 @@ def sampleMotifs(r, all_sbs, reference_motif_dic, haplo, type):
     else:
         return haplo_data
 
+def sampleMotifs_opt(r, df):
+    # subset of data
+    sb = df[df['ID'] == r].copy()
+    sb_merged = motif_generalization_opt(sb, r)
+    return sb_merged
+
 # function to make data for vcf writing
 def prepareOutputs(final_sbs, reference_motif_dic, r, type, depths):
     # prepare data for VCF
@@ -1133,8 +1408,52 @@ def prepareOutputs(final_sbs, reference_motif_dic, r, type, depths):
     res_seq = df_subset.values.tolist()    
     return res_vcf, res_seq
 
+def prepareOutputs_opt(r, final_sbs, reference_motif_dic):
+    # prepare data for VCF
+    chrom, start, end = [r.split(':')[0]] + r.split(':')[-1].split('-')
+    # restrict to data of interest
+    sbs = final_sbs[final_sbs['REGION'] == r].copy()
+    # check if 'chr' is in both the dictionary and the region of interest
+    if 'chr' not in list(reference_motif_dic.keys())[0]:
+        reference_motif_dic = {'chr' + key: value for key, value in reference_motif_dic.items()}
+    if r in reference_motif_dic.keys():
+        ref_motif, ref_len, ref_copies = reference_motif_dic[r]
+        # calculate copies wrt reference motif
+        try:
+            sbs['REFERENCE_MOTIF_COPIES'] = sbs['POLISHED_HAPLO'] / len(ref_motif.replace('+', ''))
+        except:
+            sbs['REFERENCE_MOTIF_COPIES'] = 'NA'
+    else:
+        sbs['REFERENCE_MOTIF_COPIES'] = 'NA'
+        ref_motif, ref_len, ref_copies = 'NA', int(end) - int(start), 'NA'
+    info_field = '%s;%s' %(ref_motif, ref_copies)
+    format_field = 'QC;GT;MOTIF;CN;CN_REF;DP'
+    if max(sbs['HAPLOTYPE'] >2):
+        sample_field = '%s;%s;%s;%s;%s;%s' %('PASS', '.|.', '.|.', '.|.', '.|.', '.|.')
+        res_vcf = [chrom, start, r, ref_len, '.', '.', '>2_ALLELES', info_field, format_field, sample_field]
+    else:
+        sam_gt = '|'.join(list(sbs['POLISHED_HAPLO'].map(str))) if sbs.shape[0] >1 else list(sbs["POLISHED_HAPLO"].map(str).apply(lambda x: x + "|" + x))[0]
+        sam_mot = '|'.join(list(sbs['CONSENSUS_MOTIF'].map(str))) if sbs.shape[0] >1 else list(sbs["CONSENSUS_MOTIF"].map(str).apply(lambda x: x + "|" + x))[0]
+        sam_cop = '|'.join(list(sbs['CONSENSUS_MOTIF_COPIES'].map(str))) if sbs.shape[0] >1 else list(sbs["CONSENSUS_MOTIF_COPIES"].map(str).apply(lambda x: x + "|" + x))[0]
+        sam_cop_ref = '|'.join(list(sbs['REFERENCE_MOTIF_COPIES'].map(str))) if sbs.shape[0] >1 else list(sbs["REFERENCE_MOTIF_COPIES"].map(str).apply(lambda x: x + "|" + x))[0]
+        sam_depth = '|'.join(list(sbs["COVERAGE_HAPLO"].map(str))) if sbs.shape[0] >1 else list(sbs["COVERAGE_HAPLO"].map(str).apply(lambda x: x + "|" + x))[0]
+        sample_field = '%s;%s;%s;%s;%s;%s' %('PASS', sam_gt, sam_mot, sam_cop, sam_cop_ref, sam_depth)
+        res_vcf = [chrom, start, r, ref_len, '.', '.', 'PASS', info_field, format_field, sample_field] 
+    return res_vcf
+
 # function to write outputs
 def writeOutputs(df_vcf, df_seq, seq_file, vcf_file, all_samples):
+    # write header of vcf file
+    writeVCFheader(vcf_file, all_samples)
+    with open(vcf_file, mode='a') as file:
+        df_vcf.to_csv(file, header=True, index=False, sep='\t')
+    # then compress it
+    os.system('gzip %s' %(vcf_file))
+    # write sequence file
+    #df_seq.to_csv(seq_file, header=True, index=False, sep='\t', compression = 'gzip')
+    return
+
+def writeOutputs_opt(df_vcf, vcf_file, all_samples):
     # write header of vcf file
     writeVCFheader(vcf_file, all_samples)
     with open(vcf_file, mode='a') as file:
