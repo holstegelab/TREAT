@@ -375,7 +375,7 @@ def otterPipeline_opt(outDir, cpu, ref, bed_dir, inBam, count_reg, windowAss, wi
     # add sequence
     df_asm['REGION'] = df_asm['ID'].str.extract(r'(^.+?-[^_]+)')
     # isolate duplicated based on the ID
-    df_asm_dups = df_asm[df_asm.duplicated(subset='ID')]
+    df_asm_dups = df_asm[df_asm.duplicated(subset='ID')].copy()
     df_asm_dups['IS_DUPLICATED'] = 'Yes'
     # Remove the duplicated rows from the original dataframe
     df_asm_unique = df_asm.drop_duplicates(subset='ID').copy()
@@ -913,7 +913,6 @@ def haplotyping_steps(data, n_cpu, thr_mad, min_support, type, outDir):
 def haplotyping_steps_opt(data, n_cpu, thr_mad, min_support, type, outDir):
     # Adjust the motifs in the data to find a uniform representation
     #data['UNIQUE_NAME'] = data.apply(lambda row: str(row['SAMPLE']) + '___' + str(row['REGION']) + '___' + str(row['HAPLOTYPE']), axis = 1)
-    print('** Adjust motifs')
     data['MOTIF'] = data['MOTIF'].replace("NA", np.nan)
     all_motifs = data['MOTIF'].dropna().unique()
     main_motifs = [permutMotif(motif) for motif in all_motifs]
@@ -922,13 +921,13 @@ def haplotyping_steps_opt(data, n_cpu, thr_mad, min_support, type, outDir):
     # Check motifs of the reference
     ref = data[data['SAMPLE'] == 'REFERENCE'].copy()
     ref['POLISHED_HAPLO'] = ref['SEQUENCE_LEN']
-    ref_ok = ref.drop_duplicates(subset='REGION', keep=False)
+    ref_ok = ref.drop_duplicates(subset='REGION', keep=False).copy()
     ref_ok_dic = {row['REGION']: [row['MOTIF'], row['ATR_REPEAT'], row['SEQUENCE_LEN']] for _, row in ref_ok.iterrows()}
-    ref_tocheck = ref[ref.duplicated(subset='REGION', keep=False)]
+    ref_tocheck = ref[ref.duplicated(subset='REGION', keep=False)].copy()
     # Only adjust motifs that need to be adjusted
     all_regions = list(ref_tocheck['REGION'].dropna().unique())
     pool = multiprocessing.Pool(processes=n_cpu)
-    motif_fun = partial(referenceMotifs_opt, ref = ref_tocheck, intervals = intervals)
+    motif_fun = partial(referenceMotifs_opt, ref = ref_tocheck)
     motif_res = pool.map(motif_fun, all_regions)
     pool.close()
     # combine dictionaries
@@ -958,6 +957,7 @@ def haplotyping_steps_opt(data, n_cpu, thr_mad, min_support, type, outDir):
     vcf = pool.map(prep_fun, all_regions)
     pool.close()
     # create dataframe
+    all_samples = list(set(list(data_final['SAMPLE'])))
     df_vcf = pd.DataFrame(vcf, columns = ['#CHROM', 'POS', 'ID', 'REF', 'ALT', 'QUAL', 'FILTER', 'INFO', 'FORMAT', all_samples[0]])
     # write vcf
     vcf_file = '%s/sample.vcf' %(outDir)
@@ -1003,7 +1003,7 @@ def referenceMotifs(r, ref, intervals):
     tmp_dic = {row["REGION"]: [row["CONSENSUS_MOTIF"], row["POLISHED_HAPLO"], row['CONSENSUS_MOTIF_COPIES']] for _, row in sbs.iterrows()}
     return tmp_dic
 
-def referenceMotifs_opt(r, ref, intervals):
+def referenceMotifs_opt(r, ref):
     # subset of reference data
     sbs = ref[ref['REGION'] == r].copy()
     # if there's only 1 motif, we are done
@@ -1052,27 +1052,30 @@ def motif_generalization(haplo_data, r):
 
 def motif_generalization_opt(haplo_data, r):
     # calculate fraction of sequence covered
-    haplo_data['COVERAGE_TR'] = (haplo_data['ATR_END'] - haplo_data['ATR_START'] + 1) / haplo_data['SEQUENCE_LEN']
-    haplo_data = haplo_data.sort_values('COVERAGE_TR', ascending=False)
-    # if >95% of the sequence is covered, stop
-    high_coverage = haplo_data[haplo_data['COVERAGE_TR'] >0.95].copy()
-    if high_coverage.shape[0] == 1:
-        best_motif = list(high_coverage['UNIFORM_MOTIF'])[0]
-        copies = list(high_coverage['ATR_REPEAT'])[0]
-        start = list(high_coverage['ATR_START'])[0]
-        end = list(high_coverage['ATR_END'])[0]
-    elif high_coverage.shape[0] >1:
-        high_coverage['MOTIF_SCORE'] = high_coverage['COVERAGE_TR'] * high_coverage['IDENTITY']
-        high_coverage = high_coverage.sort_values('MOTIF_SCORE', ascending=False)
-        best_motif = high_coverage['UNIFORM_MOTIF'].iloc[0]
-        copies = high_coverage['ATR_REPEAT'].iloc[0]
-        start = high_coverage['ATR_START'].iloc[0]
-        end = high_coverage['ATR_END'].iloc[0]
-    elif haplo_data['motif'].isna().all():
+    try:
+        haplo_data['COVERAGE_TR'] = (haplo_data['ATR_END'] - haplo_data['ATR_START'] + 1) / haplo_data['SEQUENCE_LEN']
+        haplo_data = haplo_data.sort_values('COVERAGE_TR', ascending=False)
+        # if >95% of the sequence is covered, stop
+        high_coverage = haplo_data[haplo_data['COVERAGE_TR'] >0.95].copy()
+        if high_coverage.shape[0] == 1:
+            best_motif = list(high_coverage['UNIFORM_MOTIF'])[0]
+            copies = list(high_coverage['ATR_REPEAT'])[0]
+            start = list(high_coverage['ATR_START'])[0]
+            end = list(high_coverage['ATR_END'])[0]
+        elif high_coverage.shape[0] >1:
+            high_coverage['MOTIF_SCORE'] = high_coverage['COVERAGE_TR'] * high_coverage['IDENTITY']
+            high_coverage = high_coverage.sort_values('MOTIF_SCORE', ascending=False)
+            best_motif = high_coverage['UNIFORM_MOTIF'].iloc[0]
+            copies = high_coverage['ATR_REPEAT'].iloc[0]
+            start = high_coverage['ATR_START'].iloc[0]
+            end = high_coverage['ATR_END'].iloc[0]
+        elif haplo_data['motif'].isna().all():
+            best_motif, copies, indexes, start, end = 'NA', 'NA', 'NA', 'NA', 'NA'
+        else:
+            best_motif, copies, indexes = combineMotifs_opt(haplo_data, r)
+            start, end = indexes[0], indexes[-1]
+    except:
         best_motif, copies, indexes, start, end = 'NA', 'NA', 'NA', 'NA', 'NA'
-    else:
-        best_motif, copies, indexes = combineMotifs_opt(haplo_data, r)
-        start, end = indexes[0], indexes[-1]
     # then combine with haplotype data
     haplo_data = haplo_data.iloc[[0]]
     haplo_data['CONSENSUS_MOTIF'] = best_motif
