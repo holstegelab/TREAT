@@ -380,7 +380,7 @@ def otterPipeline_opt(outDir, cpu, ref, bed_dir, inBam, count_reg, windowAss, wi
     # Remove the duplicated rows from the original dataframe
     df_asm_unique = df_asm.drop_duplicates(subset='ID').copy()
     # add Haplotype
-    df_asm_unique['HAPLOTYPE'] = df_asm_unique.groupby('REGION').cumcount() + 1
+    df_asm_unique['HAPLOTYPE'] = df_asm_unique.groupby(['REGION', 'SAMPLE']).cumcount() + 1
     # add duplicates back in, adding the relative haplotype information
     df_asm = pd.concat([df_asm_unique, df_asm_dups])
     # Create a dictionary mapping 'ID' to 'HAPLOTYPE' from df2
@@ -951,14 +951,14 @@ def haplotyping_steps_opt(data, n_cpu, thr_mad, min_support, type, outDir):
     data_temp = pd.concat(motif_res, ignore_index=True)
     data_final = pd.concat([data_sample_ok, data_temp])
     # prepare data for output
+    all_samples = list(set(list(data_final['SAMPLE'])))
     all_regions = list(data_final['REGION'].dropna().unique())
     pool = multiprocessing.Pool(processes=n_cpu)
-    prep_fun = partial(prepareOutputs_opt, final_sbs = data_final, reference_motif_dic = reference_motif_dic)
+    prep_fun = partial(prepareOutputs_opt, final_sbs = data_final, reference_motif_dic = reference_motif_dic, all_samples = all_samples)
     vcf = pool.map(prep_fun, all_regions)
     pool.close()
     # create dataframe
-    all_samples = list(set(list(data_final['SAMPLE'])))
-    df_vcf = pd.DataFrame(vcf, columns = ['#CHROM', 'POS', 'ID', 'REF', 'ALT', 'QUAL', 'FILTER', 'INFO', 'FORMAT', all_samples[0]])
+    df_vcf = pd.DataFrame(vcf, columns = ['#CHROM', 'POS', 'ID', 'REF', 'ALT', 'QUAL', 'FILTER', 'INFO', 'FORMAT'] + all_samples)
     # write vcf
     vcf_file = '%s/sample.vcf' %(outDir)
     writeOutputs_opt(df_vcf, vcf_file, all_samples)
@@ -1054,9 +1054,9 @@ def motif_generalization_opt(haplo_data, r):
     # calculate fraction of sequence covered
     try:
         haplo_data['COVERAGE_TR'] = (haplo_data['ATR_END'] - haplo_data['ATR_START'] + 1) / haplo_data['SEQUENCE_LEN']
-        haplo_data = haplo_data.sort_values('COVERAGE_TR', ascending=False)
+        haplo_data = haplo_data.sort_values('COVERAGE_TR', ascending=False).copy()
         # if >95% of the sequence is covered, stop
-        high_coverage = haplo_data[haplo_data['COVERAGE_TR'] >0.95].copy()
+        high_coverage = haplo_data[haplo_data['COVERAGE_TR'] >0.95]
         if high_coverage.shape[0] == 1:
             best_motif = list(high_coverage['UNIFORM_MOTIF'])[0]
             copies = list(high_coverage['ATR_REPEAT'])[0]
@@ -1411,7 +1411,7 @@ def prepareOutputs(final_sbs, reference_motif_dic, r, type, depths):
     res_seq = df_subset.values.tolist()    
     return res_vcf, res_seq
 
-def prepareOutputs_opt(r, final_sbs, reference_motif_dic):
+def prepareOutputs_opt(r, final_sbs, reference_motif_dic, all_samples):
     # prepare data for VCF
     chrom, start, end = [r.split(':')[0]] + r.split(':')[-1].split('-')
     # restrict to data of interest
@@ -1420,7 +1420,7 @@ def prepareOutputs_opt(r, final_sbs, reference_motif_dic):
     if 'chr' not in list(reference_motif_dic.keys())[0]:
         reference_motif_dic = {'chr' + key: value for key, value in reference_motif_dic.items()}
     if r in reference_motif_dic.keys():
-        ref_motif, ref_len, ref_copies = reference_motif_dic[r]
+        ref_motif, ref_copies, ref_len = reference_motif_dic[r]
         # calculate copies wrt reference motif
         try:
             sbs['REFERENCE_MOTIF_COPIES'] = sbs['POLISHED_HAPLO'] / len(ref_motif.replace('+', ''))
@@ -1431,17 +1431,20 @@ def prepareOutputs_opt(r, final_sbs, reference_motif_dic):
         ref_motif, ref_len, ref_copies = 'NA', int(end) - int(start), 'NA'
     info_field = '%s;%s' %(ref_motif, ref_copies)
     format_field = 'QC;GT;MOTIF;CN;CN_REF;DP'
-    if max(sbs['HAPLOTYPE'] >2):
-        sample_field = '%s;%s;%s;%s;%s;%s' %('PASS', '.|.', '.|.', '.|.', '.|.', '.|.')
-        res_vcf = [chrom, start, r, ref_len, '.', '.', '>2_ALLELES', info_field, format_field, sample_field]
-    else:
-        sam_gt = '|'.join(list(sbs['POLISHED_HAPLO'].map(str))) if sbs.shape[0] >1 else list(sbs["POLISHED_HAPLO"].map(str).apply(lambda x: x + "|" + x))[0]
-        sam_mot = '|'.join(list(sbs['CONSENSUS_MOTIF'].map(str))) if sbs.shape[0] >1 else list(sbs["CONSENSUS_MOTIF"].map(str).apply(lambda x: x + "|" + x))[0]
-        sam_cop = '|'.join(list(sbs['CONSENSUS_MOTIF_COPIES'].map(str))) if sbs.shape[0] >1 else list(sbs["CONSENSUS_MOTIF_COPIES"].map(str).apply(lambda x: x + "|" + x))[0]
-        sam_cop_ref = '|'.join(list(sbs['REFERENCE_MOTIF_COPIES'].map(str))) if sbs.shape[0] >1 else list(sbs["REFERENCE_MOTIF_COPIES"].map(str).apply(lambda x: x + "|" + x))[0]
-        sam_depth = '|'.join(list(sbs["COVERAGE_HAPLO"].map(str))) if sbs.shape[0] >1 else list(sbs["COVERAGE_HAPLO"].map(str).apply(lambda x: x + "|" + x))[0]
-        sample_field = '%s;%s;%s;%s;%s;%s' %('PASS', sam_gt, sam_mot, sam_cop, sam_cop_ref, sam_depth)
-        res_vcf = [chrom, start, r, ref_len, '.', '.', 'PASS', info_field, format_field, sample_field] 
+    res_vcf = [chrom, start, r, ref_len, '.', '.', '.', info_field, format_field]
+    for s in all_samples:
+        sbs_s = sbs[sbs['SAMPLE'] == s]
+        if sbs_s.shape[0] == 0 or max(sbs_s['HAPLOTYPE'] >2):
+            sample_field = '%s;%s;%s;%s;%s;%s' %('PASS', '.|.', '.|.', '.|.', '.|.', '.|.')
+            res_vcf.append(sample_field)
+        else:
+            sam_gt = '|'.join(list(sbs_s['POLISHED_HAPLO'].map(str))) if sbs_s.shape[0] >1 else list(sbs_s["POLISHED_HAPLO"].map(str).apply(lambda x: x + "|" + x))[0]
+            sam_mot = '|'.join(list(sbs_s['CONSENSUS_MOTIF'].map(str))) if sbs_s.shape[0] >1 else list(sbs_s["CONSENSUS_MOTIF"].map(str).apply(lambda x: x + "|" + x))[0]
+            sam_cop = '|'.join(list(sbs_s['CONSENSUS_MOTIF_COPIES'].map(str))) if sbs_s.shape[0] >1 else list(sbs_s["CONSENSUS_MOTIF_COPIES"].map(str).apply(lambda x: x + "|" + x))[0]
+            sam_cop_ref = '|'.join(list(sbs_s['REFERENCE_MOTIF_COPIES'].map(str))) if sbs_s.shape[0] >1 else list(sbs_s["REFERENCE_MOTIF_COPIES"].map(str).apply(lambda x: x + "|" + x))[0]
+            sam_depth = '|'.join(list(sbs_s["COVERAGE_HAPLO"].map(str))) if sbs_s.shape[0] >1 else list(sbs_s["COVERAGE_HAPLO"].map(str).apply(lambda x: x + "|" + x))[0]
+            sample_field = '%s;%s;%s;%s;%s;%s' %('PASS', sam_gt, sam_mot, sam_cop, sam_cop_ref, sam_depth)
+            res_vcf.append(sample_field)
     return res_vcf
 
 # function to write outputs
