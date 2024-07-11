@@ -270,6 +270,12 @@ def run_trf_ref_opt(x):
         name, seq = k[1], k[-4]
         # run approximate TRFinder
         temp = [list(i) for i in pytrf.ATRFinder(name, seq, min_motif_size=1, max_motif_size=100).as_list()]
+        if len(temp) == 0:
+            # if there are no hits, lower parameters and try again
+            temp = [list(i) for i in pytrf.ATRFinder(name, seq, min_motif_size=1, max_motif_size=100, min_seed_repeat=2).as_list()]
+            # if there are still no results, decrease parameters even lower
+            if len(temp) == 0:
+                temp = [list(i) for i in pytrf.ATRFinder(name, seq, min_motif_size=1, max_motif_size=100, min_seed_repeat=2, min_seed_length=8).as_list()]
         if len(temp) >0:
             for x in temp:
                 x.append(seq)
@@ -286,11 +292,26 @@ def run_trf_asm_opt(x, w):
     res = []
     fa = pyfastx.Fastx(x, uppercase=True)
     for name, seq in fa:
-        tmp = [list(i) for i in pytrf.ATRFinder(name, seq[w:-w], min_motif_size = 1, max_motif_size=100).as_list()]
+        if w == 0:
+            tmp = [list(i) for i in pytrf.ATRFinder(name, seq, min_motif_size = 1, max_motif_size=100).as_list()]
+            # if there are no hits, lower parameters and try again
+            if len(tmp) == 0:
+                tmp = [list(i) for i in pytrf.ATRFinder(name, seq, min_motif_size = 1, max_motif_size=100, min_seed_repeat=2).as_list()]
+                # if there are still no results, decrease parameters even lower
+                if len(tmp) == 0:
+                    tmp = [list(i) for i in pytrf.ATRFinder(name, seq, min_motif_size = 1, max_motif_size=100, min_seed_repeat=2, min_seed_length=8).as_list()]
+        else:
+            tmp = [list(i) for i in pytrf.ATRFinder(name, seq[(w-1):-w], min_motif_size = 1, max_motif_size=100).as_list()]
+            # if there are no hits, lower parameters and try again
+            if len(tmp) == 0:
+                tmp = [list(i) for i in pytrf.ATRFinder(name, seq[(w-1):-w], min_motif_size = 1, max_motif_size=100, min_seed_repeat=2).as_list()]
+                # if there are still no results, decrease parameters even lower
+                if len(tmp) == 0:
+                    tmp = [list(i) for i in pytrf.ATRFinder(name, seq[(w-1):-w], min_motif_size = 1, max_motif_size=100, min_seed_repeat=2, min_seed_length=8).as_list()]
         if len(tmp) >0:
             for k in tmp:
-                k.append(seq[w:-w])
-                k.append(len(seq[w:-w]))
+                k.append(seq[(w-1):-w])
+                k.append(len(seq[(w-1):-w]))
                 k.append(sample_name)
                 k.append(name.split('#')[2])
                 k.append(name.split('#')[1])
@@ -298,7 +319,7 @@ def run_trf_asm_opt(x, w):
                 k.append(name.split('#')[-2].split(':')[-1])
                 res.append(k)
         else:
-            tmp = [name, 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', seq[w:-w], len(seq[w:-w]), sample_name, name.split('#')[2], name.split('#')[1], 'NA', 'NA']
+            tmp = [name, 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', 'NA', seq[(w-1):-w], len(seq[(w-1):-w]), sample_name, name.split('#')[2], name.split('#')[1], 'NA', 'NA']
             res.append(tmp)
     return res
 
@@ -419,15 +440,15 @@ def measureDistance_reference(bed_file, window, ref, output_directory):
     writeFastaTRF(distances, outfasta)
     return distances, outfasta
 
-def measureDistance_reference_opt(x, ref, w):    
+def measureDistance_reference_opt(x, ref, w):
     distances = []
     # open the fasta
     fa = pyfaidx.Fasta(ref)
     # x is a list of regions -- iterate through these regions
     for i in x:
         chrom, start, end = i.split(':')[0], int(i.split(':')[-1].split('-')[0]), int(i.split(':')[-1].split('-')[1])
-        tmp = fa[chrom][start - w : end + w]
-        distances.append(['reference', i, 'reference', 'NA', 'NA', 'NA', str(tmp[w:-w]), str(tmp), len(tmp[w:-w]), len(tmp)])
+        tmp = fa[chrom][(start-1) : end]
+        distances.append(['reference', i, 'reference', 'NA', 'NA', 'NA', str(tmp), str(tmp), len(tmp), len(tmp)])
     return distances
 
 # Function to split bed file in n bed files
@@ -943,7 +964,7 @@ def haplotyping_steps_opt(data, n_cpu, thr_mad, min_support, type, outDir, inBam
     motif_end_time = time.time()
     time_motif = motif_end_time - motif_start_time
     print('*** Motif merge took %s seconds\t\t\t\t\t\t\t\t\t\t\t\t' %(round(time_motif, 0)))
-    write_start_time = time.time()
+    prepare_start_time = time.time()
     # generate a final dataframe
     data_temp = pd.concat(motif_res, ignore_index=True)
     data_final = pd.concat([data_sample_ok, data_temp])
@@ -951,14 +972,19 @@ def haplotyping_steps_opt(data, n_cpu, thr_mad, min_support, type, outDir, inBam
     all_samples = list(set(list(data_final['SAMPLE'])))
     all_regions = list(data_final['REGION'].dropna().unique())
     # divide in n chunks where n is th enumber of cores
+    prepare_start_time = time.time()
     chunk_size = math.ceil(len(all_regions) / 4)
     chunks = [all_regions[i * chunk_size:(i + 1) * chunk_size] for i in range(n_cpu)]
     pool = multiprocessing.Pool(processes=n_cpu)
     prep_fun = partial(prepareOutputs_opt, final_sbs = data_final, reference_motif_dic = reference_motif_dic, all_samples = all_samples)
     vcf = pool.map(prep_fun, chunks)
     pool.close()
-    flattened_vcf = [item for sublist in vcf for item in sublist]
+    prepare_end_time = time.time()
+    time_prepare = prepare_end_time - prepare_start_time
+    print('*** preparation took %s seconds\t\t\t\t\t\t\t\t\t\t\t\t' %(round(time_prepare, 0)))
     # create dataframe
+    write_start_time = time.time()
+    flattened_vcf = [item for sublist in vcf for item in sublist]
     df_vcf = pd.DataFrame(flattened_vcf, columns = ['#CHROM', 'POS', 'ID', 'REF', 'ALT', 'QUAL', 'FILTER', 'INFO', 'FORMAT'] + all_samples)
     # write vcf
     vcf_file = '%s/sample.vcf' %(outDir)
@@ -1417,45 +1443,54 @@ def prepareOutputs(final_sbs, reference_motif_dic, r, type, depths):
     return res_vcf, res_seq
 
 def prepareOutputs_opt(chunk, final_sbs, reference_motif_dic, all_samples):
+    # Ensure 'chr' is in the dictionary keys if needed
+    if 'chr' not in list(reference_motif_dic.keys())[0]:
+        reference_motif_dic = {'chr' + key: value for key, value in reference_motif_dic.items()}
+    # Convert 'HAPLOTYPE' to numeric once
+    final_sbs['HAPLOTYPE'] = pd.to_numeric(final_sbs['HAPLOTYPE'], errors='coerce')
     res_vcf = []
+    columns_of_interest = ['SAMPLE', 'REGION', 'HAPLOTYPE', 'SEQUENCE', 'POLISHED_HAPLO', 'CONSENSUS_MOTIF', 'CONSENSUS_MOTIF_COPIES', 'COVERAGE_HAPLO']
+    # Subset based on the chunks
+    final_sbs = final_sbs[final_sbs['REGION'].isin(chunk)][columns_of_interest].copy()
+    # Precompute static values
+    default_sample_field = 'PASS;.|.;.|.;.|.;.|.;.|.;.|.'
+    format_field = 'QC;GT;GT_LEN;MOTIF;CN;CN_REF;DP'
     for r in chunk:
-        # prepare data for VCF
+        # Prepare data for VCF
         chrom, start, end = [r.split(':')[0]] + r.split(':')[-1].split('-')
-        # restrict to data of interest
-        sbs = final_sbs[final_sbs['REGION'] == r].copy()
-        # check if 'chr' is in both the dictionary and the region of interest
-        if 'chr' not in list(reference_motif_dic.keys())[0]:
-            reference_motif_dic = {'chr' + key: value for key, value in reference_motif_dic.items()}
-        if r in reference_motif_dic.keys():
+        # Restrict to data of interest
+        sbs = final_sbs.loc[final_sbs['REGION'] == r].copy()
+        # Check if region is in reference_motif_dic
+        if r in reference_motif_dic:
             ref_motif, ref_copies, ref_len, ref_seq = reference_motif_dic[r]
-            # calculate copies wrt reference motif
             try:
-                sbs['REFERENCE_MOTIF_COPIES'] = sbs['POLISHED_HAPLO'] / len(ref_motif.replace('+', ''))
+                motif_len = len(ref_motif.replace('+', ''))
+                sbs.loc[:, 'REFERENCE_MOTIF_COPIES'] = sbs['POLISHED_HAPLO'] / motif_len
             except:
-                sbs['REFERENCE_MOTIF_COPIES'] = 'NA'
+                sbs.loc[:, 'REFERENCE_MOTIF_COPIES'] = 'NA'
         else:
-            sbs['REFERENCE_MOTIF_COPIES'] = 'NA'
             ref_motif, ref_len, ref_copies = 'NA', int(end) - int(start), 'NA'
-        info_field = '%s;%s;%s' %(ref_motif, ref_copies, ref_len)
-        format_field = 'QC;GT;GT_LEN;MOTIF;CN;CN_REF;DP'
+            sbs['REFERENCE_MOTIF_COPIES'] = 'NA'
+            ref_seq = 'N' * (int(end) - int(start))  # Assuming ref_seq as 'N' for missing ref_seq
+        info_field = f'{ref_motif};{ref_copies};{ref_len}'
         alt_seq = []
         sample_fields = []
         for s in all_samples:
             sbs_s = sbs[sbs['SAMPLE'] == s]
-            sbs_s['HAPLOTYPE'] = pd.to_numeric(sbs_s['HAPLOTYPE'], errors='coerce')
-            if sbs_s.shape[0] == 0 or max(sbs_s['HAPLOTYPE'] >2):
-                sample_field = '%s;%s;%s;%s;%s;%s;%s' %('PASS', '.|.', '.|.', '.|.', '.|.', '.|.', '.|.')
+            if sbs_s.empty or sbs_s['HAPLOTYPE'].max() > 2:
+                sample_fields.append(default_sample_field)
             else:
                 gt, alt_seq = manageSequence(list(sbs_s['SEQUENCE']), alt_seq, ref_seq)
-                sam_gt = '|'.join(list(sbs_s['POLISHED_HAPLO'].map(str))) if sbs_s.shape[0] >1 else list(sbs_s["POLISHED_HAPLO"].map(str).apply(lambda x: x + "|" + x))[0]
-                sam_mot = '|'.join(list(sbs_s['CONSENSUS_MOTIF'].map(str))) if sbs_s.shape[0] >1 else list(sbs_s["CONSENSUS_MOTIF"].map(str).apply(lambda x: x + "|" + x))[0]
-                sam_cop = '|'.join(list(sbs_s['CONSENSUS_MOTIF_COPIES'].map(str))) if sbs_s.shape[0] >1 else list(sbs_s["CONSENSUS_MOTIF_COPIES"].map(str).apply(lambda x: x + "|" + x))[0]
-                sam_cop_ref = '|'.join(list(sbs_s['REFERENCE_MOTIF_COPIES'].map(str))) if sbs_s.shape[0] >1 else list(sbs_s["REFERENCE_MOTIF_COPIES"].map(str).apply(lambda x: x + "|" + x))[0]
-                sam_depth = '|'.join(list(sbs_s["COVERAGE_HAPLO"].map(str))) if sbs_s.shape[0] >1 else list(sbs_s["COVERAGE_HAPLO"].map(str).apply(lambda x: x + "|" + x))[0]
-                sample_field = '%s;%s;%s;%s;%s;%s;%s' %('PASS', gt, sam_gt, sam_mot, sam_cop, sam_cop_ref, sam_depth)
-            sample_fields.append(sample_field)
-        # check alt
-        alt_seq = '.' if len(alt_seq) == 0 else ','.join(alt_seq)
+                def prepare_field(col):
+                    return '|'.join(map(str, sbs_s[col])) if sbs_s.shape[0] > 1 else f'{sbs_s[col].iloc[0]}|{sbs_s[col].iloc[0]}'
+                sam_gt = prepare_field('POLISHED_HAPLO')
+                sam_mot = prepare_field('CONSENSUS_MOTIF')
+                sam_cop = prepare_field('CONSENSUS_MOTIF_COPIES')
+                sam_cop_ref = prepare_field('REFERENCE_MOTIF_COPIES')
+                sam_depth = prepare_field('COVERAGE_HAPLO')
+                sample_field = f'PASS;{gt};{sam_gt};{sam_mot};{sam_cop};{sam_cop_ref};{sam_depth}'
+                sample_fields.append(sample_field)
+        alt_seq = '.' if not alt_seq else ','.join(alt_seq)
         tmp_vcf = [chrom, start, r, ref_seq, alt_seq, '.', '.', info_field, format_field] + sample_fields
         res_vcf.append(tmp_vcf)
     return res_vcf
@@ -1468,6 +1503,7 @@ def manageSequence(sequences, alt, ref_seq):
             gt.append('0')
         else:
             # if not reference, check if already in alt list
+            seq = 'N' if seq == '' else seq
             if seq in alt:
                 gt.append(str(alt.index(seq)))
             else:
