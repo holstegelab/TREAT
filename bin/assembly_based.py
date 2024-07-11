@@ -24,15 +24,9 @@ inBam = checkBAM(inBam_dir)
 # 2. Check which software was selected and do things accordingly
 if software == 'otter':
     # Run local assembly and TRF
-    df_trf_phasing_combined = otterPipeline(outDir, cpu, ref, bed_dir, inBam, count_reg, windowAss, window)
+    df_trf_phasing_combined = otterPipeline_opt(outDir, cpu, ref, bed_dir, inBam, count_reg, windowAss, window, bed)
     # Do directly the haplotyping so that we save on IO usage
-    ts = time.time()
-    print(haplotyping_steps(data = df_trf_phasing_combined, n_cpu = cpu, thr_mad = HaploDev, min_support = minimumSupport, type = 'otter', outDir = outDir))
-    te = time.time()
-    time_write = te-ts
-    print('*** Operation took %s seconds\t\t\t\t\t\t\t\t\t\t\t\t' %(round(time_write, 0)))
-    te_total = time.time()
-    time_total = te_total - ts_total
+    print(haplotyping_steps_opt(data = df_trf_phasing_combined, n_cpu = cpu, thr_mad = HaploDev, min_support = minimumSupport, type = 'otter', outDir = outDir, inBam = inBam))
     # Remove temporary files
     removeTemp(outDir)
     te_total = time.time()
