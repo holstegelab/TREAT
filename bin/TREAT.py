@@ -219,11 +219,8 @@ elif args.cmd == 'analysis':
     # set flag to true
     RUN = True
     # define script to run and arguments
-    script_path = 'treat_analysis.R'
+    script_path = 'treat_analysis.py'
     arguments = [args.analysis, args.vcf, args.outDir, args.outName, args.region, args.madThr, args.labels, args.cpu]
-    # validate the arguments
-    if args.analysis == "case-control" and not args.labels:
-        sys.exit("Error: 'case-control' analysis was selected, but no files including labels was given. This should be a tab-separated file with 2 columns and no header, reporting sample name and a binary label.")
 elif args.cmd == 'plot':
     # set flag to true
     RUN = True
@@ -245,8 +242,8 @@ if RUN == True:
     # Run the script
     if script_path in ['read_based.py', 'assembly_based.py', 'merge_vcf.py']:
         main_script = 'python3.6 %s/%s %s' %(main_path, script_path, ' '.join(arguments))
-    elif script_path == 'treat_analysis.R':
-        main_script = 'Rscript %s/%s --analysis %s --vcf %s --out %s --outname %s --region %s --madThr %s --labels %s --cpu %s' %(main_path, script_path, arguments[0], arguments[1], arguments[2], arguments[3], arguments[4], arguments[5], arguments[6], arguments[7])
+    elif script_path == 'treat_analysis.py':
+        main_script = '%s/%s --analysis %s --vcf %s --outDir %s --outName %s --region %s --madThr %s --labels %s --cpu %s' %(main_path, script_path, arguments[0], arguments[1], arguments[2], arguments[3], arguments[4], arguments[5], arguments[6], arguments[7])
     elif script_path == 'treat_plot.R':
         main_script = 'Rscript %s/%s --vcf %s --out %s --outname %s --region %s --plotformat %s --customColors %s --path %s --type %s' %(main_path, script_path, arguments[0], arguments[1], arguments[2], arguments[3], arguments[4], arguments[5], main_path, arguments[6])
     os.system(main_script)

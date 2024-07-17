@@ -1,0 +1,18 @@
+Assembly-based analysis selected
+** Required argument:
+	Input BAM file(s): example.bam
+	Input BED file: example.bed
+	Output directory: temp
+	Reference genome: /project/holstegelab/Share/pacbio/resources/GRCh38_full_analysis_set_plus_decoy_hla.fa
+** Optional arguments:
+	Window: 10
+	Window for assembly: 50
+	Number of threads: 2
+	Ploidy: 2
+	Assembler: otter
+	Haplotyping deviation: 0.1
+	Minimum supporting reads: 2
+	Minimum coverage: 5
+
+Effective command line:
+TREAT.py assembly -i example.bam -b example.bed -o temp -r /project/holstegelab/Share/pacbio/resources/GRCh38_full_analysis_set_plus_decoy_hla.fa -w 10 -wAss 50 -t 2 -s otter -p 2 -d 0.1 -minSup 2 -minCov 5
