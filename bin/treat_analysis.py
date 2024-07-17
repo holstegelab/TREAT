@@ -36,7 +36,7 @@ parser.add_argument("-n", "--outName", default = 'treat_outlier_analysis.txt', h
 # add arguments: --region is the name of the region to analyze
 parser.add_argument("-r", "--region", default = 'all', help = "Name of the region to analyze. By default, all regions will be analyzed.", required = False)
 # add arguments: --madThr is the value to call outliers
-parser.add_argument("-t", "--madThr", default = 3, help = "Median Absolute deviation value used to call outliers.", required = False)
+parser.add_argument("-t", "--madThr", default = 5, help = "Median Absolute deviation value used to call outliers.", required = False)
 # add arguments: --cpu is the number of cpus to use
 parser.add_argument("-c", "--cpu", default = 1, help = "Number of CPUs to use (Default: 1)", required = False)
 ###########################################################
@@ -63,8 +63,12 @@ def checkOutDir(out_dir):
 # Function to check input vcf
 def checkVCF(inp_vcf):
     if os.path.exists(inp_vcf):
-        print('** Input VCF file exists.')
-        return inp_vcf
+        if '.gz' in inp_vcf or '.zip' in inp_vcf:
+            print('** Input VCF file exists and it is valid.')
+            return inp_vcf
+        else:
+            print('** Input VCF is not Gzipped. Please compress it with gzip [file.vcf] and try again.')
+            sys.exit(1)
     else:
         print('!! Input VCF does not exist. Please check. Exiting.')
         sys.exit(1)
@@ -107,7 +111,7 @@ def checkLabels(labels):
 def outlier_analysis(inp_vcf, region, madThr, cpu, out_dir, out_name):
     # initialize output file
     fout = open('%s/%s' %(out_dir, out_name), 'w')
-    fout.write('REGION\tALLELE\tMEAN_ALL\tOUTLIER_SAMPLE\tOUTLIER_SIZE\tOUTLIER_DIST\tOUTLIER_P\n')
+    fout.write('REGION\tALLELE\tMEDIAN_ALL\tOUTLIER_SAMPLE\tOUTLIER_SIZE\tOUTLIER_DIST\tOUTLIER_P\tOUTLIER_RATIO\n')
     # list for sample names
     sample_names = []
     # iterate over regions
@@ -156,7 +160,7 @@ def writeToFile(res, fout, type, id, sample_names):
     # check if there are outliers, otherwise skip
     if len(res[1]) >0:
         for i in range(len(res[1])):
-            fout.write('%s\t%s\t%s\t%s\t%s\t%s\t%s\n' %(id, type, res[0], sample_names[res[1][i]], res[-1][i], res[-2][i], res[2][i]))
+            fout.write('%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' %(id, type, res[0], sample_names[res[1][i]], res[-2][i], res[-3][i], res[2][i], res[-1][i]))
     else:
         pass
 
@@ -181,14 +185,17 @@ def scoreOutliers(alleles, madThr):
         # make sure to have all pvalues in the right place for every sample
         p_values_corrected = np.full(p_values.shape, np.nan)
         p_values_corrected[valid_idx] = p_values_corrected_valid
+        # also do the ratio between the median value and the observed value
+        ratios = alleles/median_alleles
         # identify outliers
         outliers = np.where(p_values_corrected < 0.05)[0]
         outliers_p = p_values_corrected[outliers]
         outliers_dist = mahalanobis_dist[outliers]
         outliers_alleles = np.array(alleles)[outliers]
-        return median_alleles, outliers, outliers_p, outliers_dist, outliers_alleles
+        outliers_ratios = np.array(ratios)[outliers]
+        return median_alleles, outliers, outliers_p, outliers_dist, outliers_alleles, outliers_ratios
     except:
-        return 'NA', 'NA', 'NA', 'NA', 'NA' 
+        return 'NA', 'NA', 'NA', 'NA', 'NA', 'NA'
 
 # Function that return the shorter or longer allele given a form of Allele1|Allele2
 def giveAllele(allele, type):

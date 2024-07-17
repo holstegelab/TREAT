@@ -47,8 +47,10 @@
         plt_name_af = paste0(out_name, '_', r, '_Freq.', plotFormat)
         plotname = file.path(out_dir, plt_name)
         plotname_af = file.path(out_dir, plt_name_af)
+        # Get plot size based on number of samples to plot
+        plot_size = plotSize(vcf_info_withRef)
         # Plot tandem repeat
-        pdf(plotname, height = 10, width = 12)
+        pdf(plotname, height = plot_size[[1]], width = plot_size[[2]])
         plotComplete(vcf_info_withRef, clustering_info, custom_colors = custom_colors, region = r, path = path)
         dev.off()
         # Plot allele frequency
@@ -106,8 +108,18 @@
   # Single functions used in the pipelines
     # Function to read VCF, and restrict to region of interest
     readVCF <- function(rs_vcf, region){
-      # read vcf
-      d = fread(rs_vcf, h=T, sep="\t")
+      # Read vcf
+      # Read the file into a character vector
+      lines <- readLines(rs_vcf)
+      # Filter out lines starting with "##"
+      filtered_lines <- lines[!grepl("^##", lines)]
+      # Write the filtered lines to a temporary file
+      temp_file <- tempfile()
+      writeLines(filtered_lines, temp_file)
+      # Read the temporary file into a data table
+      d <- fread(temp_file, header = TRUE, sep = "\t")
+      # Clean up the temporary file
+      unlink(temp_file)
       # restrict to region of interest
       if (length(region) == 1 && (region == 'all')){ 
         sub = d 
@@ -123,6 +135,23 @@
       } else {
         stop('The region you provided does not exists! Stopping.')
       }
+    }
+
+    # Function to define plot sizes
+    plotSize <- function(vcf_info_withRef){
+      if (nrow(vcf_info_withRef) <=25){
+        height = 7; width = 12
+      } else if (nrow(vcf_info_withRef) <= 50){
+        height = 10; width = 12
+      } else if (nrow(vcf_info_withRef) <= 75){
+        height = 14; width = 12
+      } else if (nrow(vcf_info_withRef) <= 100){
+        height = 20; width = 12
+      } else {
+        height = 25; width = 12
+      }
+      res = list(height, width)
+      return(res)
     }
 
     # Function to plot allele frequency
@@ -157,10 +186,10 @@
     # Function to extract reference sizes
     extractReference = function(vcf, r, vcf_info){
       # get reference size
-      ref_size = as.numeric(vcf$REF[which(vcf$ID == r)])
+      ref_size = as.numeric(nchar(vcf$REF[which(vcf$ID == r)]))
       # then get reference info
-      ref_motif = str_split_fixed(vcf$INFO[which(vcf$ID == r)], ';', 2)[, 1]
-      ref_copies = str_split_fixed(vcf$INFO[which(vcf$ID == r)], ';', 2)[, 2]
+      ref_motif = str_split_fixed(vcf$INFO[which(vcf$ID == r)], ';', 3)[, 1]
+      ref_copies = str_split_fixed(vcf$INFO[which(vcf$ID == r)], ';', 3)[, 2]
       # create dataframe
       ref_df = data.frame(sample = 'GRCh38', short_allele = ref_size, long_allele = ref_size, short_allele_motif = ref_motif, long_allele_motif = ref_motif, short_allele_cn = ref_copies, long_allele_cn = ref_copies, short_allele_cn_ref = ref_copies, long_allele_cn_ref = ref_copies)
       # join with sample's data
@@ -175,10 +204,10 @@
       # take the transpose of this
       sub_trans = t(sub)
       # split columns
-      sub_trans_df = data.frame(str_split_fixed(sub_trans[, 1], ';', 5))
+      sub_trans_df = data.frame(str_split_fixed(sub_trans[, 1], ';', 7))
       sub_trans_df$sample = rownames(sub_trans)
       # rename columns
-      colnames(sub_trans_df) = c('qc', 'haplo', 'motifs', 'copies', 'copies_reference', 'sample')
+      colnames(sub_trans_df) = c('qc', 'genotype', 'haplo', 'motifs', 'copies', 'copies_reference', 'coverage', 'sample')
       # add phased values for short and long haplo
       sub_trans_df$haplo_h1 = as.numeric(str_split_fixed(sub_trans_df$haplo, '\\|', 2)[, 1])
       sub_trans_df$haplo_h2 = as.numeric(str_split_fixed(sub_trans_df$haplo, '\\|', 2)[, 2])
@@ -284,7 +313,7 @@
         } 
         
       # Second plot is the clustering of all samples
-        par(mar=c(4, 0, 0, 6))
+        par(mar=c(4, 0, 0, 8))
         # run function to get dendrogram
         dendro = clustering_info[[1]]; ordered_labs = clustering_info[[2]]
         # plot
@@ -357,7 +386,13 @@
                 # draw rectangles and add text
                 for (i in 1:nrow(df_bp)){ rect(xleft = df_bp$pos[i]-w, xright = df_bp$pos[i]+w, ybottom = y_value-wy, ytop = y_value+wy, col = alpha(df_bp$colors[i], 0.6)); text(x = df_bp$pos[i], y = y_value, labels = df_bp$letter[i], cex = sz_bp, font=2) }
                 # finally the copy number
-                text(x = xlim_max/2-1, y = y_value, labels = paste0('(', round(as.numeric(sb$short_allele_cn), 1), ')'), font = 2, adj = c(1, 0.5))
+                if (length(grep('+', sb$short_allele_cn)) >0){
+                  temp = round(as.numeric(unlist(strsplit(sb$short_allele_cn, '\\+'))), 1)
+                  label_short = paste0('(', paste(temp, collapse = ' + '), ')')
+                } else {
+                  label_short = paste0('(', round(as.numeric(sb$short_allele_cn), 1), ')')
+                }
+                text(x = xlim_max/2-1, y = y_value, labels = label_short, font = 2, adj = c(1, 0.5))
               }
             # haplotype 2
               if (nchar(sb$long_allele_motif) >15){
@@ -367,11 +402,17 @@
                 # split the letters
                 df_bp = data.frame(letter = strsplit(sb$long_allele_motif, "")[[1]], pos = seq(1, length(strsplit(sb$long_allele_motif, "")[[1]])*(w*2), w*2))
                 # assign colors of bp
-                for (i in 1:nrow(df_bp)){ df_bp$colors[i] = colors_nt[df_bp$letter[i]] }; df_bp$colors[is.na(df_bp$colors)] = 'black'
+                for (i in 1:nrow(df_bp)){ df_bp$colors[i] = colors_nt[df_bp$letter[i]] }; df_bp$colors[is.na(df_bp$colors)] = 'white'
                 # draw rectangles and add text
                 for (i in 1:nrow(df_bp)){ rect(xleft = xlim_max/2+df_bp$pos[i]-w, xright = xlim_max/2+df_bp$pos[i]+w, ybottom = y_value-wy, ytop = y_value+wy, col = alpha(df_bp$colors[i], 0.6)); text(x = xlim_max/2+df_bp$pos[i], y = y_value, labels = df_bp$letter[i], font = 2, cex = sz_bp) }
                 # finally the copy number
-                text(x = xlim_max-1, y = y_value, labels = paste0('(', round(as.numeric(sb$long_allele_cn), 1), ')'), font = 2, adj = c(1, 0.5))
+                if (length(grep('+', sb$long_allele_cn)) >0){
+                  temp = round(as.numeric(unlist(strsplit(sb$long_allele_cn, '\\+'))), 1)
+                  label_long = paste0('(', paste(temp, collapse = ' + '), ')')
+                } else {
+                  label_long = paste0('(', round(as.numeric(sb$long_allele_cn), 1), ')')
+                }
+                text(x = xlim_max-1, y = y_value, labels = label_long, font = 2, adj = c(1, 0.5))
               }
           } 
           y_value = y_value + 1

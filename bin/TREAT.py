@@ -125,7 +125,7 @@ analAnal.add_argument("-n", "--outName", default = 'treat_analysis_output.txt', 
 # add arguments: --region is the name of the region to plot
 analAnal.add_argument("-r", "--region", default = 'all', help = "Name of the region to analyze. By default, all regions will be analyzed.", required = False)
 # add arguments: --madThr is the value to call outliers
-analAnal.add_argument("-t", "--madThr", default = 3, help = "Median Absolute deviation value used to call outliers.", required = False)
+analAnal.add_argument("-t", "--madThr", default = 5, help = "Median Absolute deviation value used to call outliers.", required = False)
 # add arguments: --cpu is the number of cpus to use
 analAnal.add_argument("-c", "--cpu", default = 1, help = "Number of CPUs to use (Default: 1)", required = False)
 ###########################################################
