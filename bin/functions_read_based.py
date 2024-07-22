@@ -18,6 +18,8 @@ from sklearn.cluster import KMeans
 #import shutil
 import warnings
 import gzip
+import pytrf
+import pyfastx
 
 ##########################################################
 ###### COMMON BASIC FUNCTIONS TO READS AND ASSEMBLY ANALYSIS
@@ -656,7 +658,8 @@ def haplotyping_steps(data, n_cpu, thr_mad, min_support, type, outDir, all_clipp
     seq_file = '%s/sample.seq.txt.gz' %(outDir)
     vcf_file = '%s/sample.vcf' %(outDir)
     writeOutputs(df_vcf, df_seq, seq_file, vcf_file, all_samples)
-    return('Haplotyping analysis done!')
+    print('Haplotyping analysis done!')
+    return df_seq
 
 # function to make permutations
 def permutMotif(motif):
@@ -1235,6 +1238,4 @@ def writeOutputs(df_vcf, df_seq, seq_file, vcf_file, all_samples):
         df_vcf.to_csv(file, header=True, index=False, sep='\t')
     # then compress it
     os.system('gzip %s' %(vcf_file))
-    # write sequence file
-    #df_seq.to_csv(seq_file, header=True, index=False, sep='\t', compression = 'gzip')
     return

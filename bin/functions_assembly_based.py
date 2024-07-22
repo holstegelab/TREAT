@@ -448,7 +448,7 @@ def measureDistance_reference_opt(x, ref, w):
     for i in x:
         chrom, start, end = i.split(':')[0], int(i.split(':')[-1].split('-')[0]), int(i.split(':')[-1].split('-')[1])
         tmp = fa[chrom][(start-1) : end]
-        distances.append(['reference', i, 'reference', 'NA', 'NA', 'NA', str(tmp), str(tmp), len(tmp), len(tmp)])
+        distances.append(['reference', i, 'reference', 'NA', 'NA', 'NA', str(tmp).upper(), str(tmp).upper(), len(tmp), len(tmp)])
     return distances
 
 # Function to split bed file in n bed files
@@ -966,8 +966,11 @@ def haplotyping_steps_opt(data, n_cpu, thr_mad, min_support, type, outDir, inBam
     print('*** Motif merge took %s seconds\t\t\t\t\t\t\t\t\t\t\t\t' %(round(time_motif, 0)))
     prepare_start_time = time.time()
     # generate a final dataframe
-    data_temp = pd.concat(motif_res, ignore_index=True)
-    data_final = pd.concat([data_sample_ok, data_temp])
+    try:
+        data_temp = pd.concat(motif_res, ignore_index=True)
+        data_final = pd.concat([data_sample_ok, data_temp])
+    except:
+        data_final = data_sample_ok
     # prepare data for output
     all_samples = list(set(list(data_final['SAMPLE'])))
     all_regions = list(data_final['REGION'].dropna().unique())
