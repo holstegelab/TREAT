@@ -18,8 +18,6 @@ from sklearn.cluster import KMeans
 #import shutil
 import warnings
 import gzip
-import pytrf
-import pyfastx
 
 ##########################################################
 ###### COMMON BASIC FUNCTIONS TO READS AND ASSEMBLY ANALYSIS
