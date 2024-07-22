@@ -279,7 +279,7 @@ database_df_all, alleles_ref = readDatabase('/path/to/database_allele.txt')
 database_df, database_modifications = clean_database(database_df_all)
 database_df['allele_name'] = database_df['allele_name'].replace('GATAH4', 'Y-GATA-H4')
 # read data with sequences
-data_rs = pd.read_csv('%s/sample.raw.txt.gz' %(PATH), sep='\t')
+data_rs = pd.read_csv('%s/spanning_reads_trf_phasing.txt.gz' %(PATH), sep='\t')
 
 # read data with motif structures and genomic regions
 data_motif_genomicRegions = pd.read_csv('/path/to/forensic_hg38.extended.bed', sep='\t', header=None)
