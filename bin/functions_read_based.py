@@ -657,7 +657,7 @@ def haplotyping_steps(data, n_cpu, thr_mad, min_support, type, outDir, all_clipp
     vcf_file = '%s/sample.vcf' %(outDir)
     writeOutputs(df_vcf, df_seq, seq_file, vcf_file, all_samples)
     print('Haplotyping analysis done!')
-    return df_seq
+    return df_seq, raw_seq_df
 
 # function to make permutations
 def permutMotif(motif):
