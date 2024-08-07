@@ -8,10 +8,11 @@
 
 
 ## How do you install TREAT
+# Install with Conda
 The easiest way to install **TREAT** in your system is to clone the repository in your system, and use the `INSTALL.sh` script. This will install a fresh version of Python along with the required packages, in a separate environment. This script assumes you have `conda` correctly installed in your system. If you are not familiar with Conda, please see [here](https://conda.io/projects/conda/en/latest/user-guide/getting-started.html).
 You can run the script by typing:  
 `git clone https://github.com/holstegelab/treat.git`  
-`cd treat/bin`  
+`cd treat/install/conda`  
 `source INSTALL.sh`  
 This script will install:
 - `treat environment through conda`, which contains all required packages to execute treat (including Python 3.6 and R)
@@ -19,11 +20,21 @@ This script will install:
 - `otter`, which is a novel targeted local assembler. Additional information about `otter` is available at [here](https://github.com/holstegelab/otter).  
 Note that `R` needs to be installed in your system. When running the `plot` or `analysis` modules of `TREAT`, it will automatically install the required packages, if not present (`data.table`, `stringr`, `argparse`, `ggplot2`, `dplyr`, `dendextend`, `berryFunctions`). 
 
+# Install without Conda
 You can independently install the required packages by `TREAT` without using the provided `INSTALL.sh`. These are listed in the `treat.yml`, and consists of `samtools`, `python 3.6`, `trf`, and the python packages `pysam`, `pandas`, `scikit-learn`, `numpy`, `biopython`. Please see `otter` [installation](https://github.com/holstegelab/otter) for more information about how to properly install `otter`.
 
 At the end of the installation, you may need to re-run the following lines to enable `TREAT` and `otter` system-wide (otherwise, you need to run the tools using the full path):  
 `export PATH=$PWD/:$PATH`  
 `export PATH=$PWD/otter/build/:$PATH`  
+
+# Install with Docker
+Alternatively, you can install **TREAT** through the provided **Docker** image. Download the repository as explained above. Then navigate to the **Docker** folder, and build the image:  
+`cd treat/install/docker`  
+`docker build --network host -t treat .`  
+To run **TREAT** from **Docker**, we provide example scripts in:
+`docker_run.sh`  
+Adapt your variables such as input files, output folders and run parameters, and do:
+`sh docker_run.sh`
 
 ## What do you need to run TREAT
 To run **TREAT**, you need:

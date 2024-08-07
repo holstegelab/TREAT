@@ -22,8 +22,10 @@
       defaultW <- getOption("warn"); options(warn = -1)
       # Read VCF
       vcf = data.frame()
+      format = c()
       for (v in rs_vcf){
         tmp = readVCF(v, region)
+        format = c(format, tmp$FORMAT)
         if (nrow(vcf) == 0){
           vcf = tmp
         } else {
@@ -32,14 +34,17 @@
           vcf = merge(vcf, tmp, by = 'ID', all=T)
         }
       }
+      if (length(unique(format)) >1){
+        stop('!! Found multiple different formats. Aborting.')
+      }
       # Identify the regions to be plotted
       all_regions = unique(vcf$ID)
       # The iterate over all regions
       for (r in all_regions){
         # Extract sizes
-        vcf_info = extractHaploSize(vcf[which(vcf$ID == r),])
+        vcf_info = extractHaploSize(vcf[which(vcf$ID == r),], format)
         # Extract Reference and add it to the data
-        vcf_info_withRef = extractReference(vcf, r, vcf_info)
+        vcf_info_withRef = extractReference(vcf, r, vcf_info, format)
         # Clustering
         clustering_info = cluster_TR(vcf_info_withRef)
         # Plot name
@@ -184,12 +189,19 @@
     }
 
     # Function to extract reference sizes
-    extractReference = function(vcf, r, vcf_info){
-      # get reference size
-      ref_size = as.numeric(nchar(vcf$REF[which(vcf$ID == r)]))
-      # then get reference info
-      ref_motif = str_split_fixed(vcf$INFO[which(vcf$ID == r)], ';', 3)[, 1]
-      ref_copies = str_split_fixed(vcf$INFO[which(vcf$ID == r)], ';', 3)[, 2]
+    extractReference = function(vcf, r, vcf_info, format){
+      if (format == 'QC;GT;GT_LEN;MOTIF;CN;CN_REF;DP'){
+        # get reference size
+        ref_size = as.numeric(nchar(vcf$REF[which(vcf$ID == r)]))
+        # then get reference info
+        ref_motif = str_split_fixed(vcf$INFO[which(vcf$ID == r)], ';', 3)[, 1]
+        ref_copies = str_split_fixed(vcf$INFO[which(vcf$ID == r)], ';', 3)[, 2]
+      } else {
+        ref_size = as.numeric(vcf$REF[which(vcf$ID == r)])
+        # then get reference info
+        ref_motif = str_split_fixed(vcf$INFO[which(vcf$ID == r)], ';', 2)[, 1]
+        ref_copies = str_split_fixed(vcf$INFO[which(vcf$ID == r)], ';', 2)[, 2]
+      }
       # create dataframe
       ref_df = data.frame(sample = 'GRCh38', short_allele = ref_size, long_allele = ref_size, short_allele_motif = ref_motif, long_allele_motif = ref_motif, short_allele_cn = ref_copies, long_allele_cn = ref_copies, short_allele_cn_ref = ref_copies, long_allele_cn_ref = ref_copies)
       # join with sample's data
@@ -198,16 +210,23 @@
     }
 
     # Function to extract sizes
-    extractHaploSize = function(vcf){
+    extractHaploSize = function(vcf, format){
       # restrict to sample's columns
       sub = vcf[, 10:ncol(vcf)]
       # take the transpose of this
       sub_trans = t(sub)
       # split columns
-      sub_trans_df = data.frame(str_split_fixed(sub_trans[, 1], ';', 7))
-      sub_trans_df$sample = rownames(sub_trans)
-      # rename columns
-      colnames(sub_trans_df) = c('qc', 'genotype', 'haplo', 'motifs', 'copies', 'copies_reference', 'coverage', 'sample')
+      if (format == 'QC;GT;GT_LEN;MOTIF;CN;CN_REF;DP'){
+        sub_trans_df = data.frame(str_split_fixed(sub_trans[, 1], ';', 7))
+        sub_trans_df$sample = rownames(sub_trans)
+        # rename columns
+        colnames(sub_trans_df) = c('qc', 'genotype', 'haplo', 'motifs', 'copies', 'copies_reference', 'coverage', 'sample')
+      } else if (format == 'QC;GT;MOTIF;CN;CN_REF;DP'){
+        sub_trans_df = data.frame(str_split_fixed(sub_trans[, 1], ';', 6))
+        sub_trans_df$sample = rownames(sub_trans)
+        # rename columns
+        colnames(sub_trans_df) = c('qc', 'haplo', 'motifs', 'copies', 'copies_reference', 'coverage', 'sample')
+      }
       # add phased values for short and long haplo
       sub_trans_df$haplo_h1 = as.numeric(str_split_fixed(sub_trans_df$haplo, '\\|', 2)[, 1])
       sub_trans_df$haplo_h2 = as.numeric(str_split_fixed(sub_trans_df$haplo, '\\|', 2)[, 2])
@@ -719,7 +738,6 @@
     region = unlist(strsplit(region, ','))
     # Print summary of the run
     x = summaryRun(rs_vcf, out_dir, out_name, plotFormat, custom_colors, region, ploType)
-
     # Pipeline to plot repeats
     if (ploType == 'population'){
       plotRepeatsComplete(rs_vcf, out_dir, out_name, plotFormat, custom_colors, region, path)

@@ -93,7 +93,7 @@ asseAnal.add_argument('-wAss', '--windowAssembly', type = int, help = 'Integer. 
 # ploidy
 asseAnal.add_argument('-p', '--ploidy', type = int, help = 'Integer. Estimated ploidy of the sample.', required = False, default = 2)
 # software
-asseAnal.add_argument('-s', '--software', type = str, help = 'Software to use for assembly (otter / hifiasm). Not tested for hifiasm.', required = False, default = 'otter')
+asseAnal.add_argument('-s', '--software', type = str, help = 'Software to use for assembly (otter). New assembler will be added.', required = False, default = 'otter')
 ###########################################################
 
 ###########################################################
@@ -125,16 +125,18 @@ analAnal.add_argument("-n", "--outName", default = 'treat_analysis_output.txt', 
 # add arguments: --region is the name of the region to plot
 analAnal.add_argument("-r", "--region", default = 'all', help = "Name of the region to analyze. By default, all regions will be analyzed.", required = False)
 # add arguments: --madThr is the value to call outliers
-analAnal.add_argument("-t", "--madThr", default = 5, help = "Median Absolute deviation value used to call outliers.", required = False)
+analAnal.add_argument("-t", "--madThr", default = 5, help = "Median Absolute deviation value used to call outliers (Default: 5).", required = False)
 # add arguments: --cpu is the number of cpus to use
-analAnal.add_argument("-c", "--cpu", default = 1, help = "Number of CPUs to use (Default: 1)", required = False)
+analAnal.add_argument("-c", "--cpu", default = 1, help = "Number of CPUs to use (Default: 1).", required = False)
+# add arguments: --known is the boundary from previous studies
+analAnal.add_argument("-k", "--known", default = 'none', help = 'Incorporate knowledge for outlier detection. Please submit a tab-delimited file with 4 columns: CHROM, START, END, BOUNDARY. BOUNDARY should indicate the allele size boundary (in bp). Alleles with size larger than this boundary will be reported.', required = False)
 ###########################################################
 
 ###########################################################
 # add arguments: --reads_spannning is the VCF file of the output of read_spanning_analysis
 plotAnal.add_argument("-v", "--vcf", default = 'None', help = "VCF file output of TREAT. Multiple files should be comma-separated.", required = True)
 # add arguments: --type is the type of plot
-plotAnal.add_argument("-t", "--type", default = 'population', choices=["population", "bbc"], help = "Type of plot to be made. Default is population.", required = False)
+plotAnal.add_argument("-t", "--type", default = 'population', choices=["population"], help = "Type of plot to be made. Default is population.", required = False)
 # add arguments: --out is the output directory
 plotAnal.add_argument("-o", "--outDir", default = './', help = "Output directory where output will be placed. Default is the current directory.", required = False)
 # add arguments: --outname is the name of the output file
@@ -220,7 +222,7 @@ elif args.cmd == 'analysis':
     RUN = True
     # define script to run and arguments
     script_path = 'treat_analysis.py'
-    arguments = [args.analysis, args.vcf, args.outDir, args.outName, args.region, args.madThr, args.labels, args.cpu]
+    arguments = [args.analysis, args.vcf, args.outDir, args.outName, args.region, args.madThr, args.labels, args.cpu, args.known]
 elif args.cmd == 'plot':
     # set flag to true
     RUN = True
@@ -243,7 +245,7 @@ if RUN == True:
     if script_path in ['read_based.py', 'assembly_based.py', 'merge_vcf.py']:
         main_script = 'python3.6 %s/%s %s' %(main_path, script_path, ' '.join(arguments))
     elif script_path == 'treat_analysis.py':
-        main_script = '%s/%s --analysis %s --vcf %s --outDir %s --outName %s --region %s --madThr %s --labels %s --cpu %s' %(main_path, script_path, arguments[0], arguments[1], arguments[2], arguments[3], arguments[4], arguments[5], arguments[6], arguments[7])
+        main_script = '%s/%s --analysis %s --vcf %s --outDir %s --outName %s --region %s --madThr %s --labels %s --cpu %s --known %s' %(main_path, script_path, arguments[0], arguments[1], arguments[2], arguments[3], arguments[4], arguments[5], arguments[6], arguments[7], arguments[8])
     elif script_path == 'treat_plot.R':
         main_script = 'Rscript %s/%s --vcf %s --out %s --outname %s --region %s --plotformat %s --customColors %s --path %s --type %s' %(main_path, script_path, arguments[0], arguments[1], arguments[2], arguments[3], arguments[4], arguments[5], main_path, arguments[6])
     os.system(main_script)

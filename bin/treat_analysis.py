@@ -39,6 +39,8 @@ parser.add_argument("-r", "--region", default = 'all', help = "Name of the regio
 parser.add_argument("-t", "--madThr", default = 5, help = "Median Absolute deviation value used to call outliers.", required = False)
 # add arguments: --cpu is the number of cpus to use
 parser.add_argument("-c", "--cpu", default = 1, help = "Number of CPUs to use (Default: 1)", required = False)
+# add arguments: --known is the known boundary for TRs
+parser.add_argument("-k", "--known", default = 'none', help = "Incorporate knowledge for outlier detection. Please submit a tab-delimited file with 4 columns: CHROM, START, END, BOUNDARY. BOUNDARY should indicate the allele size boundary (in bp). Alleles with size larger than this boundary will be reported.", required = False)
 ###########################################################
 
 ###########################################################
@@ -96,7 +98,10 @@ def checkLabels(labels):
                 else:
                     labels_dic[cc_status] = [sample]
         if len(labels_dic.keys()) !=2:
-            print('!! More than 2 unique labels in the case-control labels. Make sure there is no header and file is correctly formatted')
+            print('!! More than 2 unique labels in the case-control labels. Make sure there is no header and file is correctly formatted.')
+            sys.exit(1)
+        elif not ('0' in labels_dic.keys() and '1' in labels_dic.keys()):
+            print('!! Please make sure to use only 0 and 1 labels for controls and cases, respectively.')
             sys.exit(1)
         else:
             label1_name = labels_dic.keys()
@@ -107,8 +112,36 @@ def checkLabels(labels):
         print('!! Input VCF does not exist. Please check. Exiting.')
         sys.exit(1)
 
+# Function to read (if submitted) file with known TR boundaries
+def known_boundaries(known):
+    if known == 'none':
+        print("** No file with known TR boundaries submitted.")
+        return 'none'
+    elif os.path.exists(known):
+        temp = pd.read_csv(known, sep="\t")
+        try:
+            temp['ID'] = temp['CHROM'].astype(str) + ':' + temp['START'].astype(str) + '-' + temp['END'].astype(str)
+            return temp
+        except:
+            print('** A file with known TR boundaries was submitted, but it is wrongly formatted. Make sure headers are CHROM, START, END, BOUNDARY.')
+            return 'none'
+    else:
+        print('** A file with known TR boundaries was submitted, but the file does not exist or is unreadable.')
+        return 'none'
+
 # Function for outlier analysis
-def outlier_analysis(inp_vcf, region, madThr, cpu, out_dir, out_name):
+def outlier_analysis(inp_vcf, region, madThr, cpu, out_dir, out_name, known):
+    # check if known file with boundaries was specified
+    known_boun = known_boundaries(known)
+    if isinstance(known_boun, pd.DataFrame):
+        # initialize output file
+        if '.txt' in out_name:
+            out_name_bou = out_name.replace('.txt', '_boundaries.txt')
+        else:
+            out_name_bou = out_name + '_boundaries.txt'
+        fout_bou = open('%s/%s' %(out_dir, out_name_bou), 'w')
+        fout_bou.write('OUTLIER_BOUNDARY\tSAMPLE\tREGION\tBOUNDARY\tSAMPLE_ALLELE_SIZE\tALLELE\n')
+        fout_bou.close()
     # initialize output file
     fout = open('%s/%s' %(out_dir, out_name), 'w')
     fout.write('REGION\tALLELE\tMEDIAN_ALL\tOUTLIER_SAMPLE\tOUTLIER_SIZE\tOUTLIER_DIST\tOUTLIER_P\tOUTLIER_RATIO\n')
@@ -126,14 +159,17 @@ def outlier_analysis(inp_vcf, region, madThr, cpu, out_dir, out_name):
                 line = line.rstrip().split()
                 chrom, pos, id, ref, format = [x.decode('utf-8') for x in [line[0], line[1], line[2], line[3], line[8]]]
                 # check input file is from treat
-                if format != 'QC;GT;GT_LEN;MOTIF;CN;CN_REF;DP':
+                if format != 'QC;GT;GT_LEN;MOTIF;CN;CN_REF;DP' and format != 'QC;GT;MOTIF;CN;CN_REF;DP':
                     print('!! VCF was likely not produced with TREAT. Please check.')
                     sys.exit(1)
                 else:
                     # check if 1 region need to be processed or all of them
                     if (isinstance(region, list) == True and id in region) or (isinstance(region, list) == False):
                         # extract genotypes per sample
-                        allele_sizes = [x.decode('utf-8').split(';')[2] for x in line[9::]] + [len(ref)]
+                        if format == 'QC;GT;GT_LEN;MOTIF;CN;CN_REF;DP':
+                            allele_sizes = [x.decode('utf-8').split(';')[2] for x in line[9::]] + [len(ref)]
+                        else:
+                            allele_sizes = [x.decode('utf-8').split(';')[1] for x in line[9::]] + [ref]
                         # extract list of shorter alleles
                         short_alleles = [giveAllele(x, 'short') for x in allele_sizes]
                         # extract list of longer alleles
@@ -150,10 +186,32 @@ def outlier_analysis(inp_vcf, region, madThr, cpu, out_dir, out_name):
                         writeToFile(res_short, fout, 'SHORT', id, sample_names)
                         writeToFile(res_long, fout, 'LONG', id, sample_names)
                         writeToFile(res_join, fout, 'JOIN', id, sample_names)
+                        # check allele size boundaries
+                        short_boundaries = checkBoundary(short_alleles, sample_names, id, known_boun, 'SHORT', out_dir, out_name_bou)
+                        long_boundaries = checkBoundary(long_alleles, sample_names, id, known_boun, 'LONG', out_dir, out_name_bou)
+                        joint_boundaries = checkBoundary(join_alleles, sample_names, id, known_boun, 'JOINT', out_dir, out_name_bou)
                     else:
                         pass
     fout.close()
     return '** Analysis completed. Cheers!'
+
+# Function to check allele size boundaries
+def checkBoundary(alleles, sample_names, id, known_boun, allele_type, out_dir, out_name_bou):
+    temp_bound = known_boun[known_boun['ID'] == id]
+    if temp_bound.shape[0] >0:
+        boundary_value = temp_bound['BOUNDARY'].iloc[0]
+        greater_than_bound = [True if x >= boundary_value else False for x in alleles]
+    else:
+        greater_than_bound = ['NA' for x in alleles]
+        boundary_value = 'NA'
+    df = pd.DataFrame(greater_than_bound, columns = ['OUTLIER'])
+    df['SAMPLE'] = sample_names
+    df['ID'] = id
+    df['BOUNDARY'] = boundary_value
+    df['ALLELE_SIZE'] = alleles
+    df['ALLELE'] = allele_type
+    df.to_csv('%s/%s' %(out_dir, out_name_bou), mode = 'a', header=False, index=False, sep="\t")
+    return df
 
 # Function to write outliers to file
 def writeToFile(res, fout, type, id, sample_names):
@@ -200,7 +258,7 @@ def scoreOutliers(alleles, madThr):
 # Function that return the shorter or longer allele given a form of Allele1|Allele2
 def giveAllele(allele, type):
     try:
-        allele_list = [int(x) for x in str(allele).split('|')]
+        allele_list = [float(x) for x in str(allele).split('|')]
         if type == 'short':
             return min(allele_list)
         elif type == 'long':
@@ -232,14 +290,17 @@ def casecontrol_analysis(inp_vcf, region, labels_dic, cpu, out_dir, out_name):
                 line = line.rstrip().split()
                 chrom, pos, id, ref, format = [x.decode('utf-8') for x in [line[0], line[1], line[2], line[3], line[8]]]
                 # check input file is from treat
-                if format != 'QC;GT;GT_LEN;MOTIF;CN;CN_REF;DP':
+                if format != 'QC;GT;GT_LEN;MOTIF;CN;CN_REF;DP' and format != 'QC;GT;MOTIF;CN;CN_REF;DP':
                     print('!! VCF was likely not produced with TREAT. Please check.')
                     sys.exit(1)
                 else:
                     # check if 1 region need to be processed or all of them
                     if (isinstance(region, list) == True and id in region) or (isinstance(region, list) == False):
                         # extract genotypes per sample
-                        allele_sizes = [x.decode('utf-8').split(';')[2] for x in line[9::]] + [len(ref)]
+                        if format == 'QC;GT;GT_LEN;MOTIF;CN;CN_REF;DP':
+                            allele_sizes = [x.decode('utf-8').split(';')[2] for x in line[9::]] + [len(ref)]
+                        else:
+                            allele_sizes = [x.decode('utf-8').split(';')[1] for x in line[9::]] + [ref]
                         # extract list of shorter alleles
                         short_alleles = [giveAllele(x, 'short') for x in allele_sizes]
                         # extract list of longer alleles
@@ -247,7 +308,7 @@ def casecontrol_analysis(inp_vcf, region, labels_dic, cpu, out_dir, out_name):
                         # extract list of sum of both alleles
                         join_alleles = [giveAllele(x, 'sum') for x in allele_sizes]
                         # combine in a dataframe
-                        df_alleles = createDF(labels_dic, sample_names, short_alleles, long_alleles, join_alleles)
+                        df_alleles = createDF(labels_dic, sample_names, short_alleles, long_alleles, join_alleles)                        
                         # run association for short
                         res_short = logit(df_alleles, 'Short')
                         # run association for long
@@ -304,7 +365,7 @@ def check_values_in_dict(sample_names, labels_dic):
 # Main
 ###########################################################
 # Parse input arguments and set up for running
-inp_vcf, analysis, labels, out_dir, out_name, region, madThr, cpu = args.vcf, args.analysis, args.labels, args.outDir, args.outName, args.region, int(args.madThr), args.cpu
+inp_vcf, analysis, labels, out_dir, out_name, region, madThr, cpu, known = args.vcf, args.analysis, args.labels, args.outDir, args.outName, args.region, int(args.madThr), args.cpu, args.known
 if analysis == 'case-control' and labels == 'None':
     print('!! Case-control analysis was chosen, but no case-control labels were given. Exiting.\n')
     sys.exit(1)
@@ -332,7 +393,7 @@ elif analysis == 'outlier':
     # check regions
     regions = checkRegion(region)
     # do outlier analysis
-    outlier_analysis(inp_vcf, regions, madThr, cpu, out_dir, out_name)
+    outlier_analysis(inp_vcf, regions, madThr, cpu, out_dir, out_name, known)
 else:
     print('!! Something went wrong with your analysis. Check again your input parameters. Exiting.')
     sys.exit(1)
