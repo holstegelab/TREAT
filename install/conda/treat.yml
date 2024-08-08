@@ -1,4 +1,4 @@
-name: treat
+name: newtreat
 channels:
   - bioconda
   - conda-forge
@@ -123,4 +123,7 @@ dependencies:
     - scipy==1.5.4
     - six==1.16.0
     - threadpoolctl==3.1.0
-prefix: /home/holstegelab-ntesi/.conda/envs/newtreat
+    - pytrf==1.3.0
+    - pyfastx==2.1.0
+    - pyfaidx==0.6.4
+    - statsmodels==0.12.2

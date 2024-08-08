@@ -54,9 +54,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential \
         libssl-dev \
         libffi-dev \
-        && apt-get remove -y build-essential \
+        r-base \
         && apt-get autoremove -y \
         && rm -rf /var/lib/apt/lists/*
+
+# Install R packages
+RUN Rscript -e "install.packages(c('data.table', 'stringr', 'argparse', 'ggplot2', 'dplyr', 'dendextend', 'berryFunctions'), verbose=F, repos='http://cran.rstudio.com/')"
 
 # Copy the rest of your application files
 # COPY . .
