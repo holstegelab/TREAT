@@ -24,7 +24,7 @@ make packages
 make
 cd ..
 
-echo "export PATH=../../bin/otter/build/:$PATH" >> ../../bin/activate_env.sh
-echo "export PATH+=:../../bin/:$PATH" >> ../../bin/activate_env.sh
+echo "export PATH=../../bin/otter/build/:$PATH" >> activate_env.sh
+echo "export PATH+=:../../bin/:$PATH" >> activate_env.sh
 chmod +x ../../bin/activate_env.sh
-mv ../../bin/activate_env.sh $CONDA_PREFIX/etc/conda/activate.d/
+mv activate_env.sh $CONDA_PREFIX/etc/conda/activate.d/
