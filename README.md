@@ -8,33 +8,38 @@
 
 
 ## How do you install TREAT
+Depending on your system and your preferences, you can install **TREAT** and **otter** in various ways:  
+- manually, installing the necessary libraries and packages  
+- using the provided **Conda** environment  
+- using the provided **Docker** image (recommended option)  
+Independently from how you want to install **TREAT** and **otter**, you should clone this repository first by typing:  
+`git clone https://github.com/holstegelab/TREAT.git`
+
+# Manual installation
+To install **TREAT** and **otter** manually, the steps are:
+- install **otter** following these [instructions](https://github.com/holstegelab/otter)  
+- install **TREAT**  
+To install **TREAT** manually, you can either use the `treat.yml` file that we provide, which contains all required packages. Alternatively, you can install the required packages manually. **TREAT** requires `pandas==1.1.5`, `pysam==0.19.1`, `pytrf==1.3.0`, `pyfaidx==0.6.4`, `pyfastx==2.1.0`, `biopython==1.79`, `scipy==1.5.3`, `scikit-learn==0.24.2`, `statsmodels==0.12.2`. In addition to these `python` packages, you need to install [trf](https://tandem.bu.edu/trf) as well as [samtools](https://www.htslib.org). For plots, **TREAT** uses `R` packages `data.table`, `stringr`, `argparse`, `ggplot2`, `dplyr`, `dendextend` and `berryFunctions`. We recommend using `python 3.6.15` and `R 4.3.0`. At the end of installation, you may need to make `TREAT.py` file and `otter` executables. You can do so by typing:  
+`export PATH=/path/to/TREAT/bin/:$PATH`  
+`export PATH=/path/to/otter/build/:$PATH`  
+
 # Install with Conda
-The easiest way to install **TREAT** in your system is to clone the repository in your system, and use the `INSTALL.sh` script. This will install a fresh version of Python along with the required packages, in a separate environment. This script assumes you have `conda` correctly installed in your system. If you are not familiar with Conda, please see [here](https://conda.io/projects/conda/en/latest/user-guide/getting-started.html).
+To install **TREAT** using `Conda`, you can use the `INSTALL.sh` script. This will install a fresh version of `python 3.6.15` in a new `Conda` environment called `treat`, along with the required packages. This script assumes you have `Conda` correctly installed in your system. If you are not familiar with Conda, please see [here](https://conda.io/projects/conda/en/latest/user-guide/getting-started.html).
 You can run the script by typing:  
-`git clone https://github.com/holstegelab/treat.git`  
-`cd treat/install/conda`  
+`cd TREAT/install/conda`  
 `source INSTALL.sh`  
 This script will install:
-- `treat environment through conda`, which contains all required packages to execute treat (including Python 3.6 and R)
-- `htslib-1.19.1`, which contains `htslib`, required to run `otter` 
-- `otter`, which is a novel targeted local assembler. Additional information about `otter` is available at [here](https://github.com/holstegelab/otter).  
-Note that `R` needs to be installed in your system. When running the `plot` or `analysis` modules of `TREAT`, it will automatically install the required packages, if not present (`data.table`, `stringr`, `argparse`, `ggplot2`, `dplyr`, `dendextend`, `berryFunctions`). 
-
-# Install without Conda
-You can independently install the required packages by `TREAT` without using the provided `INSTALL.sh`. These are listed in the `treat.yml`, and consists of `samtools`, `python 3.6`, `trf`, and the python packages `pysam`, `pandas`, `scikit-learn`, `numpy`, `biopython`. Please see `otter` [installation](https://github.com/holstegelab/otter) for more information about how to properly install `otter`.
-
-At the end of the installation, you may need to re-run the following lines to enable `TREAT` and `otter` system-wide (otherwise, you need to run the tools using the full path):  
-`export PATH=$PWD/:$PATH`  
-`export PATH=$PWD/otter/build/:$PATH`  
+- `treat` environment, which contains all required packages  
+- **otter** and its dependencies   
+Note that `R` needs to be installed separately in your system. When running the `plot` modules of **TREAT**, it will automatically install the required packages, if not present (`data.table`, `stringr`, `argparse`, `ggplot2`, `dplyr`, `dendextend`, `berryFunctions`).  
 
 # Install with Docker
-Alternatively, you can install **TREAT** through the provided **Docker** image. Download the repository as explained above. Then navigate to the **Docker** folder, and build the image:  
-`cd treat/install/docker`  
-`docker build --network host -t treat .`  
-To run **TREAT** from **Docker**, we provide example scripts in:
-`docker_run.sh`  
-Adapt your variables such as input files, output folders and run parameters, and do:
-`sh docker_run.sh`
+The easiest way to install **TREAT** is through the provided **Docker** image. You can do so with these steps:  
+- `cd TREAT/install/docker`  
+- `docker build --network host -t treat .`  
+To run **TREAT** using the **Docker** image, options are:
+- using `docker_run.sh` commands that we provide    
+- interactively, by running the **Docker** image with `docker run --it --network host treat`  
 
 ## What do you need to run TREAT
 To run **TREAT**, you need:
@@ -48,18 +53,14 @@ To run **TREAT**, you need:
 - `treat_run.log`: a recapitulation of the job along with a replicable command
 - `sample.vcf.gz`: the main VCF file summarizing the genotype of the target regions in the target genomes
 
-## How do you run TREAT
-To run **TREAT**, you can follow these steps:
-- `conda activate treat         # activate the right conda environment`  
-- `TREAT.py -h         # run TREAT`  
-
 ## Toolkit
-**TREAT** contains several tools to manipulate and analyze sequencing data. Three main analysis strategies are available in **TREAT**:
-- `reads`: genotype the target region in the target genomes using single reads and a clustering framework. Genotypes are always given as the size of the region of interest
-- `assembly`: genotype the target region in the target genomes with targeted local assembly of the single reads. Genotypes are always given as the size of the region of interest
-- `merge`: can be used to combine multiple VCF. Genotypes are always given as the size of the region of interest  
-- `analysis`: can be used to do downstream analysis of tandem repeats. Currently, two analyses are implemented: outlier analysis and case-control analysis
-Typing `/path/to/treat/bin/TREAT.py [reads/assembly/merge] -h` will show the help message specific to the analysis of interest, along with all available run parameters.
+**TREAT** contains several tools to manipulate and analyze sequencing data. Three main analysis strategies are available in **TREAT**:  
+- `assembly`: genotype the target region in the target genomes with targeted local assembly using **otter** of the single reads. Genotypes are always given as the size of the region of interest  
+- `reads`: genotype the target region in the target genomes using single reads and a clustering framework. Genotypes are always given as the size of the region of interest  
+- `analysis`: can be used to do downstream analysis of tandem repeats. Currently, two analyses are implemented: outlier analysis and case-control analysis  
+- `plot`: can be used to plot tandem repeats across samples  
+- `merge`: can be used to combine multiple VCF. Genotypes are always given as the size of the region of interest. Beta version.  
+Typing `TREAT.py [reads/assembly/analysis/plot] -h` will show the help message specific to the analysis of interest, along with all available run parameters.  
 
 ## Assembly analysis
 The `assembly` analysis take advantage of all sequencing reads aligning to the target region to perform local assembly of the target regions. Local assembly is done with [**otter**](https://github.com/holstegelab/otter). The procedure goes as it follows:
