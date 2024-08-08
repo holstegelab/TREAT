@@ -23,6 +23,7 @@ make
 cd ..
 
 conda init bash
+source ~/.bash_profile
 conda activate newtreat
 
 echo "export PATH=${PWD}/otter/build/:$PATH" >> activate_env.sh
