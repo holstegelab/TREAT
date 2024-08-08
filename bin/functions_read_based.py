@@ -565,7 +565,7 @@ def combine_data_afterPhasing(outDir):
 
 # FUNCTIONS FOR HAPLOTYPING
 # main function that guides haplotyping
-def haplotyping_steps(data, n_cpu, thr_mad, min_support, type, outDir, all_clipping_df):
+def haplotyping_steps(data, n_cpu, thr_mad, min_support, type, outDir, all_clipping_df, inBam):
     # STEP 1 IS TO ADJUST THE DATA BEFORE WE START
     data['START_TRF'] = pd.to_numeric(data['START_TRF'], errors='coerce')
     data['END_TRF'] = pd.to_numeric(data['END_TRF'], errors='coerce')
@@ -655,7 +655,7 @@ def haplotyping_steps(data, n_cpu, thr_mad, min_support, type, outDir, all_clipp
     print('** Producing outputs: VCF file and table with sequences                        ')
     seq_file = '%s/sample.seq.txt.gz' %(outDir)
     vcf_file = '%s/sample.vcf' %(outDir)
-    writeOutputs(df_vcf, df_seq, seq_file, vcf_file, all_samples)
+    writeOutputs(df_vcf, df_seq, seq_file, vcf_file, all_samples, inBam)
     print('Haplotyping analysis done!')
     return df_seq, raw_seq_df
 
@@ -1220,18 +1220,21 @@ def prepareIntervals(all_regions):
     return intervals
 
 # function to write header of vcf file
-def writeVCFheader(vcf_file, samples):
+def writeVCFheader(vcf_file, samples, inBam):
     # open file
     outf = open(vcf_file, 'w')
     # write header
     outf.write('##fileformat=VCFv4.2\n##INFO=<ID=REFERENCE_INFO,Number=2,Type=String,Description="Motif observed in the reference genome (GRCh38), and relative number of motif repetitions."\n##FORMAT=<ID=QC,Number=1,Type=String,Description="Quality summary of TREAT genotyping. PASS_BOTH: genotype agreed between reads-spanning and assembly. PASS_RSP: genotype from reads-spanning. PASS_ASM: genotype from assembly."\n##FORMAT=<ID=GT,Number=2,Type=String,Description="Phased size of the tandem repeats. H1_size | H2_size"\n##FORMAT=<ID=MOTIF,Number=2,Type=String,Description="Phased consensus motif found in the sample. H1_motif | H2_motif"\n##FORMAT=<ID=CN,Number=2,Type=String,Description="Phased number of copies of the motif found in the sample. H1_copies | H2_copies"\n##FORMAT=<ID=CN_REF,Number=2,Type=String,Description="Phased estimation of the reference motif as found in the sample. H1_motif_ref | H2_motif_ref"\n##FORMAT=<ID=DP,Number=1,Type=String,Description="Phased depth found in the sample. H1_depth | H2_depth"\n')
+    # need to add the contig information
+    contig_info = '\n'.join([convert_sq_to_contig(x.rstrip())for x in os.popen('samtools view -H %s' %(inBam[0])) if '@SQ' in x])
+    outf.write('%s\n' %(contig_info))
     outf.close()
     return    
 
 # function to write outputs
-def writeOutputs(df_vcf, df_seq, seq_file, vcf_file, all_samples):
+def writeOutputs(df_vcf, df_seq, seq_file, vcf_file, all_samples, inBam):
     # write header of vcf file
-    writeVCFheader(vcf_file, all_samples)
+    writeVCFheader(vcf_file, all_samples, inBam)
     with open(vcf_file, mode='a') as file:
         df_vcf.to_csv(file, header=True, index=False, sep='\t')
     # then compress it

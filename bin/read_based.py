@@ -102,7 +102,7 @@ df_trf_phasing_combined = pd.merge(df_trf_combined, combined_haplotags_df, left_
 
 # 5. Do directly the haplotyping so that we save on IO usage
 ts = time.time()
-df_seq, df_raw = haplotyping_steps(data = df_trf_phasing_combined, n_cpu = cpu, thr_mad = HaploDev, min_support = minimumSupport, type = 'reads', outDir = outDir, all_clipping_df = all_clipping_df)
+df_seq, df_raw = haplotyping_steps(data = df_trf_phasing_combined, n_cpu = cpu, thr_mad = HaploDev, min_support = minimumSupport, type = 'reads', outDir = outDir, all_clipping_df = all_clipping_df, inBam = inBam)
 te = time.time()
 time_write = te-ts
 print('*** Operation took %s seconds\t\t\t\t\t\t\t\t\t\t\t\t' %(round(time_write, 0)))

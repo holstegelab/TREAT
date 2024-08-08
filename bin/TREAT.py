@@ -89,7 +89,7 @@ asseAnal.add_argument('-minSup', '--minimumSupport', type = int, help = 'During 
 # haplotyping: minimum coverage
 asseAnal.add_argument('-minCov', '--minimumCoverage', type = int, help = 'During haplotying, minimum number of total reads necessary for calling.', required = False, default = 5)
 # window around for assembly
-asseAnal.add_argument('-wAss', '--windowAssembly', type = int, help = 'Integer. Will extend the regions defined in the BED file by this value upstream and downstream to take reads for assembly.', required = False, default = 50)
+asseAnal.add_argument('-wAss', '--windowAssembly', type = int, help = 'Integer. Will extend the regions defined in the BED file by this value upstream and downstream to take reads for assembly. (Default: 20).', required = False, default = 20)
 # ploidy
 asseAnal.add_argument('-p', '--ploidy', type = int, help = 'Integer. Estimated ploidy of the sample.', required = False, default = 2)
 # software
