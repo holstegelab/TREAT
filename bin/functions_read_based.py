@@ -1231,6 +1231,13 @@ def writeVCFheader(vcf_file, samples, inBam):
     outf.close()
     return    
 
+# Function to convert sequence to contig - OK
+def convert_sq_to_contig(sq_string):
+    match = re.match(r'@SQ\tSN:(\S+)\tLN:(\d+)', sq_string)
+    if not match:
+        raise ValueError("The input string does not match the expected format")
+    return f'##contig=<ID={match.group(1)},length={match.group(2)}>'
+
 # function to write outputs
 def writeOutputs(df_vcf, df_seq, seq_file, vcf_file, all_samples, inBam):
     # write header of vcf file
