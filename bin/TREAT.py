@@ -79,21 +79,24 @@ asseAnal.add_argument('-o', '--outDir', help='Output directory where to place ou
 asseAnal.add_argument('-r', '--ref', required=True, help='Path to reference genome data in FASTA format. Reference needs to be indexed.')
 # optional arguments
 # window around
-asseAnal.add_argument('-w', '--window', type = int, help = 'Integer. Will extend the regions defined in the BED file by this value upstream and downstreatm.', required = False, default = 10)
+asseAnal.add_argument('-w', '--window', type = int, help = 'Integer. Will extend the regions defined in the BED file by this value upstream and downstreatm. (Default: 10)', required = False, default = 10)
 # number of threads
-asseAnal.add_argument('-t', '--cpu', type = int, help = 'Number of parallel threads to be used.', required = False, default = 2)
-# haplotyping: deviation
-asseAnal.add_argument('-d', '--HaploDev', type = float, help = 'During haplotying analysis, median absolute deviation to assign reads to the same allele.', required = False, default = 0.10)
-# haplotyping: minimum supporting read number
-asseAnal.add_argument('-minSup', '--minimumSupport', type = int, help = 'During haplotying, minimum number of reads supporting each haplotyping.', required = False, default = 2)
-# haplotyping: minimum coverage
-asseAnal.add_argument('-minCov', '--minimumCoverage', type = int, help = 'During haplotying, minimum number of total reads necessary for calling.', required = False, default = 5)
+asseAnal.add_argument('-t', '--cpu', type = int, help = 'Number of parallel threads to be used. (Default: 2)', required = False, default = 2)
 # window around for assembly
-asseAnal.add_argument('-wAss', '--windowAssembly', type = int, help = 'Integer. Will extend the regions defined in the BED file by this value upstream and downstream to take reads for assembly. (Default: 20).', required = False, default = 20)
+asseAnal.add_argument('-wAss', '--windowAssembly', type = int, help = 'In otter, will extend the regions defined in the BED file by this value upstream and downstream to take reads for assembly. (Default: 20).', required = False, default = 20)
 # ploidy
-asseAnal.add_argument('-p', '--ploidy', type = int, help = 'Integer. Estimated ploidy of the sample.', required = False, default = 2)
+asseAnal.add_argument('-p', '--ploidy', type = int, help = 'In otter, the expected ploidy. (Default: 2)', required = False, default = 2)
 # software
 asseAnal.add_argument('-s', '--software', type = str, help = 'Software to use for assembly (otter). New assembler will be added.', required = False, default = 'otter')
+# additional flags for otter
+# omit non spanning reads
+asseAnal.add_argument('-ons', '--omitNonSpanning', type = str, choices = ['True', 'False'], help = 'In otter, omit non spanning reads from assembly. (Default: False)', required = False, default = 'False')
+# max coverage
+asseAnal.add_argument('-omc', '--otterMaxCov', type = int, help = 'In otter, ignore regions with coverage above this value. (Default: 200)', required = False, default = 200)
+# min coverage fraction
+asseAnal.add_argument('-ocf', '--otterCovFrac', type = str, help = 'In otter, minimum coverage fraction per sequence (INT,DOUBLE). (Default: 500,0.1)', required = False, default = '500,0.1')
+# min similarity during alignment
+asseAnal.add_argument('-oms', '--otterMinSim', type = float, help = 'In otter, minimum similarity during re-alignment. (Default: 0.9)', required = False, default = 0.9)
 ###########################################################
 
 ###########################################################
@@ -192,19 +195,19 @@ elif args.cmd == 'assembly':
     print("   Reference genome: ", args.ref)
     print('** Optional arguments:')
     print("   Window: ", args.window)
-    print("   Window for assembly: ", args.windowAssembly)
     print("   Number of threads: ", args.cpu)
-    print("   Assembly ploidy: ", args.ploidy)
-    print("   Assembly software: ", args.software)
-    print("   Haplotyping deviation: ", args.HaploDev)
-    print("   Minimum supporting reads: ", args.minimumSupport)
-    print("   Minimum coverage: ", args.minimumCoverage)
+    print("   Otter: omit non spanning reads: ", args.omitNonSpanning)
+    print("   Otter: window for assembly: ", args.windowAssembly)    
+    print("   Otter: expected assembly ploidy: ", args.ploidy)
+    print("   Otter: ignore regions with coverage above: ", args.otterMaxCov)
+    print("   Otter: minimum coverage fraction per sequence: ", args.otterCovFrac)
+    print("   Otter: minimum similarity during re-alignment: ", args.otterMinSim)
     print("\n")
     # set flag to true
     RUN = True
     # define script to run and arguments
     script_path = 'assembly_based.py'
-    arguments = [args.inBam, args.bed, args.outDir, args.ref, str(args.window), str(args.windowAssembly), str(args.cpu), str(args.ploidy), args.software, str(args.HaploDev), str(args.minimumSupport), str(args.minimumCoverage)]
+    arguments = [args.inBam, args.bed, args.outDir, args.ref, str(args.window), str(args.windowAssembly), str(args.cpu), str(args.ploidy), args.software, str(args.omitNonSpanning), str(args.otterMaxCov), str(args.otterCovFrac), str(args.otterMinSim)]
 elif args.cmd == 'merge':
     print('Merge VCF analysis selected')
     print('** Required argument:')

@@ -100,7 +100,7 @@ def checkBAM(bam_dir):
         sys.exit(1)  # Exit the script with a non-zero status code
 
 # Function to create Log file - OK
-def createLogAsm(inBam, bed_dir, outDir, ref, window, cpu, windowAss, ploidy, software, HaploDev, minimumSupport, minimumCoverage):
+def createLogAsm(inBam, bed_dir, outDir, ref, window, cpu, windowAss, ploidy, software, omitNonSpanning, otterMaxCov, otterCovFrac, otterMinSim):
     foutname = open('%s/treat_run.log' %(outDir), 'w')
     foutname.write('Assembly-based analysis selected\n')
     foutname.write('** Required argument:\n')
@@ -110,26 +110,30 @@ def createLogAsm(inBam, bed_dir, outDir, ref, window, cpu, windowAss, ploidy, so
     foutname.write("\tReference genome: %s\n" %(ref))
     foutname.write('** Optional arguments:\n')
     foutname.write("\tWindow: %s\n" %(window))
-    foutname.write("\tWindow for assembly: %s\n" %(windowAss))
     foutname.write("\tNumber of threads: %s\n" %(cpu))
-    foutname.write("\tPloidy: %s\n" %(ploidy))
     foutname.write("\tAssembler: %s\n" %(software))
-    foutname.write("\tHaplotyping deviation: %s\n" %(HaploDev))
-    foutname.write("\tMinimum supporting reads: %s\n" %(minimumSupport))
-    foutname.write("\tMinimum coverage: %s\n" %(minimumCoverage))
+    foutname.write("\tOtter: window for assembly: %s\n" %(windowAss))
+    foutname.write("\tOtter: expected ploidy: %s\n" %(ploidy))
+    foutname.write("\tOtter: omit non spanning reads: %s\n" %(omitNonSpanning))
+    foutname.write("\tOtter: ignore if coverage is above: %s\n" %(otterMaxCov))
+    foutname.write("\tOtter: maximum coverage fraction: %s\n" %(otterCovFrac))
+    foutname.write("\tOtter: minimum similarity: %s\n" %(otterMinSim))
     foutname.write("\n")
-    foutname.write('Effective command line:\nTREAT.py assembly -i %s -b %s -o %s -r %s -w %s -wAss %s -t %s -s %s -p %s -d %s -minSup %s -minCov %s\n' %(inBam, bed_dir, outDir, ref, window, windowAss, cpu, software, ploidy, HaploDev, minimumSupport, minimumCoverage))
+    foutname.write('Effective command line:\nTREAT.py assembly -i %s -b %s -o %s -r %s -w %s -wAss %s -t %s -s %s -p %s -ons %s -omc %s -ocf %s -oms %s \n' %(inBam, bed_dir, outDir, ref, window, windowAss, cpu, software, ploidy, omitNonSpanning, otterMaxCov, otterCovFrac, otterMinSim))
     foutname.close()
     print('** Log file written to %s/treat_run.log' %(outDir))
     return foutname
 
 ### FUNCTIONS FOR OTTER-BASED ASSEMBLY
 # Function to make assembly with otter and produce fasta files suitable for TRF - OK
-def assembly_otter_opt(s, output_directory, ref_fasta, bed_file, number_threads, windowAss):
+def assembly_otter_opt(s, output_directory, ref_fasta, bed_file, number_threads, windowAss, omitNonSpanning, otterMaxCov, otterCovFrac, otterMinSim, ploidy):
     # define output name with the right directory
     outname = s.split('/')[-1].replace('.bam', '.fa')
     # run otter -- -l was for spanning only
-    cmd = 'otter assemble -c 150 --fasta -b %s -r %s -R %s %s -t %s -o %s > %s/otter_local_asm/%s' %(bed_file, ref_fasta, outname, s, number_threads, windowAss, output_directory, outname)
+    if omitNonSpanning == 'True':
+        cmd = 'otter assemble -a %s -c %s -l --fasta -b %s -r %s -R %s %s -t %s -o %s -A %s -s %s > %s/otter_local_asm/%s' %(ploidy, otterMaxCov, bed_file, ref_fasta, outname, s, number_threads, windowAss, otterCovFrac, otterMinSim, output_directory, outname)
+    else:
+        cmd = 'otter assemble -a %s -c %s --fasta -b %s -r %s -R %s %s -t %s -o %s -A %s -s %s > %s/otter_local_asm/%s' %(ploidy, otterMaxCov, bed_file, ref_fasta, outname, s, number_threads, windowAss, otterCovFrac, otterMinSim, output_directory, outname)
     os.system(cmd)
     # adjust otter sequences
     return '%s/otter_local_asm/%s' %(output_directory, outname)
@@ -206,14 +210,14 @@ def run_trf_asm_opt(x, w):
     return res
 
 # Function for otter pipeline - OK
-def otterPipeline_opt(outDir, cpu, ref, bed_dir, inBam, count_reg, windowAss, window, bed):
+def otterPipeline_opt(outDir, cpu, ref, bed_dir, inBam, count_reg, windowAss, window, bed, omitNonSpanning, otterMaxCov, otterCovFrac, otterMinSim, ploidy):
     print('** Assembler: otter')
     # create directory for outputs
     os.system('mkdir %s/otter_local_asm' %(outDir))
     # run local assembly in multiprocessing -- optimized
     otter_start_time = time.time()
     pool = multiprocessing.Pool(processes=cpu)
-    otter_fun = partial(assembly_otter_opt, output_directory = outDir, ref_fasta = ref, bed_file = bed_dir, number_threads = cpu, windowAss = windowAss)
+    otter_fun = partial(assembly_otter_opt, output_directory = outDir, ref_fasta = ref, bed_file = bed_dir, number_threads = cpu, windowAss = windowAss, omitNonSpanning = omitNonSpanning, otterMaxCov = otterMaxCov, otterCovFrac = otterCovFrac, otterMinSim = otterMinSim, ploidy = ploidy)
     extract_results = pool.map(otter_fun, inBam)
     pool.close()
     otter_end_time = time.time()
@@ -284,7 +288,7 @@ def removeTemp(outDir):
 
 ### FUNCTIONS FOR HAPLOTYPING
 # Function that guides haplotyping - OK
-def haplotyping_steps_opt(data, n_cpu, thr_mad, min_support, type, outDir, inBam):
+def haplotyping_steps_opt(data, n_cpu, type, outDir, inBam):
     # Adjust the motifs in the data to find a uniform representation
     #data['UNIQUE_NAME'] = data.apply(lambda row: str(row['SAMPLE']) + '___' + str(row['REGION']) + '___' + str(row['HAPLOTYPE']), axis = 1)
     motif_start_time = time.time()

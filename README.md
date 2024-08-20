@@ -12,6 +12,7 @@ Depending on your system and your preferences, you can install **TREAT** and **o
 - manually, installing the necessary libraries and packages  
 - using the provided **Conda** environment  
 - using the provided **Docker** image (recommended option)  
+
 Independently from how you want to install **TREAT** and **otter**, you should clone this repository first by typing:  
 `git clone https://github.com/holstegelab/TREAT.git`
 

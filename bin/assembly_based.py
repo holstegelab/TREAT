@@ -6,8 +6,8 @@ from functions_assembly_based import *
 
 # Main
 # Read arguments and make small changes
-inBam_dir, bed_dir, outDir, ref, window, windowAss, cpu, ploidy, software, HaploDev, minimumSupport, minimumCoverage = sys.argv[1::]
-window = int(window); cpu = int(cpu); ploidy = int(ploidy); windowAss = int(windowAss); minimumSupport = int(minimumSupport)
+inBam_dir, bed_dir, outDir, ref, window, windowAss, cpu, ploidy, software, omitNonSpanning, otterMaxCov, otterCovFrac, otterMinSim = sys.argv[1::]
+window = int(window); cpu = int(cpu); ploidy = int(ploidy); windowAss = int(windowAss);
 
 # 1. Check arguments: BED, output directory and BAMs
 print('** Analysis started')
@@ -15,7 +15,7 @@ ts_total = time.time()
 # 1.1 Check output directory
 print(checkOutDir(outDir))
 # 1.2 Create Log file
-logfile = createLogAsm(inBam_dir, bed_dir, outDir, ref, window, cpu, windowAss, ploidy, software, HaploDev, minimumSupport, minimumCoverage)
+logfile = createLogAsm(inBam_dir, bed_dir, outDir, ref, window, cpu, windowAss, ploidy, software, omitNonSpanning, otterMaxCov, otterCovFrac, otterMinSim)
 # 1.3 Read bed file
 bed, count_reg, bed_dir = readBed(bed_dir, outDir)
 # 1.4 Check BAM files
@@ -24,9 +24,9 @@ inBam = checkBAM(inBam_dir)
 # 2. Check which software was selected and do things accordingly
 if software == 'otter':
     # Run local assembly and TRF
-    df_trf_phasing_combined = otterPipeline_opt(outDir, cpu, ref, bed_dir, inBam, count_reg, windowAss, window, bed)
+    df_trf_phasing_combined = otterPipeline_opt(outDir, cpu, ref, bed_dir, inBam, count_reg, windowAss, window, bed, omitNonSpanning, otterMaxCov, otterCovFrac, otterMinSim, ploidy)
     # Do directly the haplotyping so that we save on IO usage
-    print(haplotyping_steps_opt(data = df_trf_phasing_combined, n_cpu = cpu, thr_mad = HaploDev, min_support = minimumSupport, type = 'otter', outDir = outDir, inBam = inBam))
+    print(haplotyping_steps_opt(data = df_trf_phasing_combined, n_cpu = cpu, type = 'otter', outDir = outDir, inBam = inBam))
     # Remove temporary files
     removeTemp(outDir)
     te_total = time.time()

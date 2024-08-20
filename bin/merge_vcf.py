@@ -5,8 +5,11 @@ print('* Loading libraries')
 import pandas as pd
 import os
 import re
+import gzip
+import io
 import sys
 import time
+import numpy as np
 
 # Functions
 ### Functions to check input arguments
@@ -49,24 +52,96 @@ def checkVCF(vcf):
         sys.exit(1)  # Exit the script with a non-zero status code
 
 ### Functions to write output
-# function to write header of vcf file
-def writeVCFheader(output_fname):
-    # open file
-    outf = open(output_fname, 'w')
-    # write header
-    outf.write('##fileformat=VCFv4.2\n##INFO=<ID=REFERENCE_INFO,Number=2,Type=String,Description="Motif observed in the reference genome (GRCh38), and relative number of motif repetitions."\n##FORMAT=<ID=QC,Number=1,Type=String,Description="Quality summary of TREAT genotyping. PASS_BOTH: genotype agreed between reads-spanning and assembly. PASS_RSP: genotype from reads-spanning. PASS_ASM: genotype from assembly."\n##FORMAT=<ID=GT,Number=2,Type=String,Description="Phased size of the tandem repeats. H1_size | H2_size"\n##FORMAT=<ID=MOTIF,Number=2,Type=String,Description="Phased consensus motif found in the sample. H1_motif | H2_motif"\n##FORMAT=<ID=CN,Number=2,Type=String,Description="Phased number of copies of the motif found in the sample. H1_copies | H2_copies"\n##FORMAT=<ID=CN_REF,Number=2,Type=String,Description="Phased estimation of the reference motif as found in the sample. H1_motif_ref | H2_motif_ref"\n##FORMAT=<ID=DP,Number=1,Type=String,Description="Phased depth found in the sample. H1_depth | H2_depth"\n')
-    outf.close()
-    return
-
 # function to write outputs
 def writeOutputs(output_fname, vcf_data):
     # write header of vcf file
-    writeVCFheader(output_fname)
+    cmd = 'grep "##" %s > %s' %(vcf[0], output_fname) if '.gz' not in vcf[0] else 'zgrep "##" %s > %s' %(vcf[0], output_fname)
+    os.system(cmd)
+    # then write the dataframe
     with open(output_fname, mode='a') as file:
         vcf_data.to_csv(file, header=True, index=False, sep='\t')
     # then compress it
     os.system('gzip %s' %(output_fname))
-    return
+    return '** Output produced --> %s' %(output_fname)
+
+# Define a function to skip lines starting with '##'
+def skip_comment_lines(file):
+    if '.gz' in file:
+        with gzip.open(file, 'rt') as f:
+            lines = [line.rstrip().split('\t') for line in f if not line.startswith('##')]
+    else:
+        with open(file, 'r') as f:
+            lines = [line for line in f if not line.startswith('##')]
+    return pd.DataFrame(lines[1::], columns = lines[0])
+
+# Combine 2 dataframes resembling the VCF
+def combine_2_df(df1, df2):
+    common_df = pd.DataFrame()
+    # iterates over the rows of dataframe 2 (not the merged)
+    for index, row in df2.iterrows():
+        # take regions
+        region2 = row['ID']
+        # create dictionary with alleles mapping
+        al_map = {}
+        all_alt = []
+        # check if region is in merged df1
+        if region2 in list(df1['ID']):
+            temp_df = df1[df1['ID'] == region2].copy()
+            # then extract the alleles from both
+            alt2 = row['ALT'].split(',')
+            all_alt = [x.split(',') for x in temp_df['ALT']][0]
+            # check if alleles are the same, otherwise add them to the merged df
+            for al in alt2:
+                if al in all_alt:
+                    al_index = all_alt.index(al) + 1
+                    al_map[alt2.index(al) + 1] = al_index
+                else:
+                    all_alt.append(al)
+                    al_index = len(all_alt)
+                    al_map[alt2.index(al) + 1] = al_index
+            # after checking the alleles, we need to reformat the samples
+            temp_df['ALT'] = ','.join(all_alt)
+            for col in df2.iloc[:, 9:]:
+                tmp_value = row[col]
+                # update the genotype based on the mapping dictionary
+                tmp_mod = np.array([replace_field(arr = tmp_value, replace_dict = al_map)])
+                temp_df[col] = tmp_mod
+            # finally add to the common df
+            common_df = pd.concat([common_df, temp_df])
+        else:
+            temp_df = pd.DataFrame([row.values[0:9]], columns = ['#CHROM', 'POS', 'ID', 'REF', 'ALT', 'QUAL', 'FILTER', 'INFO', 'FORMAT'])
+            # add all samples from df1
+            for col in df1.iloc[:, 9:]:
+                temp_df[col] = 'NA;NA;NA;NA;NA;NA;NA'
+            # then add all samples from df2
+            for col in range(9, len(row)):
+                temp_df[df2.columns[col]] = row[col]
+            # finally add to the common df
+            common_df = pd.concat([common_df, temp_df])
+    # then we need to add the rows of dataframe 1 not in 2
+    for index, row in df1.iterrows():
+        region1 = row['ID']
+        if region1 not in list(df2['ID']):
+            temp_df = pd.DataFrame([row.values], columns = df1.columns)
+            # then add all samples from df2
+            for col in df2.iloc[:, 9:]:
+                temp_df[col] = 'NA;NA;NA;NA;NA;NA;NA'
+            # finally add to the common df
+            common_df = pd.concat([common_df, temp_df])
+    return common_df
+
+# Function to replace array entry based on a dictionary
+def replace_field(arr, replace_dict):
+    # Split the string by semicolons
+    fields = arr.split(';')
+    # Split the second field by pipe and replace using the dictionary
+    field_2 = fields[1].split('|')
+    field_2 = [str(replace_dict[int(x)]) for x in field_2]
+    # Join the modified field back with pipe
+    fields[1] = '|'.join(field_2)
+    # Join all fields back into a single string
+    modified_string = ';'.join(fields)
+    return modified_string
 
 # Main
 # Read arguments
@@ -82,36 +157,20 @@ print(checkOutDir(outDir))
 print(checkVCF(vcf))
 
 # 2. Read the first VCF
-first = pd.read_csv(vcf[0], sep="\t", skiprows=8)
+combined_df = skip_comment_lines(vcf[0])
 # then iteratively read the others and merge them with the first
 for f in vcf[1::]:
-    tmp = pd.read_csv(f, sep="\t", skiprows=8)
-    # merge common ids
-    tmp_sb = tmp.iloc[:, [2] + list(range(9, len(tmp.columns)))]
-    merged_df = first.merge(tmp_sb, on='ID', how='inner')
-    # find common elements in "ID" column
-    common_ids = first['ID'].isin(merged_df['ID'])
-    common_ids_df2 = tmp['ID'].isin(merged_df['ID'])
-    # find elements unique to df1
-    unique_to_df1 = first[~common_ids].copy()
-    # add NAs
-    samples_df2 = list(tmp.columns[9::])
-    for newsam in samples_df2:
-        unique_to_df1[newsam] = 'NA;NA|NA;NA|NA;NA|NA;NA|NA;NA|NA'
-    # the the other way around - find elements unique to df2
-    unique_to_df2 = tmp[~common_ids_df2].copy()
-    # add NAs
-    samples_df1 = list(first.columns[9::])
-    for newsam in samples_df1:
-        unique_to_df2[newsam] = 'NA;NA|NA;NA|NA;NA|NA;NA|NA;NA|NA'
-    # combine all together
-    complete_df = pd.concat([merged_df, unique_to_df1, unique_to_df2], ignore_index=True)
-    first = complete_df
+    print('** combining VCF %s/%s' %(vcf.index(f) + 1, len(vcf)))
+    tmp = skip_comment_lines(f)
+    # combine the 2 dfs
+    combined_df = combine_2_df(df1 = combined_df, df2 = tmp)
 
 # 3. write output file
 output_fname = '%s/%s' %(outDir, outName)
 output_fname = output_fname.replace('.gz', '')
-writeOutputs(output_fname, first)
+if '.vcf' not in output_fname:
+    output_fname = output_fname + '.vcf'
+writeOutputs(output_fname, combined_df)
 
 te_total = time.time()
 time_total = te_total - ts_total
