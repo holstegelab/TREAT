@@ -133,6 +133,9 @@ analAnal.add_argument("-t", "--madThr", default = 5, help = "Median Absolute dev
 analAnal.add_argument("-c", "--cpu", default = 1, help = "Number of CPUs to use (Default: 1).", required = False)
 # add arguments: --known is the boundary from previous studies
 analAnal.add_argument("-k", "--known", default = 'none', help = 'Incorporate knowledge for outlier detection. Please submit a tab-delimited file with 4 columns: CHROM, START, END, BOUNDARY. BOUNDARY should indicate the allele size boundary (in bp). Alleles with size larger than this boundary will be reported.', required = False)
+# add arguments: --covariate is for adding covariates to the case-control association
+parser.add_argument("-cv", "--covariate", required=False, help = "Any covariate you might want to include in the association analysis. This should be a tab-separated file with ad least 2 columns and no header, reporting sample name and the relative covariate. Only valid for case-control association.", default="None")
+
 ###########################################################
 
 ###########################################################
@@ -225,7 +228,7 @@ elif args.cmd == 'analysis':
     RUN = True
     # define script to run and arguments
     script_path = 'treat_analysis.py'
-    arguments = [args.analysis, args.vcf, args.outDir, args.outName, args.region, args.madThr, args.labels, args.cpu, args.known]
+    arguments = [args.analysis, args.vcf, args.outDir, args.outName, args.region, args.madThr, args.labels, args.cpu, args.known, args.covariate]
 elif args.cmd == 'plot':
     # set flag to true
     RUN = True
@@ -248,7 +251,7 @@ if RUN == True:
     if script_path in ['read_based.py', 'assembly_based.py', 'merge_vcf.py']:
         main_script = 'python3.6 %s/%s %s' %(main_path, script_path, ' '.join(arguments))
     elif script_path == 'treat_analysis.py':
-        main_script = '%s/%s --analysis %s --vcf %s --outDir %s --outName %s --region %s --madThr %s --labels %s --cpu %s --known %s' %(main_path, script_path, arguments[0], arguments[1], arguments[2], arguments[3], arguments[4], arguments[5], arguments[6], arguments[7], arguments[8])
+        main_script = '%s/%s --analysis %s --vcf %s --outDir %s --outName %s --region %s --madThr %s --labels %s --cpu %s --known %s --covariate %s' %(main_path, script_path, arguments[0], arguments[1], arguments[2], arguments[3], arguments[4], arguments[5], arguments[6], arguments[7], arguments[8], arguments[9])
     elif script_path == 'treat_plot.R':
         main_script = 'Rscript %s/%s --vcf %s --out %s --outname %s --region %s --plotformat %s --customColors %s --path %s --type %s' %(main_path, script_path, arguments[0], arguments[1], arguments[2], arguments[3], arguments[4], arguments[5], main_path, arguments[6])
     os.system(main_script)

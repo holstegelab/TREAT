@@ -29,6 +29,7 @@ parser.add_argument("-v", "--vcf", default = 'None', help = "VCF file output of 
 # optional arguments
 # add arguments: --file is the case-control labels (mandatory if case-control is selected)
 parser.add_argument("-l", "--labels", required=False, help = "Labels for case-control association. Only valid if case-control analysis is selected. This should be a tab-separated file with 2 columns and no header, reporting sample name and a binary label.", default='None')
+# add arguments: --covariate is for adding covariates to the case-control association
 parser.add_argument("-cv", "--covariate", required=False, help = "Any covariate you might want to include in the association analysis. This should be a tab-separated file with ad least 2 columns and no header, reporting sample name and the relative covariate. Only valid for case-control association.", default="None")
 # add arguments: --out is the output directory
 parser.add_argument("-o", "--outDir", default = './', help = "Output directory where output will be placed. Default is the current directory.", required = False)
