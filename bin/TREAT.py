@@ -134,7 +134,7 @@ analAnal.add_argument("-c", "--cpu", default = 1, help = "Number of CPUs to use 
 # add arguments: --known is the boundary from previous studies
 analAnal.add_argument("-k", "--known", default = 'none', help = 'Incorporate knowledge for outlier detection. Please submit a tab-delimited file with 4 columns: CHROM, START, END, BOUNDARY. BOUNDARY should indicate the allele size boundary (in bp). Alleles with size larger than this boundary will be reported.', required = False)
 # add arguments: --covariate is for adding covariates to the case-control association
-parser.add_argument("-cv", "--covariate", required=False, help = "Any covariate you might want to include in the association analysis. This should be a tab-separated file with ad least 2 columns and no header, reporting sample name and the relative covariate. Only valid for case-control association.", default="None")
+analAnal.add_argument("-cv", "--covariate", required=False, help = "Any covariate you might want to include in the association analysis. This should be a tab-separated file with ad least 2 columns and no header, reporting sample name and the relative covariate. Only valid for case-control association.", default="None")
 
 ###########################################################
 
