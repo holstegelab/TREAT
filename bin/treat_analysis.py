@@ -29,18 +29,19 @@ parser.add_argument("-v", "--vcf", default = 'None', help = "VCF file output of 
 # optional arguments
 # add arguments: --file is the case-control labels (mandatory if case-control is selected)
 parser.add_argument("-l", "--labels", required=False, help = "Labels for case-control association. Only valid if case-control analysis is selected. This should be a tab-separated file with 2 columns and no header, reporting sample name and a binary label.", default='None')
+parser.add_argument("-cv", "--covariate", required=False, help = "Any covariate you might want to include in the association analysis. This should be a tab-separated file with ad least 2 columns and no header, reporting sample name and the relative covariate. Only valid for case-control association.", default="None")
 # add arguments: --out is the output directory
 parser.add_argument("-o", "--outDir", default = './', help = "Output directory where output will be placed. Default is the current directory.", required = False)
 # add arguments: --outname is the name of the output file
 parser.add_argument("-n", "--outName", default = 'treat_outlier_analysis.txt', help = "Name of the plot. Default name is treat_analysis_output.txt", required = False)
 # add arguments: --region is the name of the region to analyze
-parser.add_argument("-r", "--region", default = 'all', help = "Name of the region to analyze. By default, all regions will be analyzed.", required = False)
+parser.add_argument("-r", "--region", default = 'all', help = "Name of the region to analyze. By default, all regions will be analyzed. Can be a single region, a comma-separated list of region, or a file reporting the region ID to include. The file should must have no header and should report region ID (one per line).", required = False)
 # add arguments: --madThr is the value to call outliers
 parser.add_argument("-t", "--madThr", default = 5, help = "Median Absolute deviation value used to call outliers.", required = False)
 # add arguments: --cpu is the number of cpus to use
 parser.add_argument("-c", "--cpu", default = 1, help = "Number of CPUs to use (Default: 1)", required = False)
 # add arguments: --known is the known boundary for TRs
-parser.add_argument("-k", "--known", default = 'none', help = "Incorporate knowledge for outlier detection. Please submit a tab-delimited file with 4 columns: CHROM, START, END, BOUNDARY. BOUNDARY should indicate the allele size boundary (in bp). Alleles with size larger than this boundary will be reported.", required = False)
+parser.add_argument("-k", "--known", default = 'None', help = "Incorporate knowledge for outlier detection. Please submit a tab-delimited file with 4 columns: CHROM, START, END, BOUNDARY. BOUNDARY should indicate the allele size boundary (in bp). Alleles with size larger than this boundary will be reported.", required = False)
 ###########################################################
 
 ###########################################################
@@ -80,8 +81,19 @@ def checkRegion(region):
     if region == 'all':
         print('** All regions will be analyzed.')
     else:
-        region = region.split(',')
-        print('** %s regions will be analyzed.' %(len(region)))
+        # First check whether the input is a file or a list of regions
+        if ',' in region:
+            region = region.split(',')
+            print('** %s regions will be analyzed.' %(len(region)))
+        else:
+            # Check if file exists
+            if os.path.exists(region):
+                regions_file = open(region, "r").readlines()
+                region = [x.rstrip() for x in regions_file]
+                print('** %s regions will be analyzed.' %(len(region)))
+            else:
+                print('!! A file including regions was requested, but the file does not exist. Please check the path.\n')
+                sys.exit(1)
     return region
 
 # Function to check labels
@@ -114,7 +126,7 @@ def checkLabels(labels):
 
 # Function to read (if submitted) file with known TR boundaries
 def known_boundaries(known):
-    if known == 'none':
+    if known == 'None':
         print("** No file with known TR boundaries submitted.")
         return 'none'
     elif os.path.exists(known):
@@ -269,11 +281,13 @@ def giveAllele(allele, type):
         return np.nan
 
 # Function for case-control analysis
-def casecontrol_analysis(inp_vcf, region, labels_dic, cpu, out_dir, out_name):
+def casecontrol_analysis(inp_vcf, region, labels_dic, cpu, out_dir, out_name, covariate):
     # initialize output file
     fout = open('%s/%s' %(out_dir, out_name), 'w')
     fout.write('REGION\tBETA_SHORT\tSE_SHORT\tLOW_CI_SHORT\tUP_CI_SHORT\tP_SHORT\tBETA_LONG\tSE_LONG\tLOW_CI_LONG\tUP_CI_LONG\tP_LONG\tBETA_JOIN\tSE_JOIN\tLOW_CI_JOIN\tUP_CI_JOIN\tP_JOIN\n')
     fout.close()
+    # read covariates
+    covariates = readCovar(covariate, labels_dic)
     # list for sample names
     sample_names = []
     # iterate over regions
@@ -308,13 +322,16 @@ def casecontrol_analysis(inp_vcf, region, labels_dic, cpu, out_dir, out_name):
                         # extract list of sum of both alleles
                         join_alleles = [giveAllele(x, 'sum') for x in allele_sizes]
                         # combine in a dataframe
-                        df_alleles = createDF(labels_dic, sample_names, short_alleles, long_alleles, join_alleles)                        
+                        df_alleles = createDF(labels_dic, sample_names, short_alleles, long_alleles, join_alleles)
+                        # add covariates if they are there
+                        if covariate != 'None':
+                            df_alleles = pd.merge(df_alleles, covariates, left_on = 'Sample', right_on = 'ID')
                         # run association for short
-                        res_short = logit(df_alleles, 'Short')
+                        res_short = logit(df_alleles, 'Short', covariate, covariates)
                         # run association for long
-                        res_long = logit(df_alleles, 'Long')
+                        res_long = logit(df_alleles, 'Long', covariate, covariates)
                         # run association for join
-                        res_join = logit(df_alleles, 'Join')
+                        res_join = logit(df_alleles, 'Join', covariate, covariates)
                         # combine results
                         comb_res = [[id] + res_short + res_long + res_join]
                         comb_df = pd.DataFrame(comb_res, columns = ['REGION', 'BETA_SHORT', 'SE_SHORT', 'LOW_CI_SHORT', 'UP_CI_SHORT', 'P_SHORT', 'BETA_LONG', 'SE_LONG', 'LOW_CI_LONG', 'UP_CI_LONG', 'P_LONG', 'BETA_JOIN', 'SE_JOIN', 'LOW_CI_JOIN', 'UP_CI_JOIN', 'P_JOIN'])
@@ -325,17 +342,31 @@ def casecontrol_analysis(inp_vcf, region, labels_dic, cpu, out_dir, out_name):
     return'** Analysis completed. Cheers!'
 
 # Function to do logistic regression
-def logit(df_alleles, type):
+def logit(df_alleles, type, covariate, covariates):
     try:
-        # short allele
-        model = Logit.from_formula('Label ~ %s' %(type), data = df_alleles)
-        result = model.fit(disp=0)
-        beta = result.params[1]
-        se = result.bse[1]
-        lowci = result.conf_int()[0][1]
-        upci = result.conf_int()[1][1]
-        pval = result.pvalues[1]
-        return [beta, se, lowci, upci, pval]
+        if covariate != 'None':
+            # Identify covariates
+            covariates_name = [x for x in list(covariates.columns) if 'COVAR' in x]
+            # Fit the model with covariates
+            model = Logit.from_formula("Label ~ %s + %s" %(type, ' + '.join(covariates_name)), data=df_alleles)
+            result = model.fit(disp=0)
+            # Extract the relevant results
+            beta = result.params[type]
+            se = result.bse[type]
+            lowci = result.conf_int().loc[type][0]
+            upci = result.conf_int().loc[type][1]
+            pval = result.pvalues[type]
+            return [beta, se, lowci, upci, pval]
+        else:
+            # short allele
+            model = Logit.from_formula('Label ~ %s' %(type), data = df_alleles)
+            result = model.fit(disp=0)
+            beta = result.params[1]
+            se = result.bse[1]
+            lowci = result.conf_int()[0][1]
+            upci = result.conf_int()[1][1]
+            pval = result.pvalues[1]
+            return [beta, se, lowci, upci, pval]
     except:
         return ['NA', 'NA', 'NA', 'NA', 'NA']
 
@@ -362,10 +393,43 @@ def check_values_in_dict(sample_names, labels_dic):
     else:
         return '** Not all samples in VCF have a phenotype. Those without phenotype will be excluded.'
 
+# Function to read covariates
+def readCovar(covariate, labels_dic):
+    # Check if covariates were requested
+    if covariate != 'None':
+        print(f"** Reading covariate file")
+        try:
+            # Open covariate file
+            covar_file = pd.read_csv(covariate, sep="\t", header=None)
+            covar_names = [f"COVAR{i}" for i in range(covar_file.shape[1]-1)]
+            covar_file.columns = ['ID'] + covar_names
+            covar_file['ID'] = covar_file['ID'].astype(str)
+            # Compare with labels
+            labels_dic_covar = {}
+            matching_samples = []
+            for group in labels_dic.keys():
+                for sample in labels_dic[group]:
+                    if sample in list(covar_file['ID']):
+                        matching_samples.append(sample)
+                        if group in labels_dic_covar.keys():
+                            labels_dic_covar[group].append(sample)
+                        else:
+                            labels_dic_covar[group] = [sample]
+            print(f"** After matiching, covariates are available for {len(matching_samples)}:")
+            for key1 in labels_dic_covar.keys():
+                print(f"\t** {len(labels_dic_covar[key1])} are with label {key1}")
+            # Make subset of covariates
+            covar_final = covar_file[covar_file['ID'].isin(matching_samples)].copy()
+            return covar_final
+        except:
+            print(f"!!! There was an error while reading the covariate file. Please ensure the format is correct and try again.")
+    else:
+        return 'None'    
+
 # Main
 ###########################################################
 # Parse input arguments and set up for running
-inp_vcf, analysis, labels, out_dir, out_name, region, madThr, cpu, known = args.vcf, args.analysis, args.labels, args.outDir, args.outName, args.region, int(args.madThr), args.cpu, args.known
+inp_vcf, analysis, labels, out_dir, out_name, region, madThr, cpu, known, covariate = args.vcf, args.analysis, args.labels, args.outDir, args.outName, args.region, int(args.madThr), args.cpu, args.known, args.covariate
 if analysis == 'case-control' and labels == 'None':
     print('!! Case-control analysis was chosen, but no case-control labels were given. Exiting.\n')
     sys.exit(1)
@@ -383,7 +447,7 @@ elif analysis == 'case-control' and labels != 'None':
     if out_name == 'treat_analysis_output.txt':
         out_name = 'treat_casecontrol_analysis.txt'
     # case-control analysis
-    casecontrol_analysis(inp_vcf, regions, labels_dic, cpu, out_dir, out_name)
+    casecontrol_analysis(inp_vcf, regions, labels_dic, cpu, out_dir, out_name, covariate)
 elif analysis == 'outlier':
     print('** Outlier analysis was chosen')
     # check output directory
