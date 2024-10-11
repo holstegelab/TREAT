@@ -366,14 +366,18 @@ def logit(df_alleles, type, covariate, covariates):
                 upci = result.conf_int().loc[type][1]
             return [beta, se, lowci, upci, pval]
         else:
-            # short allele
+            # model
             model = Logit.from_formula('Label ~ %s' %(type), data = df_alleles)
             result = model.fit(disp=0)
-            beta = result.params[1]
-            se = result.bse[1]
-            lowci = result.conf_int()[0][1]
-            upci = result.conf_int()[1][1]
-            pval = result.pvalues[1]
+            # Extract the relevant results if the model converged
+            if not result.mle_retvals['converged']:
+                beta, se, lowci, upci, pval = 'NA', 'NA', 'NA', 'NA', 'NA'
+            else:
+                pval = result.pvalues[1]
+                beta = result.params[type]
+                se = result.bse[type]
+                lowci = result.conf_int().loc[type][0]
+                upci = result.conf_int().loc[type][1]
             return [beta, se, lowci, upci, pval]
     except (RuntimeError, OverflowError):
         return ['NA', 'NA', 'NA', 'NA', 'NA']
