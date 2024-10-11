@@ -384,7 +384,7 @@ def logit(df_alleles, type, covariate, covariates):
                 lowci = result.conf_int().loc[type][0]
                 upci = result.conf_int().loc[type][1]
             return [beta, se, lowci, upci, pval]
-    except (RuntimeError, OverflowError):
+    except:
         return ['NA', 'NA', 'NA', 'NA', 'NA']
 
 # Function to create dataframe with values of interest for the logistic regression
