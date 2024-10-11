@@ -286,6 +286,7 @@ def giveAllele(allele, type):
 
 # Function for case-control analysis
 def casecontrol_analysis(inp_vcf, region, labels_dic, cpu, out_dir, out_name, covariate):
+    warnings.filterwarnings('ignore')
     # initialize output file
     fout = open('%s/%s' %(out_dir, out_name), 'w')
     fout.write('REGION\tBETA_SHORT\tSE_SHORT\tLOW_CI_SHORT\tUP_CI_SHORT\tP_SHORT\tBETA_LONG\tSE_LONG\tLOW_CI_LONG\tUP_CI_LONG\tP_LONG\tBETA_JOIN\tSE_JOIN\tLOW_CI_JOIN\tUP_CI_JOIN\tP_JOIN\n')
@@ -313,7 +314,7 @@ def casecontrol_analysis(inp_vcf, region, labels_dic, cpu, out_dir, out_name, co
                     sys.exit(1)
                 else:
                     # check if 1 region need to be processed or all of them
-                    if (isinstance(region, list) == True and id in region) or (isinstance(region, list) == False):
+                    if (isinstance(region, list) == True and id in region) or (isinstance(region, list) == False and id == region):
                         # extract genotypes per sample
                         if format == 'QC;GT;GT_LEN;MOTIF;CN;CN_REF;DP':
                             allele_sizes = [x.decode('utf-8').split(';')[2] for x in line[9::]] + [len(ref)]
@@ -354,12 +355,15 @@ def logit(df_alleles, type, covariate, covariates):
             # Fit the model with covariates
             model = Logit.from_formula("Label ~ %s + %s" %(type, ' + '.join(covariates_name)), data=df_alleles)
             result = model.fit(disp=0)
-            # Extract the relevant results
-            beta = result.params[type]
-            se = result.bse[type]
-            lowci = result.conf_int().loc[type][0]
-            upci = result.conf_int().loc[type][1]
-            pval = result.pvalues[type]
+            # Extract the relevant results if the model converged
+            if not result.mle_retvals['converged']:
+                beta, se, lowci, upci, pval = 'NA', 'NA', 'NA', 'NA', 'NA'
+            else:
+                pval = result.pvalues[1]
+                beta = result.params[type]
+                se = result.bse[type]
+                lowci = result.conf_int().loc[type][0]
+                upci = result.conf_int().loc[type][1]
             return [beta, se, lowci, upci, pval]
         else:
             # short allele
@@ -371,7 +375,7 @@ def logit(df_alleles, type, covariate, covariates):
             upci = result.conf_int()[1][1]
             pval = result.pvalues[1]
             return [beta, se, lowci, upci, pval]
-    except:
+    except (RuntimeError, OverflowError):
         return ['NA', 'NA', 'NA', 'NA', 'NA']
 
 # Function to create dataframe with values of interest for the logistic regression
