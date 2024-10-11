@@ -293,6 +293,9 @@ def casecontrol_analysis(inp_vcf, region, labels_dic, cpu, out_dir, out_name, co
     fout.close()
     # read covariates
     covariates = readCovar(covariate, labels_dic)
+    # counter 
+    counter = 0
+    n_tot_regions = len(region) if (isinstance(region, list)) else 1
     # list for sample names
     sample_names = []
     # iterate over regions
@@ -315,6 +318,8 @@ def casecontrol_analysis(inp_vcf, region, labels_dic, cpu, out_dir, out_name, co
                 else:
                     # check if 1 region need to be processed or all of them
                     if (isinstance(region, list) == True and id in region) or (isinstance(region, list) == False and id == region):
+                        counter += 1
+                        print('*** Association analysis: processed %s% of regions' %(round(counter/n_tot_regions*100, 2)))
                         # extract genotypes per sample
                         if format == 'QC;GT;GT_LEN;MOTIF;CN;CN_REF;DP':
                             allele_sizes = [x.decode('utf-8').split(';')[2] for x in line[9::]] + [len(ref)]
