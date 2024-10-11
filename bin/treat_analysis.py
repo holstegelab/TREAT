@@ -346,7 +346,7 @@ def casecontrol_analysis(inp_vcf, region, labels_dic, cpu, out_dir, out_name, co
                         comb_res = [[id] + res_short + res_long + res_join]
                         comb_df = pd.DataFrame(comb_res, columns = ['REGION', 'BETA_SHORT', 'SE_SHORT', 'LOW_CI_SHORT', 'UP_CI_SHORT', 'P_SHORT', 'BETA_LONG', 'SE_LONG', 'LOW_CI_LONG', 'UP_CI_LONG', 'P_LONG', 'BETA_JOIN', 'SE_JOIN', 'LOW_CI_JOIN', 'UP_CI_JOIN', 'P_JOIN'])
                         # append to file
-                        comb_df.to_csv('%s/%s' %(out_dir, out_name), mode = 'a', header = False, index = False, sep = "\t")
+                        comb_df.to_csv('%s/%s' %(out_dir, out_name), mode = 'a', header = False, index = False, sep = "\t", na_rep='NA')
                     else:
                         pass
     return'** Analysis completed. Cheers!'
