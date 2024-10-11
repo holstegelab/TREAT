@@ -86,6 +86,9 @@ def checkRegion(region):
         if ',' in region:
             region = region.split(',')
             print('** %s regions will be analyzed.' %(len(region)))
+        elif ':' in region:
+            region = [region]
+            print('** 1 region will be analyzed.')
         else:
             # Check if file exists
             if os.path.exists(region):
@@ -122,7 +125,7 @@ def checkLabels(labels):
             print('** Found %s samples with label %s' %(len(labels_dic[list(labels_dic.keys())[1]]), list(labels_dic.keys())[1]))
             return labels_dic
     else:
-        print('!! Input VCF does not exist. Please check. Exiting.')
+        print('!! Input file does not exist. Please check. Exiting.')
         sys.exit(1)
 
 # Function to read (if submitted) file with known TR boundaries
