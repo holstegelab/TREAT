@@ -6,6 +6,12 @@
 **TREAT** is a command line tool written in **Python** and **R** (for plotting) that can be used to work with tandem repeats and structural variants from long-read sequencing data. **TREAT** was developed specifically for long-read sequencing data. However, it can potentially be used with any sequencing data, including PacBio, Oxford Nanopore, and Illumina.  
 **TREAT** integrates a novel targeted local assembler, [**otter**](https://github.com/holstegelab/otter)
 
+## Publication and citation
+
+**TREAT** and **otter** were published in *Genome Research* in 2024. If you use these tools, please cite:
+
+Tesi N, Salazar A, Zhang Y, et al. (2024). **Characterizing tandem repeat complexities across long-read sequencing platforms with TREAT and otter.** *Genome Research*, **34**(11), 1942–1953. [doi:10.1101/gr.279351.124](https://doi.org/10.1101/gr.279351.124). [Full text](https://genome.cshlp.org/content/34/11/1942).
+
 
 ## How do you install TREAT
 Depending on your system and your preferences, you can install **TREAT** and **otter** in various ways:  
