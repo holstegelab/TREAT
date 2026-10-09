@@ -6,7 +6,8 @@ from functions_read_based import *
 
 # Main
 # Read arguments and make small changes
-inBam_dir, bed_dir, outDir, ref, window, cpu, phasingData, mappingSNP, HaploDev, minimumSupport, minimumCoverage, rawSequences = sys.argv[1::]
+inBam_dir, bed_dir, outDir, ref, window, cpu, phasingData, mappingSNP, HaploDev, minimumSupport, minimumCoverage, rawSequences, maxClippedFraction = sys.argv[1::]
+maxClippedFraction = float(maxClippedFraction)
 window = int(window); cpu = int(cpu); minimumSupport = int(minimumSupport)
 if HaploDev == 'None':
     HaploDev = 0.10
@@ -19,11 +20,15 @@ ts_total = time.time()
 # 1.1 Check output directory
 print(checkOutDir(outDir))
 # 1.2 Create Log file
-logfile = createLogReads(inBam_dir, bed_dir, outDir, ref, window, cpu, phasingData, mappingSNP, HaploDev, minimumSupport, minimumCoverage)
+logfile = createLogReads(inBam_dir, bed_dir, outDir, ref, window, cpu, phasingData, mappingSNP, HaploDev, minimumSupport, minimumCoverage, maxClippedFraction)
 # 1.3 Read bed file
 bed, count_reg, bed_dir = readBed(bed_dir, outDir)
 # 1.3 Check BAM files
 inBam = checkBAM(inBam_dir)
+try:
+    bed = resolveChromosomes(bed, inBam, ref, bed_dir)
+except ValueError as error:
+    sys.exit('!!! %s\nExecution halted.' % error)
 
 # 2. Extract sequence of interest
 ts = time.time()
@@ -102,7 +107,7 @@ df_trf_phasing_combined = pd.merge(df_trf_combined, combined_haplotags_df, left_
 
 # 5. Do directly the haplotyping so that we save on IO usage
 ts = time.time()
-df_seq, df_raw = haplotyping_steps(data = df_trf_phasing_combined, n_cpu = cpu, thr_mad = HaploDev, min_support = minimumSupport, type = 'reads', outDir = outDir, all_clipping_df = all_clipping_df, inBam = inBam)
+df_seq, df_raw = haplotyping_steps(data = df_trf_phasing_combined, n_cpu = cpu, thr_mad = HaploDev, min_support = minimumSupport, type = 'reads', outDir = outDir, all_clipping_df = all_clipping_df, inBam = inBam, maxClippedFraction = maxClippedFraction)
 te = time.time()
 time_write = te-ts
 print('*** Operation took %s seconds\t\t\t\t\t\t\t\t\t\t\t\t' %(round(time_write, 0)))

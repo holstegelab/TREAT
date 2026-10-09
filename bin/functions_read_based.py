@@ -18,6 +18,7 @@ from sklearn.cluster import KMeans
 #import shutil
 import warnings
 import gzip
+from chromosome_names import resolveChromosomes
 
 ##########################################################
 ###### COMMON BASIC FUNCTIONS TO READS AND ASSEMBLY ANALYSIS
@@ -43,9 +44,6 @@ def readBed(bed_dir, out_dir):
                         chrom, start, end = line[0:3]
                         region_id = chrom + ':' + start + '-' + end
                         count_reg += 1
-                        # add chromosome label if not there
-                        if 'chr' not in chrom:
-                            chrom = 'chr' + str(chrom)
                         # check size of interval, if 0 or negative, put 1
                         if int(end) - int(start) <= 0:
                             counter_invalid += 1
@@ -104,7 +102,7 @@ def checkBAM(bam_dir):
         sys.exit(1)  # Exit the script with a non-zero status code
 
 # Function to create Log file -- Reads analysis
-def createLogReads(inBam, bed_dir, outDir, ref, window, cpu, phasingData, mappingSNP, HaploDev, minimumSupport, minimumCoverage):
+def createLogReads(inBam, bed_dir, outDir, ref, window, cpu, phasingData, mappingSNP, HaploDev, minimumSupport, minimumCoverage, maxClippedFraction=0.20):
     foutname = open('%s/treat_run.log' %(outDir), 'w')
     foutname.write('Read-based analysis selected\n')
     foutname.write('** Required argument:\n')
@@ -120,8 +118,9 @@ def createLogReads(inBam, bed_dir, outDir, ref, window, cpu, phasingData, mappin
     foutname.write("\tHaplotyping deviation: %s\n" %(HaploDev))
     foutname.write("\tMinimum supporting reads: %s\n" %(minimumSupport))
     foutname.write("\tMinimum coverage: %s\n" %(minimumCoverage))
+    foutname.write("\tMaximum clipped fraction: %s\n" %(maxClippedFraction))
     foutname.write("\n")
-    foutname.write('Effective command line:\nTREAT.py reads -i %s -b %s -o %s -r %s -w %s -t %s -p %s -m %s -d %s -minSup %s -minCov %s\n' %(inBam, bed_dir, outDir, ref, window, cpu, phasingData, mappingSNP, HaploDev, minimumSupport, minimumCoverage))
+    foutname.write('Effective command line:\nTREAT.py reads -i %s -b %s -o %s -r %s -w %s -t %s -p %s -m %s -d %s -minSup %s -minCov %s --maxClippedFraction %s\n' %(inBam, bed_dir, outDir, ref, window, cpu, phasingData, mappingSNP, HaploDev, minimumSupport, minimumCoverage, maxClippedFraction))
     foutname.close()
     print('** Log file written to %s/treat_run.log' %(outDir))
     return foutname
@@ -352,10 +351,6 @@ def measureDistance_reference(bed_file, window, ref, output_directory):
     # sequence with paddings
     awk_command = """awk '{print $1":"$2-%s"-"$3+%s}' %s > %s_reformatted.txt""" %(window, window, bed_file, bed_file)
     os.system(awk_command)
-    # if reference is not GRCh38, then we need to exclude the 'chr' from the bed file otherwise it will not work
-    if 'GRCh37' in ref or 'hg19' in ref or 'hg37' in ref:
-        sed_cmd = "sed -i 's/chr//g' %s_reformatted.txt" %(bed_file)
-        os.system(sed_cmd)        
     sequence_in_reference_with_padding = [x.rstrip() for x in list(os.popen('samtools faidx -r %s_reformatted.txt %s' %(bed_file, ref)))]        # sequence without padding
     # then store these results
     distances = []
@@ -565,7 +560,7 @@ def combine_data_afterPhasing(outDir):
 
 # FUNCTIONS FOR HAPLOTYPING
 # main function that guides haplotyping
-def haplotyping_steps(data, n_cpu, thr_mad, min_support, type, outDir, all_clipping_df, inBam):
+def haplotyping_steps(data, n_cpu, thr_mad, min_support, type, outDir, all_clipping_df, inBam, maxClippedFraction=0.20):
     # STEP 1 IS TO ADJUST THE DATA BEFORE WE START
     data['START_TRF'] = pd.to_numeric(data['START_TRF'], errors='coerce')
     data['END_TRF'] = pd.to_numeric(data['END_TRF'], errors='coerce')
@@ -622,7 +617,7 @@ def haplotyping_steps(data, n_cpu, thr_mad, min_support, type, outDir, all_clipp
         # also take any relevant clipping event in the sample and region of interest
         temp_clipping = all_clipping_df[all_clipping_df['REGION'].isin(list(sbs['REGION'])) & all_clipping_df['SAMPLE'].isin(list(sbs['SAMPLE_NAME']))]
         pool = multiprocessing.Pool(processes=n_cpu)
-        haplo_fun = partial(haplotyping, s = s, thr_mad = thr_mad, type = type, reference_motif_dic = reference_motif_dic, intervals = intervals, min_support = min_support, temp_clipping = temp_clipping)
+        haplo_fun = partial(haplotyping, s = s, thr_mad = thr_mad, type = type, reference_motif_dic = reference_motif_dic, intervals = intervals, min_support = min_support, temp_clipping = temp_clipping, maxClippedFraction = maxClippedFraction)
         # use list_of_lists_of_lists below instead of list_pairs to restore
         haplo_results = pool.map(haplo_fun, list_pairs)
         pool.close()
@@ -632,6 +627,7 @@ def haplotyping_steps(data, n_cpu, thr_mad, min_support, type, outDir, all_clipp
     df_seq = pd.DataFrame([x for y in sample_res[0] for x in y[1]], columns=['READ_NAME', 'HAPLOTAG', 'REGION', 'PASSES', 'READ_QUALITY', 'LEN_SEQUENCE_FOR_TRF', 'START_TRF', 'END_TRF', 'type', 'SAMPLE_NAME', 'POLISHED_HAPLO', 'DEPTH', 'CONSENSUS_MOTIF', 'CONSENSUS_MOTIF_COPIES', 'MOTIF_REF', 'REFERENCE_MOTIF_COPIES', 'SEQUENCE_WITH_PADDINGS', 'SEQUENCE_FOR_TRF'])
     # and the raw output
     raw_seq_list = []
+    raw_seq_df = pd.DataFrame()
     if type == 'reads':
         for sample in sample_res:
             for region in sample:
@@ -673,16 +669,16 @@ def permutMotif(motif):
     return sel_motif
 
 # Function to do qc based on clipping events
-def clippingQC(sbs, temp_clipping_r):
+def clippingQC(sbs, temp_clipping_r, maxClippedFraction=0.20):
     n_spanning = sbs.shape[0]
     n_clipped = temp_clipping_r.shape[0]
     n_total = n_spanning + n_clipped
-    # rule: if total number of clipped reads is larger than 30% of all the reads, do not pass qc
-    qc = False if (n_clipped/n_total >= 0.20) else True
+    # Reject when the clipping fraction reaches the configured threshold.
+    qc = False if (n_clipped/n_total >= maxClippedFraction) else True
     return(qc)
 
 # function to guide haplotyping
-def haplotyping(pair, s, thr_mad, type, reference_motif_dic, intervals, min_support, temp_clipping):
+def haplotyping(pair, s, thr_mad, type, reference_motif_dic, intervals, min_support, temp_clipping, maxClippedFraction=0.20):
     # recover information for the reads and duplicates -- comment this and add dup_df as argument for the function to restore to previous, also look few lines below
     x, y = pair
     # define columns based on the data type
@@ -719,7 +715,7 @@ def haplotyping(pair, s, thr_mad, type, reference_motif_dic, intervals, min_supp
             # check minimum support: minimum support is for alleles --> 2*min_support is the total minimum coverage required for autosomal regions. For sex-regions, we will use min_support directly
             # find chromosome to adapt coverage
             # first do qc based on the clipping events
-            qc_clip = clippingQC(sbs, temp_clipping_r)
+            qc_clip = clippingQC(sbs, temp_clipping_r, maxClippedFraction)
             if qc_clip == True:
                 chrom = r.split(':')[0]
                 minimum_coverage = min_support if chrom in ['chrY', 'Y'] else min_support*2
@@ -946,9 +942,6 @@ def kmeans_haplotyping(sbs, min_support, thr_mad, chrom, r):
 def prepareOutputs(final_sbs, reference_motif_dic, r, type, depths):
     # prepare data for VCF
     chrom, start, end = [r.split(':')[0]] + r.split(':')[-1].split('-')
-    # check if 'chr' is in both the dictionary and the region of interest
-    if 'chr' not in list(reference_motif_dic.keys())[0]:
-        reference_motif_dic = {'chr' + key: value for key, value in reference_motif_dic.items()}
     if r in reference_motif_dic.keys():
         ref_motif, ref_len, ref_copies = reference_motif_dic[r]
     else:

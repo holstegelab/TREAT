@@ -20,6 +20,10 @@ logfile = createLogAsm(inBam_dir, bed_dir, outDir, ref, window, cpu, windowAss, 
 bed, count_reg, bed_dir = readBed(bed_dir, outDir)
 # 1.4 Check BAM files
 inBam = checkBAM(inBam_dir)
+try:
+    bed = resolveChromosomes(bed, inBam, ref, bed_dir)
+except ValueError as error:
+    sys.exit('!!! %s\nExecution halted.' % error)
 
 # 2. Check which software was selected and do things accordingly
 if software == 'otter':

@@ -16,6 +16,12 @@ import os
 import sys
 ###########################################################
 
+def clipped_fraction(value):
+    fraction = float(value)
+    if not 0 <= fraction <= 1:
+        raise argparse.ArgumentTypeError('maxClippedFraction must be between 0 and 1.')
+    return fraction
+
 ###########################################################
 # Define the parser
 parser = argparse.ArgumentParser(description='TREAT: Tandem REpeat Haplotyping Toolkit')
@@ -62,6 +68,7 @@ readAnal.add_argument('-d', '--HaploDev', type = float, help = 'During haplotyin
 readAnal.add_argument('-minSup', '--minimumSupport', type = int, help = 'During haplotying, minimum number of reads supporting each haplotyping.', required = False, default = 2)
 # haplotyping: minimum coverage
 readAnal.add_argument('-minCov', '--minimumCoverage', type = int, help = 'During haplotying, minimum number of total reads necessary for calling.', required = False, default = 5)
+readAnal.add_argument('--maxClippedFraction', type = clipped_fraction, default = 0.20, help = 'Reject genotyping when clipping events / (spanning reads + clipping events) reaches or exceeds this fraction (0 to 1; default: 0.20).')
 # raw sequences: rawSeq
 readAnal.add_argument('-rawSeq', '--rawSequences', type = str, help = 'True/False. Whether to output the raw sequences with TRF annotation extracted from the bam file. (Default is False)', required = False, default = 'False')
 ###########################################################
@@ -182,13 +189,14 @@ if args.cmd == 'reads':
     print("   Haplotyping deviation: ", args.HaploDev)
     print("   Minimum supporting reads: ", args.minimumSupport)
     print("   Minimum coverage: ", args.minimumCoverage)
+    print("   Maximum clipped fraction: ", args.maxClippedFraction)
     print("   Write raw sequences: ", args.rawSequences)
     print("\n")
     # set flag to true
     RUN = True
     # define script to run and arguments
     script_path = 'read_based.py'
-    arguments = [args.inBam, args.bed, args.outDir, args.ref, str(args.window), str(args.cpu), args.phasingData, args.mappingSNP, str(args.HaploDev), str(args.minimumSupport), str(args.minimumCoverage), str(args.rawSequences)]
+    arguments = [args.inBam, args.bed, args.outDir, args.ref, str(args.window), str(args.cpu), args.phasingData, args.mappingSNP, str(args.HaploDev), str(args.minimumSupport), str(args.minimumCoverage), str(args.rawSequences), str(args.maxClippedFraction)]
 elif args.cmd == 'assembly':
     print('Assembly-based analysis selected')
     print('** Required argument:')

@@ -16,6 +16,7 @@ import gzip
 import pyfastx
 import pyfaidx
 import pytrf
+from chromosome_names import resolveChromosomes
 
 ### FUNCTIONS TO CHECK DIRECTORIES AND FILES
 # Function to read bed file - OK
@@ -39,9 +40,6 @@ def readBed(bed_dir, out_dir):
                         chrom, start, end = line[0:3]
                         region_id = chrom + ':' + start + '-' + end
                         count_reg += 1
-                        # add chromosome label if not there
-                        if 'chr' not in chrom:
-                            chrom = 'chr' + str(chrom)
                         # check size of interval, if 0 or negative, put 1
                         if int(end) - int(start) <= 0:
                             counter_invalid += 1
@@ -238,7 +236,7 @@ def otterPipeline_opt(outDir, cpu, ref, bed_dir, inBam, count_reg, windowAss, wi
     pool.close()
     # run trf on the assemblies
     pool = multiprocessing.Pool(processes=cpu)
-    trf_asm = partial(run_trf_asm_opt, w = window)
+    trf_asm = partial(run_trf_asm_opt, w = windowAss)
     trf_asm_res = pool.map(trf_asm, extract_results)
     pool.close()
     # Combine df from different samples together
@@ -508,9 +506,6 @@ def sampleMotifs_opt(r, df):
 
 # Function to make data for vcf writing - OK
 def prepareOutputs_opt(chunk, final_sbs, reference_motif_dic, all_samples):
-    # Ensure 'chr' is in the dictionary keys if needed
-    if 'chr' not in list(reference_motif_dic.keys())[0]:
-        reference_motif_dic = {'chr' + key: value for key, value in reference_motif_dic.items()}
     # Convert 'HAPLOTYPE' to numeric once
     final_sbs['HAPLOTYPE'] = pd.to_numeric(final_sbs['HAPLOTYPE'], errors='coerce')
     res_vcf = []
