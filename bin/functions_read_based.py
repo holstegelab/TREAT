@@ -18,6 +18,7 @@ from sklearn.cluster import KMeans
 #import shutil
 import warnings
 import gzip
+import subprocess
 from chromosome_names import resolveChromosomes
 
 ##########################################################
@@ -392,30 +393,55 @@ def writeFastaTRF(all_seqs, fasta_name):
 
 # Run TRF given a sequence -- a problem may be that we pass the distances object here -- this is only done for a merging operation, maybe we can do the perging operation outside the multiprocessing
 def run_trf(index, all_fasta, type):
-    # then run tandem repeat finder
-    cmd = 'trf %s 2 7 7 80 10 50 200 -ngs -h' %(all_fasta[index])
-    trf = [x for x in os.popen(cmd).read().split('\n') if x != '']
-    # loop on trf results and save them into a list of lists
-    x = 0; trf_matches = []
-    sample_name = re.sub(r'^a[a-z]\.tmp_', '', os.path.basename(all_fasta[index])).replace('.fa', '')
-    while x < len(trf):
-        # check if the line is the header of an entry
-        if trf[x].startswith('@'):
-            # if so, save the corresponding information depending on the type of input
+    fasta = all_fasta[index]
+    no_matches = [['NA' for i in range(19)]]
+    with open(fasta) as source:
+        if not any(line.strip() for line in source):
+            return no_matches
+    cmd = ['trf', fasta, '2', '7', '7', '80', '10', '50', '200', '-ngs', '-h']
+    result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                            universal_newlines=True)
+    if result.returncode != 0:
+        raise RuntimeError('TRF failed for %s (exit code %s): %s' %
+                           (fasta, result.returncode,
+                            result.stderr.strip() or result.stdout.strip() or 'No diagnostics'))
+    sample_name = re.sub(r'^a[a-z]\.tmp_', '', os.path.basename(fasta)).replace('.fa', '')
+    read_id = region = None
+    trf_matches = []
+    for line_number, line in enumerate(result.stdout.splitlines(), 1):
+        line = line.strip()
+        if not line:
+            continue
+        if line.startswith('@'):
+            fields = line.split(';')
             if type != 'otter' or sample_name == 'reference':
-                region, sample, read_id = trf[x].split(';')[0:3]
+                if len(fields) < 3 or any(not field.strip() for field in fields[:3]) or fields[0] == '@':
+                    raise ValueError('Malformed TRF sequence header for %s at line %s: %s' %
+                                     (fasta, line_number, line))
+                region, sample, read_id = fields[:3]
             else:
-                read_id, region, seq_size_with_padding, seq_size = trf[x].split(';')
+                if len(fields) != 4 or any(not field.strip() for field in fields) or fields[0] == '@':
+                    raise ValueError('Malformed TRF sequence header for %s at line %s: %s' %
+                                     (fasta, line_number, line))
+                read_id, region, seq_size_with_padding, seq_size = fields
                 read_id = '@>' + read_id
-            x += 1
-        while x < len(trf) and not trf[x].startswith('@'):
-            tmp_trf_match = [read_id + '_' + region.replace('@', ''), 'NA'] + trf[x].split()
-            trf_matches.append(tmp_trf_match)
-            x += 1
-    # finally create pandas df and assign column names
-    if len(trf_matches) == 0:
-        trf_matches = [['NA' for i in range(19)]] 
-    return trf_matches
+            continue
+        if read_id is None:
+            raise ValueError('Unexpected TRF output before a sequence header for %s '
+                             'at line %s: %s' % (fasta, line_number, line))
+        fields = line.split()
+        try:
+            if len(fields) != 17:
+                raise ValueError('Expected 17 result fields')
+            for value in fields[:13]:
+                float(value)
+            for value in fields[:3]:
+                int(value)
+        except ValueError:
+            raise ValueError('Malformed TRF result for %s at line %s: %s' %
+                             (fasta, line_number, line))
+        trf_matches.append([read_id + '_' + region.replace('@', ''), 'NA'] + fields)
+    return trf_matches or no_matches
 
 # Combine TRF results of the different chunks
 def combineTRF_res(trf_matches, distances, all_fasta):
@@ -425,6 +451,8 @@ def combineTRF_res(trf_matches, distances, all_fasta):
         df.columns = ['ID', 'EXPECTED_MOTIF', 'START_TRF', 'END_TRF', 'LENGTH_MOTIF_TRF', 'COPIES_TRF', 'TRF_CONSENSUS_SIZE', 'TRF_PERC_MATCH', 'TRF_PERC_INDEL', 'TRF_SCORE', 'TRF_A_PERC', 'TRF_C_PERC', 'TRF_G_PERC', 'TRF_T_PERC', 'TRF_ENTROPY', 'TRF_MOTIF', 'TRF_REPEAT_SEQUENCE', 'TRF_PADDING_BEFORE', 'TRF_PADDING_AFTER']
         # finally, we need to add the reads where trf didn't find any motif
         if type != 'otter':
+            if not distances[i][0]:
+                continue
             df_seqs = pd.DataFrame(distances[i][0])
             df_seqs.columns = ['SAMPLE_NAME', 'REGION', 'READ_NAME', 'PASSES', 'READ_QUALITY', 'MAPPING_CONSENSUS', 'SEQUENCE_FOR_TRF', 'SEQUENCE_WITH_PADDINGS', 'LEN_SEQUENCE_FOR_TRF', 'LEN_SEQUENCE_WITH_PADDINGS']
         else:

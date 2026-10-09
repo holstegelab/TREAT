@@ -16,6 +16,7 @@ import gzip
 import pyfastx
 import pyfaidx
 import pytrf
+import subprocess
 from chromosome_names import resolveChromosomes
 
 ### FUNCTIONS TO CHECK DIRECTORIES AND FILES
@@ -127,12 +128,17 @@ def createLogAsm(inBam, bed_dir, outDir, ref, window, cpu, windowAss, ploidy, so
 def assembly_otter_opt(s, output_directory, ref_fasta, bed_file, number_threads, windowAss, omitNonSpanning, otterMaxCov, otterCovFrac, otterMinSim, ploidy):
     # define output name with the right directory
     outname = s.split('/')[-1].replace('.bam', '.fa')
-    # run otter -- -l was for spanning only
+    cmd = ['otter', 'assemble', '-a', str(ploidy), '-c', str(otterMaxCov),
+           '--fasta', '-b', bed_file, '-r', ref_fasta, '-R', outname, s,
+           '-t', str(number_threads), '-o', str(windowAss), '-A', otterCovFrac,
+           '-s', str(otterMinSim)]
     if omitNonSpanning == 'True':
-        cmd = 'otter assemble -a %s -c %s -l --fasta -b %s -r %s -R %s %s -t %s -o %s -A %s -s %s > %s/otter_local_asm/%s' %(ploidy, otterMaxCov, bed_file, ref_fasta, outname, s, number_threads, windowAss, otterCovFrac, otterMinSim, output_directory, outname)
-    else:
-        cmd = 'otter assemble -a %s -c %s --fasta -b %s -r %s -R %s %s -t %s -o %s -A %s -s %s > %s/otter_local_asm/%s' %(ploidy, otterMaxCov, bed_file, ref_fasta, outname, s, number_threads, windowAss, otterCovFrac, otterMinSim, output_directory, outname)
-    os.system(cmd)
+        cmd.append('-l')
+    with open('%s/otter_local_asm/%s' % (output_directory, outname), 'w') as output:
+        result = subprocess.run(cmd, stdout=output)
+    if result.returncode != 0:
+        raise RuntimeError('otter failed for %s (exit code %s). See otter diagnostics above.' %
+                           (s, result.returncode))
     # adjust otter sequences
     return '%s/otter_local_asm/%s' %(output_directory, outname)
 
@@ -174,6 +180,10 @@ def run_trf_ref_opt(x):
 def run_trf_asm_opt(x, w):
     sample_name = os.path.basename(x).replace('.fa', '')
     res = []
+    with open(x) as source:
+        if not any(line.strip() for line in source):
+            print('** No assembled sequences for %s; reporting missing genotypes.' % sample_name)
+            return res
     fa = pyfastx.Fastx(x, uppercase=True)
     for name, seq in fa:
         if w == 0:
@@ -335,11 +345,12 @@ def haplotyping_steps_opt(data, n_cpu, type, outDir, inBam):
     except:
         data_final = data_sample_ok
     # prepare data for output
-    all_samples = list(set(list(data_final['SAMPLE'])))
-    all_regions = list(data_final['REGION'].dropna().unique())
+    # Keep every input sample and target, even when otter produced no assembly.
+    all_samples = list(dict.fromkeys(os.path.basename(bam).replace('.bam', '') for bam in inBam))
+    all_regions = list(reference_motif_dic)
     # divide in n chunks where n is th enumber of cores
     prepare_start_time = time.time()
-    chunk_size = math.ceil(len(all_regions) / 4)
+    chunk_size = math.ceil(len(all_regions) / n_cpu)
     chunks = [all_regions[i * chunk_size:(i + 1) * chunk_size] for i in range(n_cpu)]
     pool = multiprocessing.Pool(processes=n_cpu)
     prep_fun = partial(prepareOutputs_opt, final_sbs = data_final, reference_motif_dic = reference_motif_dic, all_samples = all_samples)
@@ -537,7 +548,9 @@ def prepareOutputs_opt(chunk, final_sbs, reference_motif_dic, all_samples):
         sample_fields = []
         for s in all_samples:
             sbs_s = sbs[sbs['SAMPLE'] == s]
-            if sbs_s.empty or sbs_s['HAPLOTYPE'].max() > 2:
+            if sbs_s.empty:
+                sample_fields.append('NO_ASSEMBLY;.|.;.|.;.|.;.|.;.|.;.|.')
+            elif sbs_s['HAPLOTYPE'].max() > 2:
                 sample_fields.append(default_sample_field)
             else:
                 gt, alt_seq = manageSequence(list(sbs_s['SEQUENCE']), alt_seq, ref_seq)
@@ -593,7 +606,7 @@ def writeVCFheader(vcf_file, samples, inBam):
     # open file
     outf = open(vcf_file, 'w')
     # write header
-    outf.write('##fileformat=VCFv4.2\n##INFO=<ID=REFERENCE_INFO,Number=2,Type=String,Description="Motif observed in the reference genome (GRCh38), and relative number of motif repetitions."\n##FORMAT=<ID=QC,Number=1,Type=String,Description="Quality summary of TREAT genotyping. PASS: passed quality filter."\n##FORMAT=<ID=GT,Number=2,Type=String,Description="Phased genotype of the tandem repeats. H1_genotype | H2_genotype"\n##FORMAT=<ID=GT_LEN,Number=2,Type=Number,Description="Phased size of the tandem repeat genotypes. H1_size | H2_size"\n##FORMAT=<ID=MOTIF,Number=2,Type=String,Description="Phased consensus motif found in the sample. H1_motif | H2_motif"\n##FORMAT=<ID=CN,Number=2,Type=String,Description="Phased number of copies of the motif found in the sample. H1_copies | H2_copies"\n##FORMAT=<ID=CN_REF,Number=2,Type=String,Description="Phased estimation of the reference motif as found in the sample. H1_motif_ref | H2_motif_ref"\n##FORMAT=<ID=DP,Number=1,Type=String,Description="Phased depth found of the tandem repeat. H1_depth | H2_depth"\n')
+    outf.write('##fileformat=VCFv4.2\n##INFO=<ID=REFERENCE_INFO,Number=2,Type=String,Description="Motif observed in the reference genome (GRCh38), and relative number of motif repetitions."\n##FORMAT=<ID=QC,Number=1,Type=String,Description="Quality summary of TREAT genotyping. PASS: passed quality filter. NO_ASSEMBLY: no assembled sequence available."\n##FORMAT=<ID=GT,Number=2,Type=String,Description="Phased genotype of the tandem repeats. H1_genotype | H2_genotype"\n##FORMAT=<ID=GT_LEN,Number=2,Type=Number,Description="Phased size of the tandem repeat genotypes. H1_size | H2_size"\n##FORMAT=<ID=MOTIF,Number=2,Type=String,Description="Phased consensus motif found in the sample. H1_motif | H2_motif"\n##FORMAT=<ID=CN,Number=2,Type=String,Description="Phased number of copies of the motif found in the sample. H1_copies | H2_copies"\n##FORMAT=<ID=CN_REF,Number=2,Type=String,Description="Phased estimation of the reference motif as found in the sample. H1_motif_ref | H2_motif_ref"\n##FORMAT=<ID=DP,Number=1,Type=String,Description="Phased depth found of the tandem repeat. H1_depth | H2_depth"\n')
     # need to add the contig information
     contig_info = '\n'.join([convert_sq_to_contig(x.rstrip())for x in os.popen('samtools view -H %s' %(inBam[0])) if '@SQ' in x])
     outf.write('%s\n' %(contig_info))

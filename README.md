@@ -75,20 +75,24 @@ Typing `TREAT.py [reads/assembly/analysis/plot] -h` will show the help message s
 The `assembly` analysis take advantage of all sequencing reads aligning to the target region to perform local assembly of the target regions. Local assembly is done with [**otter**](https://github.com/holstegelab/otter). The procedure goes as it follows:
 1. extract the reads and relative sequences encompassing the target regions
 2. perform haplotype aware local assembly of the target regions in each sample
-3. performs motif finding at the individual assembly level using [tandem repeat finder](https://tandem.bu.edu/trf/trf.html)
+3. performs motif finding at the individual assembly level using [pytrf](https://github.com/lmdu/pytrf)
 4. performs haplotype calling
 
 ### Required parameters
 Same as for the `reads` analysis.
 
 ### Optional parameters
-- `-w / --window`: the target regions defined in the BED file will be extended by this value upstream and downstream. Default value is 20. Must be an integer.
+- `-w / --window`: default is 10. Retained for compatibility; otter assembly padding and trimming are controlled by `--windowAssembly`.
 - `-t / --cpu`: number of parallel threads to be used. Default value is 2.
-- `-d / --HaploDev`: during haplotype calling analysis, the median absolute deviation value to assign reads to the same allele. Defaul value is 0.10, that correspond to 10% median absolute deviation.
-- `-minSup / --minimumSupport`: during haplotype calling, the minimum number of reads supporting each haplotyping. Default is 2.
-- `-minCov / --minimumCoverage`: during haplotype calling, the minimum number of total reads necessary for calling. Default is 5.
-- `-wAss / --windowAssembly`: the target regions defined in the BED file by this value upstream and downstream to take reads for assembly. Default value is 20. Must be an integer.
-- `-p / --ploidy`: estimated ploidy of the sample. Default value is 2 for autosomal regions. For sex-specific regions, the ploidy is either 1 (for males with chrX and chrY present in the BAM file), or 2 (for females with 2 chrX).
+- `-wAss / --windowAssembly`: number of bases to extend upstream and downstream for otter assembly. The same value is used to trim the assembled sequences for annotation and VCF output. Default is 20.
+- `-p / --ploidy`: maximum number of alleles allowed by otter. Default is 2; use 1 explicitly for haploid targets. TREAT's VCF output does not reliably support ploidy above 2 or automatically infer sex chromosome ploidy.
+- `-s / --software`: assembler, default `otter`.
+- `-ons / --omitNonSpanning`: `True` or `False`, whether otter excludes nonspanning reads. Default is `False`.
+- `-omc / --otterMaxCov`: skip regions with coverage above this value. Default is 200.
+- `-ocf / --otterCovFrac`: otter's alternative minimum support fraction for longer sequences, as `length_threshold,fraction`. Default is `500,0.1`; shorter sequences use otter's default support fraction.
+- `-oms / --otterMinSim`: minimum similarity during otter realignment. Default is 0.9.
+
+`--HaploDev`, `--minimumSupport`, and `--minimumCoverage` are not accepted in assembly mode. Assembly support decisions are handled by otter. Samples and regions without an assembled sequence are retained in the VCF with sample QC `NO_ASSEMBLY` and missing allele fields. An otter command failure stops the run instead of being treated as a missing assembly.
 
 ## Reads analysis
 The `reads` analysis take advantage of all sequencing reads aligning to the target regions to estimate genotypes. The procedure goes as it follows:
@@ -104,10 +108,10 @@ The `reads` analysis take advantage of all sequencing reads aligning to the targ
 - `-r / --ref`: the reference genome encoded in a FASTA file.
 
 ### Optional parameters
-- `-w / --window`: the target regions defined in the BED file will be extended by this value upstream and downstream. Default value is 20. Must be an integer.
+- `-w / --window`: the target regions defined in the BED file will be extended by this value upstream and downstream. Default value is 10. Must be an integer.
 - `-t / --cpu`: number of parallel threads to be used. Default value is 2.
 - `-minSup / --minimumSupport`: during haplotype calling, the minimum number of reads supporting each haplotyping. Default is 2.
-- `-minCov / --minimumCoverage`: during haplotype calling, the minimum number of total reads necessary for calling. Default is 5.
+- `-minCov / --minimumCoverage`: accepted and logged (default 5), but currently not used by the genotype coverage check. That check requires `2 * minimumSupport` usable spanning reads, or `minimumSupport` on chromosome Y.
 
 The `reads` mode also accepts `--maxClippedFraction` (default: `0.20`, range: `0` to `1`). Genotyping is rejected when `clipping events / (spanning reads + clipping events)` reaches or exceeds this threshold. For example, `--maxClippedFraction 0.5` allows genotyping when the fraction is below 50%. This option changes the QC threshold; it does not include the flagged clipped reads in genotyping.
 
